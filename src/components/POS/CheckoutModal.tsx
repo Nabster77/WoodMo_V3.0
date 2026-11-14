@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { CartItem, Transaction, PaymentMethod, Location } from '@/types';
-import { calcNet, calcTax, formatCurrency } from '@/lib/format';
-import { taxRateForProduct } from '@/lib/tax';
+import { formatCurrency } from '@/lib/format';
+import { buildCheckoutTransactions, checkoutTotals, isCardWithCashPfandPayout } from '@/lib/checkoutTransactions';
 import { X, Check, Receipt, Banknote, CreditCard, Coins, Recycle, AlertTriangle } from 'lucide-react';
 
 interface Props {
   items: CartItem[];
   location: Location;
-  onComplete: (tx: Transaction) => Promise<'queued-online' | 'queued-offline' | 'test'>;
+  onComplete: (transactions: Transaction[]) => Promise<'queued-online' | 'queued-offline' | 'test'>;
   onCancel: () => void;
 }
 
@@ -20,26 +20,12 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedWhere, setSavedWhere] = useState<'queued-online' | 'queued-offline' | 'test' | null>(null);
 
-  const grossByRate = new Map<number, number>();
-  let totalPfand = 0, pfandRetoure = 0;
-  for (const item of items) {
-    if (item.isPfandRetoure) {
-      pfandRetoure += item.unitPrice * item.quantity;
-      continue;
-    }
-    const rate = taxRateForProduct(item.product, location);
-    const gross = item.unitPrice * item.quantity;
-    grossByRate.set(rate, (grossByRate.get(rate) ?? 0) + gross);
-    totalPfand += item.unitPfand * item.quantity;
-  }
-  const subtotal = [...grossByRate.values()].reduce((s, v) => s + v, 0);
-  const total = subtotal + totalPfand + pfandRetoure;
-  const totalTax = [...grossByRate.entries()].reduce((s, [r, g]) => s + calcTax(g, r), 0);
-  const totalNet = [...grossByRate.entries()].reduce((s, [r, g]) => s + calcNet(g, r), 0);
-
+  const { total, goodsTotal, pfandRetoure, isPfandOnly, totalPfand, taxLines } = checkoutTotals(items, location);
+  // Card + Pfand-Retoure: goods on card, Pfand-Retoure paid out in cash.
+  const splitPayout = isCardWithCashPfandPayout(items, paymentMethod);
+  const cashPayout = -pfandRetoure;
   const given = parseFloat(givenAmount.replace(',', '.')) || 0;
   const change = given - total;
-  const isPfandOnly = items.every((item) => item.isPfandRetoure);
   const cashPayment = !isPfandOnly && paymentMethod === 'cash';
 
     async function handleConfirm() {
@@ -47,59 +33,8 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
     setSaving(true);
     setSaveError(null);
     try {
-    const taxByRate: Record<number, number> = {};
-    const txItems = items.map((item) => {
-      if (item.isPfandRetoure) {
-        return {
-          productId: item.product.id,
-          name: item.product.name,
-          price: item.unitPrice,
-          quantity: item.quantity,
-          taxRate: 0 as const,
-          netPrice: item.unitPrice,
-          taxAmount: 0,
-          categoryId: item.product.categoryId,
-          pfand: item.unitPrice * item.quantity,
-          isPfandRetoure: true,
-        };
-      }
-      const rate = taxRateForProduct(item.product, location);
-      const gross = item.unitPrice * item.quantity;
-      const net = calcNet(gross, rate);
-      const tax = calcTax(gross, rate);
-      taxByRate[rate] = (taxByRate[rate] ?? 0) + tax;
-      return {
-        productId: item.product.id,
-        name: item.shot && item.shot.id !== 'none'
-          ? `${item.product.name} + ${item.shot.name}`
-          : item.product.name,
-        price: item.unitPrice,
-        quantity: item.quantity,
-        taxRate: rate,
-        netPrice: net,
-        taxAmount: tax,
-        categoryId: item.product.categoryId,
-        pfand: item.unitPfand * item.quantity,
-        shotName: item.shot && item.shot.id !== 'none' ? item.shot.name : undefined,
-      };
-    });
-
-    const tx: Transaction = {
-      id: `tx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: Date.now(),
-      items: txItems,
-      subtotal,
-      taxByRate,
-      totalNet,
-      totalTax,
-      totalPfand: totalPfand + pfandRetoure,
-      total,
-      paymentMethod: isPfandOnly ? 'cash' : (paymentMethod ?? 'cash'),
-      amountPaid: cashPayment ? given : undefined,
-      change: cashPayment ? change : undefined,
-      location,
-    };
-        const result = await onComplete(tx);
+    const transactions = buildCheckoutTransactions({ items, location, paymentMethod, given });
+        const result = await onComplete(transactions);
     setSavedWhere(result);
     setConfirmBooking(false);
     setPaid(true);
@@ -126,7 +61,10 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
                 ? 'Offline-Warteschlange gespeichert. Die Cloud-Uebertragung erfolgt nach Wiederverbindung.'
                 : 'Auf diesem Geraet gespeichert. Die Cloud-Synchronisierung folgt; erst deren Bestaetigung bedeutet Cloud-Speicherung.'}
           </p>
-          <p className={`text-3xl font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(total)}</p>
+          <p className={`text-3xl font-bold ${(splitPayout ? goodsTotal : total) < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(splitPayout ? goodsTotal : total)}</p>
+          {splitPayout && (
+            <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Jetzt bar auszahlen (Pfand): {formatCurrency(cashPayout)}</p>
+          )}
           {paymentMethod === 'cash' && change > 0 && (
             <p className="text-sm text-gray-500 dark:text-gray-400">Rückgeld: <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(change)}</span></p>
           )}
@@ -165,9 +103,9 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
             ))}
           </div>
           <div className="space-y-1 border-t border-gray-200 pt-3 text-sm dark:border-gray-700">
-            {[...grossByRate.entries()].sort((a, b) => a[0] - b[0]).map(([rate, gross]) => (
+            {taxLines.map(({ rate, tax }) => (
               <div key={rate} className="flex justify-between text-gray-500 dark:text-gray-400">
-                <span>MwSt {rate}%</span><span>{formatCurrency(calcTax(gross, rate))}</span>
+                <span>MwSt {rate}%</span><span>{formatCurrency(tax)}</span>
               </div>
             ))}
             {totalPfand > 0 && (
@@ -177,9 +115,20 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
             )}
           </div>
           <div className="flex items-baseline justify-between border-t-2 border-gray-300 pt-3 dark:border-gray-600">
-            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Zu zahlen</span>
-            <span className={`text-3xl font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(total)}</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{splitPayout ? 'Per Karte' : 'Zu zahlen'}</span>
+            <span className={`text-3xl font-bold ${(splitPayout ? goodsTotal : total) < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(splitPayout ? goodsTotal : total)}</span>
           </div>
+          {splitPayout && (
+            <div role="status" className="rounded-xl border border-teal-500/60 bg-teal-50 p-3 text-sm dark:bg-teal-900/20">
+              <div className="flex items-baseline justify-between font-bold text-teal-700 dark:text-teal-300">
+                <span className="flex items-center gap-1.5"><Recycle className="h-4 w-4" /> Pfand bar auszahlen</span>
+                <span className="text-xl">{formatCurrency(cashPayout)}</span>
+              </div>
+              <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">
+                Ware wird per Karte gebucht. Die Pfand-Retoure wird bar aus der Kasse ausgezahlt und mindert den Kassenbestand (eigener Beleg „Pfandausgabe“).
+              </p>
+            </div>
+          )}
 
           {!isPfandOnly && (<>
           {/* Payment method selection */}
@@ -259,10 +208,23 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
               </div>
             </div>
             <div className="mb-4 space-y-1.5 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900/40">
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Gesamtbetrag</span>
-                <span className={`font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>{formatCurrency(total)}</span>
-              </div>
+              {splitPayout ? (
+                <>
+                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                    <span>Karte belasten</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(goodsTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-teal-700 dark:text-teal-300">
+                    <span>Pfand bar auszahlen</span>
+                    <span className="font-bold">{formatCurrency(cashPayout)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <span>Gesamtbetrag</span>
+                  <span className={`font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>{formatCurrency(total)}</span>
+                </div>
+              )}
               {cashPayment && (
                 <>
                   <div className="flex justify-between text-gray-600 dark:text-gray-400">
@@ -279,7 +241,7 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
               )}
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>Zahlungsart</span>
-                <span className="font-medium">{isPfandOnly ? 'Pfandausgabe' : paymentMethod === 'cash' ? 'Bar' : 'Karte'}</span>
+                <span className="font-medium">{isPfandOnly ? 'Pfandausgabe' : splitPayout ? 'Karte + Pfandausgabe bar' : paymentMethod === 'cash' ? 'Bar' : 'Karte'}</span>
               </div>
             </div>
             <p className="mb-4 text-center text-sm text-gray-600 dark:text-gray-300">
