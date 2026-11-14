@@ -117,6 +117,7 @@ await test('10 Bezahldialog nutzt die gemeinsame Funktion, App speichert beide B
   assert.match(app, /await enqueueEntries\(booked\.map\(/, 'beide Belege in einer IndexedDB-Transaktion');
 });
 
+// Start: node scripts/run-card-pfand-split.mjs (löst @/-Pfade auf).
 // Backup-Wiederherstellung muss geteilte Belege annehmen (Validierung aus 20261114080000).
 const db = new PGlite();
 const admin = '6dfda066-31a0-4a40-8f1b-b82d886487c3';
