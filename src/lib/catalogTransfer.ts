@@ -411,6 +411,40 @@ export async function exportTemplateWorkbook(): Promise<ArrayBuffer> {
   sheet.columns.forEach(column => {column.width = 24;});
   return await workbook.xlsx.writeBuffer() as ArrayBuffer;
 }
+/**
+ * Simple export in the layout of the 2026 price list: deposit rows on top, the 8 familiar columns, no IDs.
+ * Columns "VK DE / VK AT" are added only when prices differ between the two locations.
+ * The importer recognizes articles by name; hidden settings (availability, order, images) stay as they are.
+ */
+export async function exportSimpleWorkbook(catalog: LocalCatalog): Promise<ArrayBuffer> {
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Preisliste');
+  const differs = catalog.products.some(p => p.prices.Friedrichshafen !== p.prices.Bregenz) ||
+    catalog.shotOptions.some(s => s.locationPrices && Object.keys(s.locationPrices).length > 0);
+  const headers = ['Produktname App', 'VK', 'Warengruppe', 'Preis fix / individuell', 'Steuer DE in %', 'Steuer AT in %', 'Schuss', 'Pfand', ...(differs ? ['VK DE', 'VK AT'] : [])];
+  sheet.addRow(['Artikel_Verkaufspreise_2026']);
+  sheet.addRow(['', 'Pfand']);
+  sheet.addRow(['Friedrichshafen', catalog.pfandSettings.Friedrichshafen]);
+  sheet.addRow(['Bregenz', catalog.pfandSettings.Bregenz]);
+  sheet.addRow([]);
+  sheet.addRow(headers);
+  const categories = [...catalog.categories].filter(c => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const c of categories) {
+    for (const p of catalog.products.filter(x => x.categoryId === c.id).sort((a, b) => a.sortOrder - b.sortOrder)) {
+      sheet.addRow([p.name, p.hasIndividualPrice ? '' : p.prices.Friedrichshafen, c.name, p.hasIndividualPrice ? 'individuell' : 'fix',
+        taxRateForProduct(p, 'Friedrichshafen'), taxRateForProduct(p, 'Bregenz'), p.hasShot ? 'x' : '', p.isPfandArticle ? 'x' : '',
+        ...(differs ? [p.prices.Friedrichshafen, p.prices.Bregenz] : [])]);
+    }
+  }
+  for (const shot of catalog.shotOptions) {
+    sheet.addRow([`${shot.name} (Schuss)`, shot.price, 'SCHUSS', 'fix', 19, 20, '', '',
+      ...(differs ? [shot.locationPrices?.Friedrichshafen ?? '', shot.locationPrices?.Bregenz ?? ''] : [])]);
+  }
+  sheet.getRow(6).font = {bold: true};
+  sheet.columns.forEach(column => {column.width = 24;});
+  return await workbook.xlsx.writeBuffer() as ArrayBuffer;
+}
 export async function exportWorkbook(catalog: LocalCatalog): Promise<ArrayBuffer> {
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();

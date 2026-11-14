@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import type { CatalogImportSession } from '@/lib/catalogEngine';
-import { buildImportPlan, exportWorkbook, exportTemplateWorkbook, readImageZip, readWorkbook, type ImageEntry, type ImportPlan } from '@/lib/catalogTransfer';
+import { buildImportPlan, exportWorkbook, exportSimpleWorkbook, exportTemplateWorkbook, readImageZip, readWorkbook, type ImageEntry, type ImportPlan } from '@/lib/catalogTransfer';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { supabase } from '@/lib/supabaseClient';
 import { createCatalogIllustration } from '@/lib/catalogIllustration';
@@ -222,9 +222,17 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   async function download() {
     setBusy(true); setMessage('');
     try {
+      const bytes = await exportSimpleWorkbook(catalog);
+      const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      const a = document.createElement('a'); a.href = url; a.download = `WOODMO-Katalog-${new Date().toLocaleDateString('en-CA')}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {setMessage((e as Error).message);} finally {setBusy(false);}
+  }
+  async function downloadFull() {
+    setBusy(true); setMessage('');
+    try {
       const bytes = await exportWorkbook(catalog);
       const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-      const a = document.createElement('a'); a.href = url; a.download = `Sicherung_WOODMO-Katalog-${new Date().toLocaleDateString('en-CA')}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const a = document.createElement('a'); a.href = url; a.download = `WOODMO-Katalog-vollstaendig-${new Date().toLocaleDateString('en-CA')}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {setMessage((e as Error).message);} finally {setBusy(false);}
   }
   async function downloadImagesOnly() {
@@ -303,6 +311,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <button disabled={busy} onClick={downloadTemplate} className={button}>Mustervorlage</button>
             <button disabled={busy} onClick={download} className={button}>Nur Excel</button>
             <button disabled={busy} onClick={downloadImagesOnly} className={button}>Nur Bilder-ZIP</button>
+            <button disabled={busy} onClick={downloadFull} className={button} title="Mit IDs und allen technischen Spalten (für Fachleute)">Excel vollständig (mit IDs)</button>
           </div>
         </details>
         <section className={done ? 'hidden' : 'space-y-2'}>
