@@ -271,7 +271,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
         </div>
       </div>}
       <div className="mt-2 space-y-3 overflow-auto">
-        <details className="rounded-xl border border-gray-400 p-2">
+        <details className={done ? 'hidden' : 'rounded-xl border border-gray-400 p-2'}>
           <summary className="cursor-pointer font-semibold">1. Aktuellen Stand exportieren (optional)</summary>
           <div className="mt-2 flex flex-wrap gap-2">
             <button disabled={busy} onClick={downloadBundle} className={primary}>Excel + Bilder exportieren</button>
@@ -280,7 +280,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <button disabled={busy} onClick={downloadImagesOnly} className={button}>Nur Bilder-ZIP</button>
           </div>
         </details>
-        <section className="space-y-2">
+        <section className={done ? 'hidden' : 'space-y-2'}>
           <h3 className="font-semibold">2. Neue Dateien auswählen</h3>
           <label className="flex flex-wrap items-center gap-2">Excel (.xlsx)<input disabled={busy} type="file" accept=".xlsx" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'excel'); e.target.value = '';}} /><span className={excel ? 'font-semibold text-emerald-400' : 'opacity-60'}>{excel ? `✓ ${excel.name}` : 'noch keine Datei'}</span></label>
           <label className="flex flex-wrap items-center gap-2">Bilder-ZIP (optional)<input disabled={busy} type="file" accept=".zip" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'zip'); e.target.value = '';}} /><span className={zip ? 'font-semibold text-emerald-400' : 'opacity-60'}>{zip ? `✓ ${zip.name}` : 'noch keine Datei'}</span></label>
@@ -299,8 +299,13 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <li>Buchungen und Tagesabschlüsse werden nie verändert.</li>
           </ul>}
         </section>
-        {message && <p role="status" className="whitespace-pre-wrap rounded-xl border border-blue-400 p-3">{message}</p>}
-        {plan && <section className="space-y-3">
+        {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-500 p-4" role="status">
+          <h3 className="text-base font-bold text-emerald-400">✓ Import abgeschlossen</h3>
+          <p className="text-sm">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>
+          <button type="button" className={primary} onClick={onClose}>Schließen</button>
+        </section>}
+        {message && !done && <p role="status" className="whitespace-pre-wrap rounded-xl border border-blue-400 p-3">{message}</p>}
+        {plan && !done && <section className="space-y-3">
           <h3 className="font-semibold">3. Vorschau prüfen und importieren</h3>
           <p className="font-semibold">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} werden gelöscht · {unchanged} unverändert</p>
           {plan.errors.length > 0 && <div role="alert" className="rounded-xl border border-red-500 p-3"><strong>Import gesperrt – bitte zuerst beheben:</strong><ul className="list-disc pl-5">{plan.errors.map((e,i) => <li key={i}>{e}</li>)}</ul></div>}
@@ -314,7 +319,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           </div>}
           {groups.filter(g => g.rows.length).map(g => <details key={g.title} className="rounded-xl border border-gray-400 px-3 py-1.5">
             <summary className="cursor-pointer text-sm font-semibold">{g.title} ({g.rows.length})</summary>
-            <ul className="mt-1 max-h-48 overflow-auto text-xs leading-5">{g.rows.map((r, i) => <li key={`${r.id}-${i}`}><strong>{r.name}</strong>{r.image ? <span className="opacity-70"> ← {r.image}</span> : r.changes.length > 0 ? <span className="opacity-80"> · {r.changes.filter(c => !c.startsWith('Bild')).join(' · ')}</span> : null}</li>)}</ul>
+            <ul className="mt-1 max-h-48 overflow-auto text-xs leading-5">{g.rows.map((r, i) => <li key={`${r.id}-${i}`}><strong>{r.name}</strong>{r.image ? <span className="opacity-70"> ← {r.image}</span> : r.changes.length > 0 && r.kind !== 'Warengruppe' ? <span className="opacity-80"> · {r.changes.filter(c => !c.startsWith('Bild')).join(' · ')}</span> : null}</li>)}</ul>
           </details>)}
           {plan.warnings.length > 0 && <details className="rounded-xl border border-gray-400 p-3"><summary className="cursor-pointer">{plan.warnings.length} Hinweise zu Bildern</summary><ul className="mt-2 list-disc pl-5 text-sm">{plan.warnings.map((w,i) => <li key={i}>{w}</li>)}</ul></details>}
           {!autoIllustrations && plan.rows.filter(r => r.kind === 'Artikel' && r.status !== 'entfernt' && r.id && !plan.images[r.id] && !plan.next.products.find(p => p.id === r.id)?.imageUrl).length > 0 && <section className="space-y-2 rounded-xl border border-gray-400 p-3">
