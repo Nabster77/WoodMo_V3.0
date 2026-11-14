@@ -598,7 +598,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
           </span>
         </div>
       </div>
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+      <div className="-mx-6 -mt-4 mb-0 flex gap-1.5 overflow-x-auto px-6 pb-6 pt-4">
         <button onClick={() => setFilterCat('')} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${!filterCat ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>Alle</button>
         {[...categories].filter((cat) => cat.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
           <button key={cat.id} onClick={() => setFilterCat(cat.id)} style={cat.color.startsWith("#") ? { backgroundColor: cat.color } : cat.color.startsWith("linear-gradient(") ? { background: cat.color } : undefined} className={`whitespace-nowrap rounded-lg bg-gradient-to-r px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 ${cat.color.startsWith("#") || cat.color.startsWith("linear-gradient(") ? "" : cat.color} ${filterCat === cat.id ? "woodmo-filter-active" : "opacity-85"}`}>{cat.name}</button>
