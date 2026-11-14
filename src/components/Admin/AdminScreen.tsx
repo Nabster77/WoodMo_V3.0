@@ -616,7 +616,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
               setDragEnabled(false);
             }}
             className={`rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white ${filterCat ? 'woodmo-filter-active' : ''}`}>
-            <option value="manual">Eigene Reihenfolge</option>
+            <option value="manual">Filter &amp; Sortierung</option>
             <option value="alphabetical">Aufsteigend (A–Z)</option>
             <option value="reverse">Absteigend (Z–A)</option>
             <optgroup label="Nur Warengruppe anzeigen">
