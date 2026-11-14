@@ -38,9 +38,9 @@ let archive;
 await check('01 ZIP enthaelt die echten Bildbytes aus dem eigenen Storage',async()=>{
   archive=await buildCatalogImagesZip(catalog,origin,undefined,mockFetch);
   const zip=unzipSync(archive.bytes);
-  assert.deepEqual(zip['Bilder/Glühwein Rot.png'],imagePng);
-  assert.deepEqual(zip['Bilder/Heiße Witwe.jpg'],imageJpg);
-  assert.deepEqual(zip['Bilder/Hot Aperol.webp'],imageWebp);
+  assert.deepEqual(zip['Bilder/Getränke/Glühwein Rot.png'],imagePng);
+  assert.deepEqual(zip['Bilder/Getränke/Heiße Witwe.jpg'],imageJpg);
+  assert.deepEqual(zip['Bilder/Getränke/Hot Aperol.webp'],imageWebp);
   assert.equal(archive.exportedImages,3);
 });
 await check('02 Fehlende und gesperrte Bilder werden im ZIP dokumentiert',()=>{
@@ -55,14 +55,14 @@ await check('02 Fehlende und gesperrte Bilder werden im ZIP dokumentiert',()=>{
 await check('03 ZIP Dateien sind vom vorhandenen Bilder-Import zuordenbar',()=>{
   const images=readImageZip(archive.bytes);
   assert.equal(images.length,3);
-  assert(images.some(x=>x.path==='Bilder/Glühwein Rot.png'));
+  assert(images.some(x=>x.path==='Bilder/Getränke/Glühwein Rot.png'));
   const sheets={Artikel:[['Produktname App','VK','Warengruppe','Preis fix / individuell','Steuer DE in %','Steuer AT in %','Schuss','Pfand'],['Glühwein Rot',4,'Getränke','fix',19,20,'',''],['Heiße Witwe',4,'Getränke','fix',19,20,'',''],['Hot Aperol',4,'Getränke','fix',19,20,'','']]};
   const baseCatalog={...catalog,products:catalog.products.map(p=>({...p,imageUrl:''}))};
-  const plan=buildImportPlan(sheets,baseCatalog,images,false);
+  const plan=buildImportPlan(sheets,baseCatalog,images);
   assert.equal(plan.errors.length,0,plan.errors.join('; '));
   assert.equal(Object.keys(plan.images).length,3);
-  const existing=buildImportPlan(sheets,catalog,images,false);
-  assert.equal(Object.keys(existing.images).length,0,'Bestehende Bilder nicht ohne Auswahl ersetzen');
+  const existing=buildImportPlan(sheets,catalog,images);
+  assert.equal(Object.keys(existing.images).length,3,'ZIP-Bilder haben automatisch Vorrang');
 });
 await check('04 Excel+ZIP-Paket sichert trotz fehlendem Bild alle verfuegbaren',async()=>{
   const bundle=await buildCatalogBundle(catalog,undefined,origin,mockFetch);

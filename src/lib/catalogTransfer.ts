@@ -6,56 +6,96 @@ import { taxRateForProduct, taxRateForClass } from './tax';
 
 export const locations = ['Friedrichshafen', 'Bregenz'] as const;
 export type SheetRows = Record<string, unknown[][]>;
-export type PreviewRow = { id?: string; kind: string; name: string; status: 'neu' | 'geändert' | 'unverändert'; changes: string[]; image?: string };
+export type PreviewRow = { id?: string; kind: string; name: string; status: 'neu' | 'geändert' | 'unverändert' | 'entfernt'; changes: string[]; image?: string; tags?: string[] };
 export type ImageEntry = { path: string; bytes: Uint8Array; mime: string };
-export type ImportPlan = { base: LocalCatalog; next: LocalCatalog; rows: PreviewRow[]; errors: string[]; warnings: string[]; images: Record<string, ImageEntry> };
+export type ImportPlan = { base: LocalCatalog; next: LocalCatalog; rows: PreviewRow[]; errors: string[]; warnings: string[]; images: Record<string, ImageEntry>; removed: { kind: 'Artikel' | 'Warengruppe'; id: string; name: string; group?: string }[] };
 export const normalizeName = (v: unknown): string => String(v ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss').toLocaleLowerCase('de-DE').replace(/\(\d+\)\s*$/, '').replace(/[^a-z0-9]/g, '');
 /** Image filenames may spell German umlauts as ae/oe/ue instead of ä/ö/ü. */
 function imageNameKey(value: string): string {
   return normalizeName(value.replace(/ä/gi, 'ae').replace(/ö/gi, 'oe').replace(/ü/gi, 'ue'));
 }
-function sameImageName(left: string, right: string): boolean {
-  return normalizeName(left) === normalizeName(right) || imageNameKey(left) === imageNameKey(right);
-}
-/** Conservative similarity suggestions; never silently assign a fuzzy match. */
-function imageSimilarity(article: string, filePath: string): number {
-  const file = filePath.split('/').pop()!.replace(/\.[^.]+$/, '');
-  const a = imageNameKey(article);
-  const b = imageNameKey(file);
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  // Preserve size distinctions: large and small images are not interchangeable.
-  const size = (v: string) => /(?:\(l\)|\bgro(?:ß|ss)\b)/i.test(v) ? 'large' : /(?:\(s\)|\bklein\b)/i.test(v) ? 'small' : '';
-  const sa = size(article), sb = size(file);
-  if (sa && sb && sa !== sb) return 0;
-  const distance = (x: string, y: string) => {
-    let prev = Array.from({length:y.length+1}, (_,i)=>i);
-    for (let i=1;i<=x.length;i++) {
-      const cur = [i];
-      for (let j=1;j<=y.length;j++) cur[j] = Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(x[i-1]===y[j-1]?0:1));
-      prev = cur;
-    }
-    return prev[y.length];
-  };
-  return 1 - distance(a,b)/Math.max(a.length,b.length);
-}
-/** Product sizes and copied-file suffixes do not affect the photo identity. */
-function imageIdentity(value: string): string {
-  // Remove Windows duplicate suffixes before stripping punctuation, e.g. Duftklotz(2).jpg.
-  const withoutCopy = value.replace(/\s*\(\d+\)\s*$/, '');
-  const withoutSize = withoutCopy
-    .replace(/\s*\((?:s|m|l|xl)\)\s*/gi, ' ')
-    .replace(/(?:^|[\s_-])(?:s|m|l|xl)\s*$/gi, ' ')
-    .replace(/\b(?:klein|mittel|medium|gross|groß|large|extra\s*large|extra\s*groß)\b/gi, ' ');
-  return imageNameKey(withoutSize)
-    .replace(/^aromaboxen$/, 'aromabox')
-    .replace(/^duftkloetze$/, 'duftklotz')
-    .replace(/^duftklotze$/, 'duftklotz')
-    .replace(/^kafee$/, 'kaffee')
-    .replace(/^schnapssbrett/, 'schnapsbrett');
-}
 function imageStem(path: string): string {
   return path.split('/').pop()!.replace(/\.[^.]+$/, '');
+}
+/** Known spelling mistakes that are corrected in article names on import. */
+export function fixSpelling(name: string): string {
+  return name.replace(/\s+/g, ' ').trim().replace(/\bKafee/g, 'Kaffee').replace(/\bKaffe\b/g, 'Kaffee').replace(/\bkafee/g, 'kaffee');
+}
+function distance(x: string, y: string): number {
+  let prev = Array.from({ length: y.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= y.length; j++) cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[y.length];
+}
+/** Two names count as the same when they differ by at most one typo (only for names of 5+ letters). */
+function nearlySame(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return Math.min(a.length, b.length) >= 5 && distance(a, b) <= 1;
+}
+type Kind = 'schnaps' | 'likoer' | '';
+type Size = 'small' | 'medium' | 'large' | 'xl' | '';
+type NameInfo = { key: string; kind: Kind; size: Size };
+const KIND_WORDS: Record<string, string> = { zirbenschnaps: 'zirbe', aromaboxen: 'aromabox', duftkloetze: 'duftklotz', duftklotze: 'duftklotz' };
+/**
+ * Splits an article or file name into its core name, the drink type and the size.
+ * (S)/S = Schnaps, (L)/L = Likör; klein/mittel/groß/XL are sizes.
+ */
+function parseName(raw: string, hint = ''): NameInfo {
+  let value = raw.replace(/\s*\((\d+)\)\s*$/, '').trim();
+  let kind: Kind = '';
+  let size: Size = '';
+  const marker = (m: string) => { const v = m.toLocaleLowerCase('de-DE'); if (v === 's') kind = 'schnaps'; else if (v === 'l') kind = 'likoer'; else if (v === 'm') size = 'medium'; else if (v === 'xl') size = 'xl'; };
+  value = value.replace(/\s*\(\s*(s|l|m|xl)\s*\)\s*/gi, (_, m) => { marker(m); return ' '; });
+  value = value.replace(/(?:^|[\s_-])(s|l)\s*$/gi, (_, m) => { marker(m); return ' '; });
+  value = value.replace(/\b(klein|mittel|medium|gro(?:ß|ss)|large|extra\s*(?:gro(?:ß|ss)|large))\b/gi, (m) => {
+    const v = m.toLocaleLowerCase('de-DE');
+    size = v === 'klein' ? 'small' : v === 'mittel' || v === 'medium' ? 'medium' : v.startsWith('extra') ? 'xl' : 'large';
+    return ' ';
+  });
+  let key = imageNameKey(value);
+  if (key === 'zirbenschnaps') kind = 'schnaps';
+  key = KIND_WORDS[key] ?? key;
+  if (!kind) {
+    const h = normalizeName(hint);
+    if (h.includes('schnaps')) kind = 'schnaps';
+    else if (h.includes('likor') || h.includes('likoer')) kind = 'likoer';
+  }
+  return { key, kind, size };
+}
+const isBottleHint = (v: string) => /flasche/i.test(v);
+/** Highest score wins; 0 = not the same product. */
+function imageScore(article: string, group: string, file: string): number {
+  const folder = file.includes('/') ? file.split('/').slice(0, -1).join('/') : '';
+  const a = parseName(article, group);
+  const explicitFile = parseName(imageStem(file));
+  const f = parseName(imageStem(file), explicitFile.kind ? '' : folder);
+  if (!nearlySame(a.key, f.key)) return 0;
+  if (a.kind && f.kind && a.kind !== f.kind) return 0;
+  if (a.size && f.size && a.size !== f.size) return 0;
+  let score = a.key === f.key ? 100 : 94;
+  if (a.kind && f.kind && a.kind === f.kind) score += 4;
+  if (a.size && f.size) score += 4; else if (a.size || f.size) score -= 5;
+  if (isBottleHint(group) === isBottleHint(folder)) score += isBottleHint(group) ? 10 : 0; else score -= 10;
+  const groupStem = normalizeName(group.replace(/\(.*\)/, ''));
+  if (folder && groupStem && normalizeName(folder).includes(groupStem)) score += 3;
+  return score;
+}
+function bestImage(article: string, group: string, archive: ImageEntry[]): { file?: ImageEntry; ambiguous: ImageEntry[] } {
+  const scored = archive.map(file => ({ file, score: imageScore(article, group, file.path) })).filter(x => x.score > 0)
+    .sort((x, y) => y.score - x.score || x.file.path.localeCompare(y.file.path, 'de'));
+  if (!scored.length) return { ambiguous: [] };
+  const top = scored.filter(x => x.score === scored[0].score);
+  if (top.length > 1) return { ambiguous: top.map(x => x.file) };
+  return { file: scored[0].file, ambiguous: [] };
+}
+function imageSuggestions(article: string, group: string, archive: ImageEntry[]): string[] {
+  const a = parseName(article, group);
+  return archive.map(f => ({ path: f.path, score: 1 - distance(a.key, parseName(imageStem(f.path)).key) / Math.max(a.key.length, 1) }))
+    .filter(f => f.score >= 0.7).sort((x, y) => y.score - x.score).slice(0, 3).map(f => f.path);
 }
 const text = (v: unknown) => String(v ?? '').trim();
 const field = (r: Record<string, unknown>, ...names: string[]) => {
@@ -106,19 +146,26 @@ function table(rows: unknown[][], required: string): { index: number; records: R
   if (new Set(headers.filter(Boolean)).size !== headers.filter(Boolean).length) throw new Error('Doppelte Spaltenüberschrift.');
   return { index, records: rows.slice(index + 1).filter(r => r.some(c => !empty(c))).map(r => Object.fromEntries(headers.map((h, i) => [h, r[i]]))) };
 }
-export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: ImageEntry[] = [], replaceImages = false): ImportPlan {
+export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: ImageEntry[] = []): ImportPlan {
   const next: LocalCatalog = structuredClone(base);
-  const plan: ImportPlan = { base: structuredClone(base), next, rows: [], errors: [], warnings: [], images: {} };
+  const plan: ImportPlan = { base: structuredClone(base), next, rows: [], errors: [], warnings: [], images: {}, removed: [] };
   const seen = new Set<string>();
+  const matchedOld = new Set<string>();
   const names = new Set<string>();
   const uniqueName = (key: string) => { if (names.has(key)) throw new Error('Doppelter Name innerhalb derselben Warengruppe.'); names.add(key); };
+  const catName = (id: unknown) => [...next.categories, ...base.categories].find(c => c.id === id)?.name ?? String(id ?? '—');
+  const label: Record<string, string> = { name: 'Name', categoryId: 'Warengruppe', prices: 'Preis', taxRates: 'Steuer', taxClass: 'Steuerklasse', available: 'Verfügbar', sortOrder: 'Sortierung', hasShot: 'Schuss', pfand: 'Pfand', isPfandArticle: 'Pfandartikel', hasIndividualPrice: 'Preisart', shotPrices: 'Schusspreise', imageUrl: 'Bild', price: 'Preis' };
+  const tagOf: Record<string, string> = { name: 'Name', categoryId: 'Gruppe', prices: 'Preis', price: 'Preis' };
+  const show = (k: string, v: unknown) => v === undefined ? '—' : k === 'categoryId' ? catName(v) : k === 'prices' && v && typeof v === 'object' ? Object.values(v as Record<string, number>).join(' / ') : stableStringify(v).replace(/^"|"$/g, '');
   function record(kind: string, value: {id: string; name?: string}, before: unknown, image?: string) {
     const key = `${kind}:${value.id}`;
     if (seen.has(key)) throw new Error(`Doppelter Eintrag „${value.name ?? value.id}“.`);
     seen.add(key);
     const old = before as Record<string, unknown> | undefined;
-    const changes = Object.entries(value).filter(([k, v]) => stableStringify(v) !== stableStringify(old?.[k])).map(([k, v]) => `${k}: ${stableStringify(old?.[k]) ?? '—'} → ${stableStringify(v)}`);
-    plan.rows.push({id: value.id, kind, name: value.name ?? value.id, status: !before ? 'neu' : changes.length || image ? 'geändert' : 'unverändert', changes, image});
+    const diff = Object.entries(value).filter(([k, v]) => stableStringify(v) !== stableStringify(old?.[k]));
+    const changes = diff.map(([k, v]) => `${label[k] ?? k}: ${show(k, old?.[k])} → ${show(k, v)}`);
+    const tags = [...new Set(diff.map(([k]) => tagOf[k]).filter(Boolean))];
+    plan.rows.push({id: value.id, kind, name: value.name ?? value.id, status: !before ? 'neu' : changes.length || image ? 'geändert' : 'unverändert', changes, image, tags: !before ? ['neu'] : tags});
   }
   const upsert = <T extends {id: string}>(items: T[], value: T) => { const i = items.findIndex(x => x.id === value.id); if (i < 0) items.push(value); else items[i] = value; };
   const protect = (context: string, action: () => void) => { try { action(); } catch (e) { plan.errors.push(`${context}: ${(e as Error).message}`); } };
@@ -147,8 +194,34 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         if (settings.length > 1) throw new Error(`Pfand ${loc} mehrfach angegeben.`);
         if (settings.length) next.pfandSettings[loc] = number(settings[0][1], `Pfand ${loc}`);
       }
+      // Step 1: find the existing article for every row (ID, then same group, then any group).
+      // Articles that moved to another Warengruppe are moved, not duplicated.
+      const infos = t.records.map(r => ({ name: fixSpelling(text(r['Produktname App'])), group: text(r.Warengruppe), id: r.ID }));
+      const usable = (x: { name: string; group: string }) => !!x.name && !!x.group && normalizeName(x.group) !== 'schuss';
+      const pre: (Product | undefined)[] = infos.map(info => {
+        if (!usable(info)) return undefined;
+        if (!empty(info.id)) { const byId = base.products.find(x => x.id === text(info.id)); if (byId) matchedOld.add(byId.id); return byId; }
+        const baseCat = base.categories.find(c => normalizeName(c.name) === normalizeName(info.group));
+        if (!baseCat) return undefined;
+        const same = base.products.filter(x => x.categoryId === baseCat.id && !matchedOld.has(x.id) && normalizeName(fixSpelling(x.name)) === normalizeName(info.name));
+        if (same.length === 1) matchedOld.add(same[0].id);
+        return same.length === 1 ? same[0] : undefined;
+      });
+      const sameArticle = (a: string, b: string) => { const x = parseName(a), y = parseName(b); return x.kind === y.kind && x.size === y.size && nearlySame(x.key, y.key); };
+      infos.forEach((info, i) => {
+        if (pre[i] || !empty(info.id) || !usable(info)) return;
+        const cands = base.products.filter(x => x.categoryId !== SHOT_CATEGORY_ID && !matchedOld.has(x.id) && sameArticle(x.name, info.name));
+        let pick = cands.length === 1 ? cands[0] : undefined;
+        if (cands.length > 1) {
+          const stem = (v: string) => normalizeName(v.replace(/\(.*\)/, ''));
+          const close = cands.filter(x => stem(base.categories.find(c => c.id === x.categoryId)?.name ?? '') === stem(info.group));
+          if (close.length === 1) pick = close[0];
+          else plan.warnings.push(`${info.name}: mehrere ähnliche Artikel im bisherigen Katalog; wird als neuer Artikel behandelt.`);
+        }
+        if (pick) { pre[i] = pick; matchedOld.add(pick.id); }
+      });
       t.records.forEach((r, i) => protect(`${sheet}, Datenzeile ${i + 1}`, () => {
-        const name = text(r['Produktname App']); const group = text(r.Warengruppe);
+        const name = infos[i].name; const group = infos[i].group;
         if (!name || !group) throw new Error('Artikelname oder Warengruppe fehlt.');
         const isShot = normalizeName(group) === 'schuss';
         const priceKind = text(field(r, 'Preis fix / individuell', 'Preis durch Mitarbeiter oder fix')).toLocaleLowerCase('de-DE');
@@ -162,8 +235,8 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
           next.categories.push(category); record('Warengruppe', category, undefined);
         }
         uniqueName(isShot ? `shot:${shotKey(name)}` : `product:${category!.id}:${normalizeName(name)}`);
-        const candidates = base.products.filter(p => p.categoryId === category?.id);
-        const old = !isShot ? match(empty(r.ID) ? candidates : base.products, r.ID, name) : undefined;
+        const old = !isShot ? pre[i] : undefined;
+        if (!isShot && !empty(r.ID) && !old) throw new Error(`Unbekannte ID „${text(r.ID)}“. Für neue Einträge ID leer lassen.`);
         if (old?.categoryId === SHOT_CATEGORY_ID) throw new Error('Normaler Artikel darf nicht in SCHUSS umgewandelt werden.');
         const individual = priceKind === 'individuell eintragen' || priceKind === 'individuell';
         const shared = number(field(r, 'VK', 'VK 2026'), 'Grundpreis', individual ? old?.prices.Friedrichshafen ?? 0 : oldShot?.price);
@@ -197,44 +270,21 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         const imageUrl = text(r.Bild);
         if (imageUrl && imageUrl !== p.imageUrl) {
           if (!/^(https?:\/\/|\/[^/])/.test(imageUrl)) throw new Error('Bild muss eine HTTP(S)-URL oder ein lokaler Asset-Pfad sein.');
-          if (!p.imageUrl || replaceImages) p.imageUrl = imageUrl;
-          else plan.warnings.push(`${name}: vorhandenes Bild bleibt erhalten.`);
+          p.imageUrl = imageUrl;
         }
-        const exactImages = archive.filter(f => sameImageName(imageStem(f.path), name));
-        const identityImages = archive.filter(f => imageIdentity(imageStem(f.path)) === imageIdentity(name));
-        // A name without size suffix is the same product as (S), (M), (L), (XL),
-        // klein, mittel, groß. Prefer the compact S variant, then M, L, XL.
-        // Exact filename matches always take priority; tie-break by stable ZIP path.
-        const imageSizeRank = (path: string) => {
-          const stem = imageStem(path).toLocaleLowerCase('de-DE');
-          if (/(?:\(s\)|(?:^|[\s_-])s$|\bklein\b)/i.test(stem)) return 0;
-          if (/(?:\(m\)|(?:^|[\s_-])m$|\bmittel\b|\bmedium\b)/i.test(stem)) return 1;
-          if (/(?:\(l\)|(?:^|[\s_-])l$|\bgroß\b|\bgross\b|\blarge\b)/i.test(stem)) return 2;
-          if (/(?:\(xl\)|(?:^|[\s_-])xl$|\bextra\s*(?:groß|gross|large)\b)/i.test(stem)) return 3;
-          return 4;
-        };
-        const candidatesImage = (exactImages.length ? exactImages : identityImages)
-          .sort((a,b) => imageSizeRank(a.path) - imageSizeRank(b.path) || a.path.localeCompare(b.path, 'de'));
+        // Images from the ZIP always win over existing images.
         let image: string | undefined;
-        // If two equally ranked images match the same article, choosing one
-        // would be an unreviewed overwrite. Import the article, but skip its
-        // image and surface the conflict in the preview.
-        const ambiguousImage = candidatesImage.length > 1 &&
-          imageSizeRank(candidatesImage[0].path) === imageSizeRank(candidatesImage[1].path);
-        if (ambiguousImage) {
-          plan.warnings.push(`${name}: mehrere gleichwertige ZIP-Bilder gefunden (${candidatesImage.map(f => f.path).join(', ')}). Keine automatische Bildzuordnung; bitte Bildnamen eindeutig machen.`);
-        } else if (candidatesImage.length && (!p.imageUrl || replaceImages || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl))) {
-          plan.images[p.id] = candidatesImage[0];
-          image = candidatesImage[0].path;
-        } else if (candidatesImage.length) {
-          plan.warnings.push(`${name}: ZIP-Bild nicht übernommen, vorhandenes Bild bleibt erhalten.`);
-        }
-        else if (archive.length) {
-          const suggestions = archive.map(f => ({path:f.path, score:imageSimilarity(name,f.path)}))
-            .filter(f => f.score >= 0.75 && f.score < 1)
-            .sort((a,b) => b.score-a.score).slice(0,3);
-          const hint = suggestions.length ? ` Mögliche Bilder (nur Vorschläge, nicht übernommen): ${suggestions.map(f => `${f.path} (${Math.round(f.score*100)} %)`).join(', ')}.` : '';
-          plan.warnings.push(`${name}: kein exaktes ZIP-Bild;${hint} Artikel wird trotzdem importiert.`);
+        if (archive.length) {
+          const found = bestImage(name, group, archive);
+          if (found.ambiguous.length) {
+            plan.warnings.push(`${name}: mehrere gleich gute ZIP-Bilder gefunden (${found.ambiguous.map(f => f.path).join(', ')}). Bild nicht zugeordnet; bitte Bildnamen eindeutig machen.`);
+          } else if (found.file) {
+            plan.images[p.id] = found.file;
+            image = found.file.path;
+          } else if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) {
+            const hint = imageSuggestions(name, group, archive);
+            plan.warnings.push(`${name}: kein passendes ZIP-Bild; es wird ein eigenes Symbol erzeugt.${hint.length ? ` Ähnliche Dateien (nicht übernommen): ${hint.join(', ')}.` : ''}`);
+          }
         }
         record('Artikel', p, old, image); upsert(next.products, p);
       }));
@@ -263,7 +313,24 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
   }
   if (!validShots(next.shotOptions)) plan.errors.push('SCHUSS-Einstellungen enthalten ungültige oder doppelte Sorten.');
   next.categories = normalizeCategories(next.categories);
-  for (const p of base.products) if (!seen.has(`Artikel:${p.id}`)) plan.rows.push({kind: 'Artikel', name: p.name, status: 'unverändert', changes: ['Nicht in der Datei; bleibt erhalten.']});
+  // Articles missing from the new file are deleted (the file is the truth). Shot options are never deleted.
+  if (found && !plan.errors.length) {
+    const groupOf = (id: string) => base.categories.find(c => c.id === id)?.name ?? '';
+    for (const p of base.products) {
+      if (matchedOld.has(p.id) || p.categoryId === SHOT_CATEGORY_ID) continue;
+      next.products = next.products.filter(x => x.id !== p.id);
+      plan.removed.push({ kind: 'Artikel', id: p.id, name: p.name, group: groupOf(p.categoryId) });
+      plan.rows.push({ id: p.id, kind: 'Artikel', name: p.name, status: 'entfernt', changes: [`Fehlt in der neuen Excel (Warengruppe ${groupOf(p.categoryId)}) – wird gelöscht.`], tags: ['entfernt'] });
+    }
+    for (const c of base.categories) {
+      if (c.id === SHOT_CATEGORY_ID || seen.has(`Warengruppe:${c.id}`)) continue;
+      const had = base.products.some(p => p.categoryId === c.id);
+      if (!had || next.products.some(p => p.categoryId === c.id)) continue;
+      next.categories = next.categories.filter(x => x.id !== c.id);
+      plan.removed.push({ kind: 'Warengruppe', id: c.id, name: c.name });
+      plan.rows.push({ id: c.id, kind: 'Warengruppe', name: c.name, status: 'entfernt', changes: ['Keine Artikel mehr in dieser Warengruppe – wird gelöscht.'], tags: ['entfernt'] });
+    }
+  }
   for (const s of base.shotOptions) if (!seen.has(`SCHUSS:${s.id}`)) plan.rows.push({kind: 'SCHUSS', name: s.name, status: 'unverändert', changes: ['Nicht in der Datei; bleibt erhalten.']});
   return plan;
 }

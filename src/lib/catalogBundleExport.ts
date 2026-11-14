@@ -66,20 +66,27 @@ export async function buildCatalogImagesZip(
   const images: ImageFile[] = [];
   const problems: string[] = [];
   const usedNames = new Set<string>();
+  const groupName = (id: string) => catalog.categories.find(c => c.id === id)?.name ?? 'Ohne Warengruppe';
   for (const [index, product] of catalog.products.entries()) {
     if (!product.imageUrl) {
-      problems.push(`${product.name}: kein Artikelbild zugeordnet.`);
+      problems.push(`${product.name}: kein Artikelbild zugeordnet (beim Import wird ein Symbol erzeugt).`);
+      continue;
+    }
+    // Automatically generated symbols are not real photos: not exported, only listed.
+    if (/[?&]woodmoIllustration=1(?:&|$)/.test(product.imageUrl)) {
+      problems.push(`${product.name}: automatisch erzeugtes Symbol, kein eigenes Bild. Eigenes Bild in den Ordner „${safeName(groupName(product.categoryId))}“ legen, Dateiname: ${safeName(product.name)}.jpg/.png`);
       continue;
     }
     onProgress?.(`Bild ${index + 1}/${catalog.products.length}: ${product.name}`);
     try {
       const url = ownStorageUrl(product.imageUrl, storageOrigin);
       const bytes = await retrieveImage(url, fetchImage);
+      const folder = safeName(groupName(product.categoryId));
       const filename = safeName(product.name) + '.' + imageExtension(bytes);
-      const key = normalizeName(filename.replace(/\\.[^.]+$/, ''));
-      if (usedNames.has(key)) throw new Error('Bilddateiname ist nicht eindeutig; automatische Zuordnung nicht möglich.');
+      const key = (folder + '/' + filename.replace(/\.[^.]+$/, '')).toLocaleLowerCase('de-DE');
+      if (usedNames.has(key)) throw new Error('Bilddateiname ist in dieser Warengruppe nicht eindeutig.');
       usedNames.add(key);
-      images.push({ fileName: filename, bytes });
+      images.push({ fileName: folder + '/' + filename, bytes });
     } catch (error) {
       problems.push(`${product.name}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -93,7 +100,7 @@ export async function buildCatalogImagesZip(
     '',
     ...(problems.length ? problems : ['Keine fehlenden Bilder.']),
     '',
-  ].join('\\n');
+  ].join('\n');
   const entries: Record<string, Uint8Array> = {
     ...Object.fromEntries(images.map(({ fileName, bytes }) => ['Bilder/' + fileName, bytes])),
     'FEHLENDE_BILDER.txt': strToU8(listing),
@@ -117,14 +124,14 @@ export async function buildCatalogBundle(
   onProgress?.('Excel und Bilder-ZIP erstellen');
   const excel = new Uint8Array(await exportWorkbook(catalog));
   const manual = strToU8(
-    'WOODMO Kassen-App 3.0: Katalog-Export mit Bildern\\n\\n' +
-    '1. Dieses Paket entpacken.\\n' +
-    '2. Excel-Datei bearbeiten (IDs, Tabellenüberschriften und Pfandzeilen beibehalten).\\n' +
-    '3. Bilder in WOODMO_Bilder.zip aktualisieren; Dateiname = Artikelname in Excel.\\n' +
-    '4. In der App die Excel-Datei und WOODMO_Bilder.zip auswählen. Vorschau kontrollieren.\\n' +
-    '5. Bei gewünschten Bildänderungen die Option zum Ersetzen vorhandener Bilder ausdrücklich aktivieren.\\n' +
-    '6. FEHLENDE_BILDER.txt im Bilder-ZIP prüfen und fehlende Fotos separat ergänzen.\\n' +
-    'Wichtig: Keine Buchungen, Mitarbeiterpasswörter oder Cloud-Zugangsdaten im Paket.\\n'
+    'WOODMO Kassen-App: Katalog-Export mit Bildern\n\n' +
+    '1. Dieses Paket entpacken.\n' +
+    '2. WOODMO_Katalog.xlsx bearbeiten (Spalte „ID“ und Überschriften nicht ändern). Artikel, die in der Excel fehlen, werden beim Import gelöscht.\n' +
+    '3. Bilder: Im ZIP gibt es je Warengruppe einen Ordner. Neues Bild einfach mit demselben Namen wie der Artikel in den Ordner legen (JPG, PNG oder WebP).\n' +
+    '4. In der App: Excel und Bilder-ZIP auswählen und Vorschau prüfen. Bilder aus dem ZIP ersetzen vorhandene Bilder automatisch.\n' +
+    '5. Artikel ohne Bild bekommen beim Import ein Symbol. Eigenes Bild später in der Artikelverwaltung hochladen.\n' +
+    '6. FEHLENDE_BILDER.txt zeigt, welche Artikel kein eigenes Bild haben.\n' +
+    'Wichtig: Vor dem Import ein Backup erstellen. Im Paket sind keine Buchungen, Passwörter oder Zugangsdaten.\n'
   );
   const bundle = zipSync({
     'WOODMO_Katalog.xlsx': excel,

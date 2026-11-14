@@ -14,7 +14,8 @@ const make = (rows: unknown[][]) => ({Tabelle1:[headers,...rows]});
 const original = JSON.stringify(base);
 const plan = buildImportPlan(make([product,['Rum (Schuss)',2,'SCHUSS','fix',19,20],['Einzelpreis',null,'Handwerk','individuell eintragen',7,10]]),base);
 assert.deepEqual(plan.errors,[]);
-assert.equal(plan.next.products.length,base.products.length+2);
+assert.equal(plan.next.products.length,2,'Artikel, die in der Excel fehlen, werden entfernt');
+assert.equal(plan.removed.filter(r=>r.kind==='Artikel').length,base.products.length);
 assert.equal(plan.next.shotOptions.find(s=>s.id==='rum')?.price,2);
 assert.equal(plan.next.shotOptions.find(s=>s.id==='rum')?.name,'Rum');
 assert(!plan.next.products.some(p=>p.categoryId==='cat-system-schuss'));
@@ -37,13 +38,12 @@ assert.equal(Object.keys(withImage.images).length,1);
 const duplicates = [...images,{...images[0],path:'other/neu.jpg'}];
 const ambiguousImages = buildImportPlan(make([product]),base,duplicates);
 assert.deepEqual(ambiguousImages.errors,[], 'Artikelimport darf bei doppeltem Bild nicht abbrechen');
-assert(ambiguousImages.warnings.some(w=>w.includes('mehrere gleichwertige ZIP-Bilder')));
+assert(ambiguousImages.warnings.some(w=>w.includes('mehrere gleich gute ZIP-Bilder')));
 assert.equal(Object.keys(ambiguousImages.images).length,0,'mehrdeutige Bilder duerfen nicht stillschweigend hochgeladen werden');
 const missing = buildImportPlan(make([['Other',1,'G','fix',19,20]]),base,images);
-assert.equal(missing.errors.length,0); assert(missing.warnings.some(w=>w.includes('kein exaktes ZIP-Bild')));
+assert.equal(missing.errors.length,0); assert(missing.warnings.some(w=>w.includes('kein passendes ZIP-Bild')));
 const existing = [{...images[0],path:'outer/Cola 0,5l.jpg'}];
-assert.equal(Object.keys(buildImportPlan(make([['Cola 0,5l',4,'Getränke','fix',19,20]]),base,existing).images).length,0);
-assert.equal(Object.keys(buildImportPlan(make([['Cola 0,5l',4,'Getränke','fix',19,20]]),base,existing,true).images).length,1);
+assert.equal(Object.keys(buildImportPlan(make([['Cola 0,5l',4,'Getränke','fix',19,20]]),base,existing).images).length,1,'ZIP-Bild hat automatisch Vorrang vor vorhandenem Bild');
 const {default: ExcelJS} = await import('exceljs');
 const formulas = new ExcelJS.Workbook(); const formulaSheet=formulas.addWorksheet('Formel');
 formulaSheet.getCell('A1').value={formula:'1+1',result:2};
@@ -58,15 +58,43 @@ modified.products[0].taxRates = {Friedrichshafen:7,Bregenz:13};
 modified.shotOptions[0].locationPrices = {Bregenz:2.75};
 const twice = buildImportPlan(await readWorkbook(await exportWorkbook(modified)),modified);
 assert.deepEqual(twice.next,modified,'explicit rates and shot overrides roundtrip');
+
+// Warengruppe wechselt: Artikel wird verschoben statt doppelt angelegt; Tippfehler Kafee -> Kaffee.
+{
+  const g = (id: string, name: string) => ({id, name, icon: 'Package', color: 'x', sortOrder: 0});
+  const mk = (name: string, cat: string, id: string) => ({...base.products[0], id, name, categoryId: cat, imageUrl: '', sortOrder: 0});
+  const moved: LocalCatalog = {...structuredClone(base), categories: normalizeCategories([g('c-k','Kurze'), g('c-f','Schnaps (Flaschen)')]), products: [mk('Obstler','c-k','p1'), mk('Obstler','c-f','p2'), mk('Kaffee (L)','c-k','p3'), mk('Alt','c-k','p4')]};
+  const rows = [['Obstler',4,'Kurze (Schnaps)','fix',19,20],['Obstler',26,'Schnaps (Flaschen)','fix',19,20],['Kafee (L)',4,'Kurze (Likör)','fix',19,20]];
+  const result = buildImportPlan(make(rows), moved);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.next.products.length, 3, 'keine Duplikate');
+  assert.equal(result.next.products.find(p => p.id === 'p2')!.categoryId, 'c-f', 'Flaschen-Obstler bleibt in seiner Gruppe');
+  assert.notEqual(result.next.products.find(p => p.id === 'p1')!.categoryId, 'c-k', 'Kurze-Obstler wurde verschoben');
+  assert.equal(result.next.products.find(p => p.id === 'p3')!.name, 'Kaffee (L)', 'Schreibweise korrigiert');
+  assert.deepEqual(result.removed.map(r => r.name).sort(), ['Alt', 'Kurze']);
+  assert(!result.next.categories.some(c => c.id === 'c-k'), 'leere Warengruppe entfernt');
+  assert(result.next.categories.some(c => c.id === 'cat-system-schuss'), 'SCHUSS bleibt');
+  // Bilder: (S)=Schnaps, (L)=Likör, Tippfehler, Ordner Flaschen.
+  const png = {bytes: validPng, mime: 'image/png'};
+  const archive2 = ['Getränke/Obstler (S).png','Flaschenbilder/Obstler.jpeg','Getränke/Kaffee (L).png','Flaschenbilder/Kafee groß.jpeg','Getränke/Zirbenschnaps.png','Getränke/Zirbe (L).png'].map(path => ({path, ...png}));
+  const pic = buildImportPlan(make([['Obstler',4,'Kurze (Schnaps)','fix',19,20],['Obstler',26,'Schnaps (Flaschen)','fix',19,20],['Kafee (L)',4,'Kurze (Likör)','fix',19,20],['Kaffee groß',28,'Likör (Flaschen)','fix',19,20],['Zirbe (S)',4,'Kurze (Schnaps)','fix',19,20],['Zirbe (L)',4,'Kurze (Likör)','fix',19,20]]), moved, archive2);
+  const pathOf = (name: string, group: string) => { const p = pic.next.products.find(x => x.name === name && pic.next.categories.find(c => c.id === x.categoryId)?.name === group); return p && pic.images[p.id]?.path; };
+  assert.equal(pathOf('Obstler','Kurze (Schnaps)'), 'Getränke/Obstler (S).png');
+  assert.equal(pathOf('Obstler','Schnaps (Flaschen)'), 'Flaschenbilder/Obstler.jpeg');
+  assert.equal(pathOf('Kaffee (L)','Kurze (Likör)'), 'Getränke/Kaffee (L).png');
+  assert.equal(pathOf('Kaffee groß','Likör (Flaschen)'), 'Flaschenbilder/Kafee groß.jpeg');
+  assert.equal(pathOf('Zirbe (S)','Kurze (Schnaps)'), 'Getränke/Zirbenschnaps.png');
+  assert.equal(pathOf('Zirbe (L)','Kurze (Likör)'), 'Getränke/Zirbe (L).png');
+}
 if (process.argv[2]) {
  const bytes = fs.readFileSync(process.argv[2]);
  const archive = process.argv[3] ? readImageZip(fs.readFileSync(process.argv[3])) : [];
  const actual = buildImportPlan(await readWorkbook(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)),base,archive);
  assert.deepEqual(actual.errors,[]);
- assert.equal(actual.next.products.length-base.products.length,51);
+ assert.equal(actual.next.products.length,51);
  assert.equal(actual.next.shotOptions.length,4);
  assert.equal(actual.next.pfandSettings.Bregenz,3);
- console.log(`Originaldateien: ${actual.next.products.length-base.products.length} Artikel, ${actual.rows.filter(r=>r.kind==='SCHUSS'&&r.status==='geändert').length} SCHUSS-Änderungen, ${Object.keys(actual.images).length} Bildzuordnungen, ${actual.warnings.length} Bildhinweise.`);
+ console.log(`Originaldateien: ${actual.next.products.length} Artikel, ${actual.rows.filter(r=>r.kind==='SCHUSS'&&r.status==='geändert').length} SCHUSS-Änderungen, ${Object.keys(actual.images).length} Bildzuordnungen, ${actual.warnings.length} Bildhinweise.`);
 }
 console.log('Katalogtests erfolgreich: Vorschau, Duplikate, Preis-/Steuervalidierung, SCHUSS-Schutz, ZIP-Unterordner, Bildschutz und vollständiger Excel-Roundtrip.');
 
@@ -89,10 +117,11 @@ try {
   const inside = readImageZip(files['WOODMO_Bilder.zip']);
   assert.equal(inside.length,1);
   assert(inside[0].path.includes(imageProduct.name + '.png'));
+  assert(/^Bilder\/[^/]+\/[^/]+\.png$/.test(inside[0].path),'Export: Unterordner je Warengruppe');
   const excelBytes = files['WOODMO_Katalog.xlsx'];
   const imported = buildImportPlan(
     await readWorkbook(excelBytes.buffer.slice(excelBytes.byteOffset,excelBytes.byteOffset+excelBytes.byteLength) as ArrayBuffer),
-    roundtripCatalog,inside,true);
+    roundtripCatalog,inside);
   assert.deepEqual(imported.errors,[]);
   assert(imported.images[imageProduct.id]);
   // A missing image MUST be listed inside the exported ZIP, not silently
