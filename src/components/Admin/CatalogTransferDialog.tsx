@@ -261,7 +261,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   const unchanged = plan?.rows.filter(r => r.status === 'unverändert').length ?? 0;
   const importBlocked = !confirmed || (!!plan?.removed.length && !confirmedDelete) || busy || done || !session || !!stale || testMode || !!plan?.errors.length;
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="catalog-transfer-title">
-    <div className="flex max-h-[94vh] w-full max-w-4xl flex-col rounded-2xl bg-white p-5 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
+    <div className="flex max-h-[94vh] w-full max-w-3xl flex-col rounded-2xl bg-white p-4 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
       <div className="flex items-center justify-between gap-4"><h2 id="catalog-transfer-title" className="text-lg font-bold">Artikel per Excel ändern</h2><button disabled={busy} onClick={onClose} className={button}>Schließen</button></div>
       {fileError && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="presentation">
         <div role="alertdialog" aria-modal="true" aria-labelledby="catalog-file-error-title" aria-describedby="catalog-file-error-text" className="w-full max-w-md rounded-xl bg-white p-5 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
@@ -270,27 +270,22 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           <button autoFocus type="button" onClick={() => setFileError('')} className={button}>OK</button>
         </div>
       </div>}
-      <div className="mt-3 space-y-5 overflow-auto">
-        <section className="space-y-2">
-          <h3 className="font-semibold">1. Aktuellen Stand exportieren</h3>
-          <p className="text-sm">Du bekommst eine Excel-Datei und die Bilder, je Warengruppe ein Ordner.</p>
-          <div className="flex flex-wrap gap-2">
+      <div className="mt-2 space-y-3 overflow-auto">
+        <details className="rounded-xl border border-gray-400 p-2">
+          <summary className="cursor-pointer font-semibold">1. Aktuellen Stand exportieren (optional)</summary>
+          <div className="mt-2 flex flex-wrap gap-2">
             <button disabled={busy} onClick={downloadBundle} className={primary}>Excel + Bilder exportieren</button>
-            <button disabled={busy} onClick={downloadTemplate} className={button}>Mustervorlage herunterladen</button>
+            <button disabled={busy} onClick={downloadTemplate} className={button}>Mustervorlage</button>
+            <button disabled={busy} onClick={download} className={button}>Nur Excel</button>
+            <button disabled={busy} onClick={downloadImagesOnly} className={button}>Nur Bilder-ZIP</button>
           </div>
-          <details className="text-sm"><summary className="cursor-pointer">Weitere Downloads</summary>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button disabled={busy} onClick={download} className={button}>Nur Excel</button>
-              <button disabled={busy} onClick={downloadImagesOnly} className={button}>Nur Bilder-ZIP</button>
-            </div>
-          </details>
-        </section>
+        </details>
         <section className="space-y-2">
           <h3 className="font-semibold">2. Neue Dateien auswählen</h3>
-          <label className="block">Excel (.xlsx)<input disabled={busy} className="ml-3" type="file" accept=".xlsx" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'excel'); e.target.value = '';}} /></label>
-          <label className="block">Bilder-ZIP (optional)<input disabled={busy} className="ml-3" type="file" accept=".zip" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'zip'); e.target.value = '';}} /></label>
+          <label className="flex flex-wrap items-center gap-2">Excel (.xlsx)<input disabled={busy} type="file" accept=".xlsx" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'excel'); e.target.value = '';}} /><span className={excel ? 'font-semibold text-emerald-400' : 'opacity-60'}>{excel ? `✓ ${excel.name}` : 'noch keine Datei'}</span></label>
+          <label className="flex flex-wrap items-center gap-2">Bilder-ZIP (optional)<input disabled={busy} type="file" accept=".zip" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'zip'); e.target.value = '';}} /><span className={zip ? 'font-semibold text-emerald-400' : 'opacity-60'}>{zip ? `✓ ${zip.name}` : 'noch keine Datei'}</span></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy} checked={autoIllustrations} onChange={e => {invalidate();setAutoIllustrations(e.target.checked);}} />Artikel ohne Bild bekommen ein eigenes Symbol</label>
-          {zipSummary && <p role="status" className="text-sm font-semibold">{zipSummary}</p>}
+          {zipSummary && zip && <p role="status" className="text-sm font-semibold">{zipSummary}</p>}
           {testMode && <p className="rounded-xl bg-amber-100 p-3 text-amber-900">Testmodus: Vorschau und Export möglich, Import gesperrt.</p>}
           <button disabled={busy || !excel} onClick={preview} className={primary}>{busy ? 'Bitte warten …' : 'Vorschau erstellen'}</button>
           <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(v => !v)} className={`${button} ml-2`}>{helpOpen ? 'Hilfe schließen' : 'Hilfe: Was gilt beim Import?'}</button>
@@ -309,17 +304,17 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           <h3 className="font-semibold">3. Vorschau prüfen und importieren</h3>
           <p className="font-semibold">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} werden gelöscht · {unchanged} unverändert</p>
           {plan.errors.length > 0 && <div role="alert" className="rounded-xl border border-red-500 p-3"><strong>Import gesperrt – bitte zuerst beheben:</strong><ul className="list-disc pl-5">{plan.errors.map((e,i) => <li key={i}>{e}</li>)}</ul></div>}
-          {plan.removed.length > 0 && <div className="rounded-xl border-2 border-red-600 p-3 text-sm">
+          {plan.removed.length > 0 && <div className="rounded-xl border-2 border-red-600 p-2 text-sm">
             <strong>Diese Einträge fehlen in der neuen Excel und werden gelöscht:</strong>
-            <ul className="mt-2 list-disc pl-5">
+            <ul className="mt-1 list-disc pl-5 text-xs">
               {removedArticles.map(r => <li key={r.id}>{r.name} <span className="opacity-70">({r.group})</span></li>)}
               {removedGroups.map(r => <li key={r.id}>Warengruppe „{r.name}“ (leer)</li>)}
             </ul>
-            <label className="mt-3 flex items-center gap-2 font-semibold"><input type="checkbox" disabled={busy || done} checked={confirmedDelete} onChange={e => setConfirmedDelete(e.target.checked)} />Ich habe ein Backup erstellt und bestätige das Löschen.</label>
+            <label className="mt-2 flex items-center gap-2 font-semibold"><input type="checkbox" disabled={busy || done} checked={confirmedDelete} onChange={e => setConfirmedDelete(e.target.checked)} />Ich habe ein Backup erstellt und bestätige das Löschen.</label>
           </div>}
-          {groups.filter(g => g.rows.length).map(g => <details key={g.title} className="rounded-xl border border-gray-400 p-3" open={g.title === 'Neu angelegt' || g.title === 'Preis geändert' || g.title === 'Warengruppe gewechselt'}>
-            <summary className="cursor-pointer font-semibold">{g.title} ({g.rows.length})</summary>
-            <ul className="mt-2 space-y-1 text-sm">{g.rows.map((r, i) => <li key={`${r.id}-${i}`}><strong>{r.name}</strong>{r.image ? <span className="opacity-70"> · Bild: {r.image}</span> : null}{r.status === 'geändert' && r.changes.length > 0 && !g.title.startsWith('Bild') && <span className="block opacity-80">{r.changes.filter(c => !c.startsWith('Bild')).join(' · ')}</span>}</li>)}</ul>
+          {groups.filter(g => g.rows.length).map(g => <details key={g.title} className="rounded-xl border border-gray-400 px-3 py-1.5">
+            <summary className="cursor-pointer text-sm font-semibold">{g.title} ({g.rows.length})</summary>
+            <ul className="mt-1 max-h-48 overflow-auto text-xs leading-5">{g.rows.map((r, i) => <li key={`${r.id}-${i}`}><strong>{r.name}</strong>{r.image ? <span className="opacity-70"> ← {r.image}</span> : r.changes.length > 0 ? <span className="opacity-80"> · {r.changes.filter(c => !c.startsWith('Bild')).join(' · ')}</span> : null}</li>)}</ul>
           </details>)}
           {plan.warnings.length > 0 && <details className="rounded-xl border border-gray-400 p-3"><summary className="cursor-pointer">{plan.warnings.length} Hinweise zu Bildern</summary><ul className="mt-2 list-disc pl-5 text-sm">{plan.warnings.map((w,i) => <li key={i}>{w}</li>)}</ul></details>}
           {!autoIllustrations && plan.rows.filter(r => r.kind === 'Artikel' && r.status !== 'entfernt' && r.id && !plan.images[r.id] && !plan.next.products.find(p => p.id === r.id)?.imageUrl).length > 0 && <section className="space-y-2 rounded-xl border border-gray-400 p-3">
