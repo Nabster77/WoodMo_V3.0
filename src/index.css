@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
+
+@keyframes woodmo-status-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(52,211,153,.96), 0 0 12px 4px rgba(16,185,129,.58), 0 0 25px 7px rgba(16,185,129,.27);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(110,255,188,1), 0 0 21px 8px rgba(16,255,135,.75), 0 0 37px 11px rgba(16,185,129,.38);
+  }
+}
+.woodmo-brand-ok { animation: woodmo-status-glow 2.8s ease-in-out infinite; }
+.woodmo-brand-error {
+  box-shadow: 0 0 0 3px rgba(255,70,70,1), 0 0 20px 8px rgba(255,30,30,.72), 0 0 35px 9px rgba(239,68,68,.4);
+}
+.woodmo-brand-pending {
+  box-shadow: 0 0 0 2px rgba(251,191,36,.92), 0 0 16px 5px rgba(245,158,11,.48);
+}
+.woodmo-heading-offline { text-shadow: 0 0 11px rgba(239,68,68,.76); }
+@media (prefers-reduced-motion: reduce) {
+  .woodmo-brand-ok {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(52,211,153,1), 0 0 18px 6px rgba(16,185,129,.62);
+  }
+}
+
+@keyframes woodmo-text-glow {
+  0%, 100% { text-shadow: 0 0 8px rgba(16,185,129,.1); }
+  50% { text-shadow: 0 0 14px rgba(16,185,129,.28); }
+}
+.woodmo-title-ok { animation: woodmo-text-glow 3.3s ease-in-out infinite; }
+.woodmo-title-error { text-shadow: 0 0 10px rgba(239,68,68,.38); }
+@media (prefers-reduced-motion: reduce) { .woodmo-title-ok { animation: none; } }

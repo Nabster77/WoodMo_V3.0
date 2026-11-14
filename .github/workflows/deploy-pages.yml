@@ -1,0 +1,65 @@
+name: WOODMO V3.0 – GitHub Pages
+
+# Veröffentlicht NUR aus dem eigenen V3-Repository Nabster77/WoodMo_V3.0.
+# Die V2-Kasse (Nabster77/holz-bar-kassen-appv2) wird davon nie berührt.
+# Adresse: https://nabster77.github.io/WoodMo_V3.0/
+# Datenbank: Supabase-Projekt tulndunkpsynkbbebenf (über Variable/Secret dieses Repos).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'Nabster77/WoodMo_V3.0'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    env:
+      VITE_DEPLOY_BASE: /WoodMo_V3.0/
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - name: Code laden
+        uses: actions/checkout@v4
+      - name: Sicherheitscheck – nur V3-Datenbank
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "Variable VITE_SUPABASE_URL oder Secret VITE_SUPABASE_ANON_KEY fehlt."; exit 1
+          fi
+          if [ "$VITE_SUPABASE_URL" != "https://tulndunkpsynkbbebenf.supabase.co" ]; then
+            echo "Abbruch: VITE_SUPABASE_URL ist nicht die V3-Datenbank."; exit 1
+          fi
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Abhängigkeiten installieren
+        run: npm ci
+      - name: Typen prüfen
+        run: npm run typecheck
+      - name: Gesamttests
+        run: npm test
+      - name: Pages vorbereiten
+        uses: actions/configure-pages@v5
+      - name: App bauen
+        run: npm run build
+      - name: Website bereitstellen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4
