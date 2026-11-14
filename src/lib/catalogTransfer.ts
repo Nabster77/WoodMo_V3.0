@@ -8,7 +8,7 @@ export const locations = ['Friedrichshafen', 'Bregenz'] as const;
 export type SheetRows = Record<string, unknown[][]>;
 export type PreviewRow = { id?: string; kind: string; name: string; status: 'neu' | 'geändert' | 'unverändert' | 'entfernt'; changes: string[]; image?: string; tags?: string[] };
 export type ImageEntry = { path: string; bytes: Uint8Array; mime: string };
-export type ImportPlan = { base: LocalCatalog; next: LocalCatalog; rows: PreviewRow[]; errors: string[]; warnings: string[]; images: Record<string, ImageEntry>; removed: { kind: 'Artikel' | 'Warengruppe'; id: string; name: string; group?: string }[] };
+export type ImportPlan = { base: LocalCatalog; next: LocalCatalog; rows: PreviewRow[]; errors: string[]; warnings: string[]; images: Record<string, ImageEntry>; removed: { kind: 'Artikel' | 'Warengruppe'; id: string; name: string; group?: string }[]; unmatched: string[] };
 export const normalizeName = (v: unknown): string => String(v ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss').toLocaleLowerCase('de-DE').replace(/\(\d+\)\s*$/, '').replace(/[^a-z0-9]/g, '');
 /** Image filenames may spell German umlauts as ae/oe/ue instead of ä/ö/ü. */
 function imageNameKey(value: string): string {
@@ -148,7 +148,7 @@ function table(rows: unknown[][], required: string): { index: number; records: R
 }
 export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: ImageEntry[] = []): ImportPlan {
   const next: LocalCatalog = structuredClone(base);
-  const plan: ImportPlan = { base: structuredClone(base), next, rows: [], errors: [], warnings: [], images: {}, removed: [] };
+  const plan: ImportPlan = { base: structuredClone(base), next, rows: [], errors: [], warnings: [], images: {}, removed: [], unmatched: [] };
   const seen = new Set<string>();
   const matchedOld = new Set<string>();
   const names = new Set<string>();
@@ -323,6 +323,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
       else record('Artikel', p, old);
     }
   }
+  { const used = new Set(Object.values(plan.images).map(i => i.path)); plan.unmatched = archive.map(f => f.path).filter(path => !used.has(path)); }
   if (!validShots(next.shotOptions)) plan.errors.push('SCHUSS-Einstellungen enthalten ungültige oder doppelte Sorten.');
   next.categories = normalizeCategories(next.categories);
   // Articles missing from the new file are deleted (the file is the truth). Shot options are never deleted.
