@@ -173,7 +173,6 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
         const url = await uploadArticleImage(file);
         if (!url) throw new Error(`Bild „${image.path}“ konnte nicht hochgeladen werden. Katalog wurde nicht importiert. Bereits hochgeladene neue Bilder bleiben unreferenziert; vorhandene Bilder bleiben erhalten.`);
         uploaded++; completedSteps++; setImportProgress({done:completedSteps,total:totalSteps,stage:'ZIP-Bilder hochladen'});
-        addLog(`✓ Bild gespeichert: ${articleName}`);
         next.products.find(p => p.id === productId)!.imageUrl = url;
       }
       for (const [productId, generatedImage] of Object.entries(generated)) {
@@ -192,14 +191,16 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           const url = await uploadArticleImage(illustration);
           if (!url) throw new Error(`Illustration für „${product.name}“ konnte nicht gespeichert werden.`);
           uploaded++; completedSteps++; setImportProgress({done:completedSteps,total:totalSteps,stage:'Illustrationen hochladen'}); product.imageUrl = `${url}${url.includes('?') ? '&' : '?'}woodmoIllustration=1`;
-          addLog(`✓ Symbol erzeugt: ${product.name}`);
         }
       }
       setImportProgress({done:completedSteps,total:totalSteps,stage:'Speichere Katalog in der Datenbank …'});
       await onCommit(session, next);
+      const isReal = (x: { changes: string[] }) => x.changes.some(c => !c.startsWith('Bild'));
       for (const r of plan.rows.filter(x => x.status === 'neu')) addLog(`✓ Füge ${r.kind === 'Warengruppe' ? 'Warengruppe' : 'Artikel'} hinzu: ${r.name}`);
-      for (const r of plan.rows.filter(x => x.status === 'geändert')) addLog(`✓ Erneuere ${r.kind === 'Warengruppe' ? 'Warengruppe' : r.kind === 'Artikel' ? 'Artikel' : r.kind}: ${r.name}`);
+      for (const r of plan.rows.filter(x => x.status === 'geändert' && isReal(x))) addLog(`✓ Erneuere ${r.kind === 'Warengruppe' ? 'Warengruppe' : r.kind === 'Artikel' ? 'Artikel' : r.kind}: ${r.name}${r.tags?.length ? ` (${r.tags.join(', ')})` : ''}`);
       for (const r of plan.removed) addLog(`✓ Lösche ${r.kind === 'Warengruppe' ? 'Warengruppe' : 'Artikel'}: ${r.name}`);
+      const imageOnly = plan.rows.filter(x => x.status === 'geändert' && !isReal(x) && x.image).length;
+      if (imageOnly) addLog(`✓ Erneuere Bilder: ${imageOnly} Artikel`);
       setImportProgress({done:totalSteps,total:totalSteps,stage:'Import abgeschlossen'});
       setDone(true); setConfirmed(false); setConfirmedDelete(false); setMessage(`Import abgeschlossen.${plan.removed.length ? ` ${plan.removed.length} Einträge gelöscht.` : ''}`);
     } catch (e) {
@@ -273,7 +274,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   const importBlocked = !confirmed || (!!plan?.removed.length && !confirmedDelete) || busy || done || !session || !!stale || testMode || !!plan?.errors.length;
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="catalog-transfer-title">
     <div className="flex max-h-[94vh] w-full max-w-3xl flex-col rounded-2xl bg-white p-4 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
-      <div className="flex items-center justify-between gap-4"><h2 id="catalog-transfer-title" className="text-lg font-bold">Artikel per Excel ändern</h2><button disabled={busy} onClick={onClose} className={button}>Schließen</button></div>
+      <div className="flex items-center justify-between gap-4"><h2 id="catalog-transfer-title" className="text-lg font-bold">Artikel per Excel ändern</h2>{!done && <button disabled={busy} onClick={onClose} className={button}>Schließen</button>}</div>
       {helpOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="catalog-help-title">
         <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl bg-white p-5 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
           <h3 id="catalog-help-title" className="text-lg font-bold">So geht’s</h3>
