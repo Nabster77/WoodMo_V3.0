@@ -92,9 +92,10 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   const [importProgress, setImportProgress] = useState<{done:number;total:number;stage:string} | null>(null);
   const [message, setMessage] = useState('');
   const [importError, setImportError] = useState('');
+  const [log, setLog] = useState<string[]>([]);
   const [fileError, setFileError] = useState('');
   const [done, setDone] = useState(false);
-  const invalidate = () => {setGenerated({});setZipSummary('');setPlan(null); setSession(null); setConfirmed(false); setConfirmedDelete(false); setDone(false); setImportError(''); setImportProgress(null); setMessage('');};
+  const invalidate = () => {setGenerated({});setZipSummary('');setPlan(null); setSession(null); setConfirmed(false); setConfirmedDelete(false); setDone(false); setImportError(''); setImportProgress(null); setLog([]); setMessage('');};
   const stale = session && JSON.stringify(session.base) !== JSON.stringify(catalog);
   function chooseFile(file: File | null, kind: 'excel' | 'zip') {
     invalidate();
@@ -154,7 +155,8 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   }
   async function commit() {
     if (!plan || !session || !confirmed || (plan.removed.length && !confirmedDelete) || plan.errors.length || stale || testMode || busy || done) return;
-    setBusy(true); setMessage(''); setImportError('');
+    setBusy(true); setMessage(''); setImportError(''); setLog([]);
+    const addLog = (line: string) => setLog(prev => [...prev, line]);
     const imageCount = Object.keys(plan.images).length + Object.keys(generated).length + (autoIllustrations ? plan.next.products.filter(p => !p.imageUrl && !plan.images[p.id] && !generated[p.id] && plan.rows.some(r => r.kind === 'Artikel' && r.id === p.id)).length : 0);
     const totalSteps = imageCount + 1;
     let completedSteps = 0;
@@ -166,9 +168,12 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
       for (const [productId, image] of Object.entries(plan.images)) {
         // Images were already validated and resized individually during preview.
         const file = new File([new Uint8Array(image.bytes)], image.path.split('/').pop()!, {type: image.mime});
+        const articleName = next.products.find(p => p.id === productId)?.name ?? image.path;
+        setImportProgress({done:completedSteps,total:totalSteps,stage:`Lade Bild hoch: ${articleName}`});
         const url = await uploadArticleImage(file);
         if (!url) throw new Error(`Bild „${image.path}“ konnte nicht hochgeladen werden. Katalog wurde nicht importiert. Bereits hochgeladene neue Bilder bleiben unreferenziert; vorhandene Bilder bleiben erhalten.`);
         uploaded++; completedSteps++; setImportProgress({done:completedSteps,total:totalSteps,stage:'ZIP-Bilder hochladen'});
+        addLog(`✓ Bild gespeichert: ${articleName}`);
         next.products.find(p => p.id === productId)!.imageUrl = url;
       }
       for (const [productId, generatedImage] of Object.entries(generated)) {
@@ -182,14 +187,19 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
         for (const product of next.products) {
           if (product.imageUrl || plan.images[product.id] || generated[product.id]) continue;
           if (!plan.rows.some(r => r.kind === 'Artikel' && r.id === product.id)) continue;
+          setImportProgress({done:completedSteps,total:totalSteps,stage:`Erzeuge Symbol: ${product.name}`});
           const illustration = await createCatalogIllustration(product.name);
           const url = await uploadArticleImage(illustration);
           if (!url) throw new Error(`Illustration für „${product.name}“ konnte nicht gespeichert werden.`);
           uploaded++; completedSteps++; setImportProgress({done:completedSteps,total:totalSteps,stage:'Illustrationen hochladen'}); product.imageUrl = `${url}${url.includes('?') ? '&' : '?'}woodmoIllustration=1`;
+          addLog(`✓ Symbol erzeugt: ${product.name}`);
         }
       }
-      setImportProgress({done:completedSteps,total:totalSteps,stage:'Katalog in Supabase speichern'});
+      setImportProgress({done:completedSteps,total:totalSteps,stage:'Speichere Katalog in der Datenbank …'});
       await onCommit(session, next);
+      for (const r of plan.rows.filter(x => x.status === 'neu')) addLog(`✓ Füge ${r.kind === 'Warengruppe' ? 'Warengruppe' : 'Artikel'} hinzu: ${r.name}`);
+      for (const r of plan.rows.filter(x => x.status === 'geändert')) addLog(`✓ Erneuere ${r.kind === 'Warengruppe' ? 'Warengruppe' : r.kind === 'Artikel' ? 'Artikel' : r.kind}: ${r.name}`);
+      for (const r of plan.removed) addLog(`✓ Lösche ${r.kind === 'Warengruppe' ? 'Warengruppe' : 'Artikel'}: ${r.name}`);
       setImportProgress({done:totalSteps,total:totalSteps,stage:'Import abgeschlossen'});
       setDone(true); setConfirmed(false); setConfirmedDelete(false); setMessage(`Import abgeschlossen.${plan.removed.length ? ` ${plan.removed.length} Einträge gelöscht.` : ''}`);
     } catch (e) {
@@ -307,8 +317,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
         {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 p-4" role="status">
           <h3 className="text-xl font-extrabold text-emerald-300">✓ Import erfolgreich abgeschlossen</h3>
           <p className="text-base font-semibold text-emerald-100">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>
-          {plan.removed.length > 0 && <p className="text-sm text-emerald-100">Gelöscht: {plan.removed.map(r => r.kind === 'Warengruppe' ? `Warengruppe „${r.name}“` : r.name).join(', ')}</p>}
-          {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').length > 0 && <p className="text-sm text-emerald-100">Neu: {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').map(r => r.name).join(', ')}</p>}
+          {log.length > 0 && <ul className="max-h-48 overflow-auto rounded-lg bg-black/20 p-2 text-sm text-emerald-100">{log.map((l, i) => <li key={i}>{l}</li>)}</ul>}
           <p className="text-base font-bold text-emerald-200">Sie können dieses Fenster jetzt schließen.</p>
           <button type="button" autoFocus className="rounded-xl bg-emerald-600 px-6 py-3 text-lg font-extrabold text-white hover:bg-emerald-500" onClick={onClose}>Fenster schließen</button>
         </section>}
@@ -344,7 +353,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           </section>}
           {stale && !done && <p role="alert">Der lokale Katalog hat sich geändert. Bitte Vorschau neu erstellen.</p>}
           <label className="flex items-center gap-2"><input type="checkbox" disabled={busy || done || !session || !!stale || testMode || !!plan.errors.length} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />Ich habe die Vorschau geprüft und bestätige den Import.</label>
-          {importProgress && <div role="status" className="space-y-1 rounded-xl border border-gray-400 p-3"><p className="text-sm font-semibold">Import: {Math.round(importProgress.done / importProgress.total * 100)} % – {importProgress.stage}</p><progress className="w-full" max={importProgress.total} value={importProgress.done} /></div>}
+          {importProgress && <div role="status" className="space-y-1 rounded-xl border border-gray-400 p-3"><p className="text-sm font-semibold">Import: {Math.round(importProgress.done / importProgress.total * 100)} % – {importProgress.stage}</p><progress className="w-full" max={importProgress.total} value={importProgress.done} />{log.length > 0 && <ul className="max-h-32 overflow-auto text-xs">{log.slice(-6).map((l, i) => <li key={i}>{l}</li>)}</ul>}</div>}
           <button className={primary} disabled={importBlocked} onClick={commit}>Jetzt importieren</button>
         </section>}
       </div>
