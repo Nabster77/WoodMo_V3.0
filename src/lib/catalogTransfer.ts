@@ -196,7 +196,15 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
       }
       // Step 1: find the existing article for every row (ID, then same group, then any group).
       // Articles that moved to another Warengruppe are moved, not duplicated.
-      const infos = t.records.map(r => ({ name: fixSpelling(text(r['Produktname App'])), group: text(r.Warengruppe), id: r.ID }));
+      // Identical duplicate rows are ignored; same name with different values stays an error (see uniqueName).
+      const rowSignatures = new Set<string>();
+      const records = t.records.filter(r => {
+        const sig = JSON.stringify(Object.entries(r).map(([k, v]) => [k, text(v)]));
+        if (rowSignatures.has(sig)) { plan.warnings.push(`${fixSpelling(text(r['Produktname App']))}: doppelte, identische Zeile in der Excel ignoriert.`); return false; }
+        rowSignatures.add(sig); return true;
+      });
+      const ambiguousRows = new Set<number>();
+      const infos = records.map(r => ({ name: fixSpelling(text(r['Produktname App'])), group: text(r.Warengruppe), id: r.ID }));
       const usable = (x: { name: string; group: string }) => !!x.name && !!x.group && normalizeName(x.group) !== 'schuss';
       const pre: (Product | undefined)[] = infos.map(info => {
         if (!usable(info)) return undefined;
@@ -205,6 +213,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         if (!baseCat) return undefined;
         const same = base.products.filter(x => x.categoryId === baseCat.id && !matchedOld.has(x.id) && normalizeName(fixSpelling(x.name)) === normalizeName(info.name));
         if (same.length === 1) matchedOld.add(same[0].id);
+        if (same.length > 1) ambiguousRows.add(infos.indexOf(info));
         return same.length === 1 ? same[0] : undefined;
       });
       const sameArticle = (a: string, b: string) => { const x = parseName(a), y = parseName(b); return x.kind === y.kind && x.size === y.size && nearlySame(x.key, y.key); };
@@ -220,7 +229,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         }
         if (pick) { pre[i] = pick; matchedOld.add(pick.id); }
       });
-      t.records.forEach((r, i) => protect(`${sheet}, Datenzeile ${i + 1}`, () => {
+      records.forEach((r, i) => protect(`${sheet}, Datenzeile ${i + 1}`, () => {
         const name = infos[i].name; const group = infos[i].group;
         if (!name || !group) throw new Error('Artikelname oder Warengruppe fehlt.');
         const isShot = normalizeName(group) === 'schuss';
@@ -235,6 +244,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
           next.categories.push(category); record('Warengruppe', category, undefined);
         }
         uniqueName(isShot ? `shot:${shotKey(name)}` : `product:${category!.id}:${normalizeName(name)}`);
+        if (ambiguousRows.has(i)) throw new Error(`Name „${name}“ ist mehrdeutig. Bitte ID aus dem Export verwenden.`);
         const old = !isShot ? pre[i] : undefined;
         if (!isShot && !empty(r.ID) && !old) throw new Error(`Unbekannte ID „${text(r.ID)}“. Für neue Einträge ID leer lassen.`);
         if (old?.categoryId === SHOT_CATEGORY_ID) throw new Error('Normaler Artikel darf nicht in SCHUSS umgewandelt werden.');
