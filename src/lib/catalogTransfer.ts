@@ -278,9 +278,11 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         if (old?.isPfandArticle === undefined && !p.isPfandArticle) delete p.isPfandArticle;
         if (old?.shotPrices === undefined && p.shotPrices && !Object.keys(p.shotPrices).length) delete p.shotPrices;
         const imageUrl = text(r.Bild);
+        // The exported Bild column only fills gaps. An existing real image is never reverted by an
+        // older address in the Excel (the file may be older than the last import); ZIP images decide instead.
         if (imageUrl && imageUrl !== p.imageUrl) {
           if (!/^(https?:\/\/|\/[^/])/.test(imageUrl)) throw new Error('Bild muss eine HTTP(S)-URL oder ein lokaler Asset-Pfad sein.');
-          p.imageUrl = imageUrl;
+          if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) p.imageUrl = imageUrl;
         }
         // Images from the ZIP always win over existing images.
         let image: string | undefined;

@@ -87,6 +87,16 @@ assert.deepEqual(twice.next,modified,'explicit rates and shot overrides roundtri
   assert.equal(pathOf('Zirbe (S)','Kurze (Schnaps)'), 'Getränke/Zirbenschnaps.png');
   assert.equal(pathOf('Zirbe (L)','Kurze (Likör)'), 'Getränke/Zirbe (L).png');
 }
+
+// Veraltete Bildadresse in der Excel darf ein vorhandenes Bild nicht zurücksetzen.
+{
+  const withImage: LocalCatalog = structuredClone(base);
+  withImage.products[0].imageUrl = 'https://x.supabase.co/storage/v1/object/public/article-images/new.png';
+  const cat = withImage.categories.find(c => c.id === withImage.products[0].categoryId)!;
+  const sheet = {Tabelle1:[[...headers,'Bild'],[withImage.products[0].name,withImage.products[0].prices.Friedrichshafen,cat.name,'fix',19,20,'https://x.supabase.co/storage/v1/object/public/article-images/old.png']]};
+  const stale = buildImportPlan(sheet, withImage);
+  assert.equal(stale.next.products.find(p => p.id === withImage.products[0].id)!.imageUrl.endsWith('new.png'), true, 'altes Bild aus der Excel setzt nichts zurück');
+}
 if (process.argv[2]) {
  const bytes = fs.readFileSync(process.argv[2]);
  const archive = process.argv[3] ? readImageZip(fs.readFileSync(process.argv[3])) : [];
