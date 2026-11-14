@@ -81,6 +81,10 @@ assert.deepEqual(twice.next,modified,'explicit rates and shot overrides roundtri
   const pic = buildImportPlan(make([['Obstler',4,'Kurze (Schnaps)','fix',19,20],['Obstler',26,'Schnaps (Flaschen)','fix',19,20],['Kafee (L)',4,'Kurze (Likör)','fix',19,20],['Kaffee groß',28,'Likör (Flaschen)','fix',19,20],['Zirbe (S)',4,'Kurze (Schnaps)','fix',19,20],['Zirbe (L)',4,'Kurze (Likör)','fix',19,20]]), moved, archive2);
   const pathOf = (name: string, group: string) => { const p = pic.next.products.find(x => x.name === name && pic.next.categories.find(c => c.id === x.categoryId)?.name === group); return p && pic.images[p.id]?.path; };
   assert.equal(pathOf('Obstler','Kurze (Schnaps)'), 'Getränke/Obstler (S).png');
+  const schussArchive = [...archive2, 'Getränke/Rum (Schuss).png', 'Getränke/Whiskey (Schuss).PNG', 'Winzer Glühwein.png'].map(x => typeof x === 'string' ? { path: x, ...png } : x);
+  const schussPlan = buildImportPlan(make([['Obstler',4,'Kurze (Schnaps)','fix',19,20]]), moved, schussArchive);
+  assert(!schussPlan.unmatched.some(x => /schuss/i.test(x)), 'Schuss-Bilder werden nicht als unpassend gemeldet');
+  assert(schussPlan.unmatched.includes('Winzer Glühwein.png'), 'echte unpassende Bilder werden weiter gemeldet');
   assert.equal(pathOf('Obstler','Schnaps (Flaschen)'), 'Flaschenbilder/Obstler.jpeg');
   assert.equal(pathOf('Kaffee (L)','Kurze (Likör)'), 'Getränke/Kaffee (L).png');
   assert.equal(pathOf('Kaffee groß','Likör (Flaschen)'), 'Flaschenbilder/Kafee groß.jpeg');

@@ -323,7 +323,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
       else record('Artikel', p, old);
     }
   }
-  { const used = new Set(Object.values(plan.images).map(i => i.path)); plan.unmatched = archive.map(f => f.path).filter(path => !used.has(path)); }
+  { const used = new Set(Object.values(plan.images).map(i => i.path)); plan.unmatched = archive.map(f => f.path).filter(path => !used.has(path) && !/(^|\/)schuss(\/|$)|\(\s*schuss\s*\)\.[a-z0-9]+$/i.test(path)); }
   if (!validShots(next.shotOptions)) plan.errors.push('SCHUSS-Einstellungen enthalten ungültige oder doppelte Sorten.');
   next.categories = normalizeCategories(next.categories);
   // Articles missing from the new file are deleted (the file is the truth). Shot options are never deleted.
