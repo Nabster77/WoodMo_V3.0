@@ -1,7 +1,7 @@
 @echo off
 setlocal
 REM WOODMO V3 - lokaler Testserver. Doppelklick genuegt. Nur V3-Datenbank erlaubt.
-set "BRANCH=claude/excel-import-abgleich"
+set "BRANCH=main"
 set "DIR=C:\Users\szmai\WOODMO\WOODMO_V3_TEST"
 set "V3URL=https://tulndunkpsynkbbebenf.supabase.co"
 set "REPO=https://github.com/Nabster77/WoodMo_V3.0.git"
