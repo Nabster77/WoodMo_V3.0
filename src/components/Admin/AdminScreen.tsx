@@ -607,11 +607,23 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
       <div className="mb-3 flex flex-wrap items-center justify-start gap-3">
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           Sortierung:
-          <select aria-label="Artikel sortieren" value={sortMode} onChange={e => { setSortMode(e.target.value as 'alphabetical' | 'reverse' | 'manual'); setDragEnabled(false); }}
+          <select aria-label="Artikel sortieren" value={filterCat ? `cat:${filterCat}` : sortMode} onChange={e => {
+              const value = e.target.value;
+              // A Warengruppe entry only filters the list (in own order);
+              // a sort entry shows all articles again.
+              if (value.startsWith('cat:')) { setFilterCat(value.slice(4)); setSortMode('manual'); }
+              else { setFilterCat(''); setSortMode(value as 'alphabetical' | 'reverse' | 'manual'); }
+              setDragEnabled(false);
+            }}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
             <option value="manual">Eigene Reihenfolge</option>
             <option value="alphabetical">Aufsteigend (A–Z)</option>
             <option value="reverse">Absteigend (Z–A)</option>
+            <optgroup label="Nur Warengruppe anzeigen">
+              {[...categories].filter((cat) => cat.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
+                <option key={cat.id} value={`cat:${cat.id}`}>{cat.name}</option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <button type="button" aria-pressed={dragEnabled} onClick={() => { if (!dragEnabled) setSortMode('manual'); setDragEnabled(!dragEnabled); }}
