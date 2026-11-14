@@ -305,7 +305,8 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           <p className="text-base font-semibold text-emerald-100">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>
           {plan.removed.length > 0 && <p className="text-sm text-emerald-100">Gelöscht: {plan.removed.map(r => r.kind === 'Warengruppe' ? `Warengruppe „${r.name}“` : r.name).join(', ')}</p>}
           {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').length > 0 && <p className="text-sm text-emerald-100">Neu: {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').map(r => r.name).join(', ')}</p>}
-          <button type="button" className={primary} onClick={onClose}>Schließen</button>
+          <p className="text-base font-bold text-emerald-200">Sie können dieses Fenster jetzt schließen.</p>
+          <button type="button" autoFocus className="rounded-xl bg-emerald-600 px-6 py-3 text-lg font-extrabold text-white hover:bg-emerald-500" onClick={onClose}>Fenster schließen</button>
         </section>}
         {importError && !done && <div role="alert" className="rounded-xl border-2 border-red-500 bg-red-950/60 p-4"><h3 className="text-lg font-extrabold text-red-300">✗ Import fehlgeschlagen</h3><p className="mt-1 whitespace-pre-wrap text-sm text-red-100">{importError}</p></div>}
         {message && !done && <p role="status" className="whitespace-pre-wrap rounded-xl border border-blue-400 p-3">{message}</p>}
