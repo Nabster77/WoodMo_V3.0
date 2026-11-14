@@ -42,6 +42,24 @@ async function main() {
  const staleCloud=await engine.prepareImport(); cloud[0].updated_at++;
  const cloudChange=structuredClone(next); cloudChange.shotOptions[0].price=4;
  await assert.rejects(engine.commitImport(staleCloud,cloudChange),/Cloud-Konflikt/); assert.equal(local.shotOptions[0].price,2);
+ // Articles missing from the imported catalog become tombstones (deleted=true); SCHUSS and shot settings are never deleted.
+ {
+  const store2=new Map(); let cloud2=[]; const pushed=[]; let applied=null; let local2;
+  const product={id:'p-old',name:'Alt',categoryId:'cat-drinks',imageUrl:'',taxClass:'standard',prices:{Friedrichshafen:1,Bregenz:1},available:true,sortOrder:0,hasShot:false,pfand:{Friedrichshafen:0,Bregenz:0}};
+  const cat={id:'cat-drinks',name:'Getränke',color:'#fff',sortOrder:0,icon:'CupSoda'};
+  const base2={categories:load('shotCatalog').normalizeCategories([cat]),products:[product],shotOptions:[{id:'rum',name:'Rum',price:1}],pfandSettings:{Friedrichshafen:3,Bregenz:3}};
+  cloud2=rows(base2); local2=structuredClone(base2);
+  const stubs2={...stubs,storage:{...stubs.storage,loadJSON:(k,f)=>store2.get(k)??f,saveJSON:(k,v)=>store2.set(k,structuredClone(v))},catalogCloud:{fetchCatalogRows:async()=>structuredClone(cloud2),pushCatalogRows:async r=>{pushed.push(...r);},commitCatalogImport:async(expected,r)=>{const map=new Map(cloud2.map(x=>[sync.keyOf(x.kind,x.id),x]));r.forEach(x=>map.set(sync.keyOf(x.kind,x.id),{...x,updated_at:200}));cloud2=[...map.values()];return structuredClone(cloud2);}}};
+  const engine2=loader(stubs2)('catalogEngine').createCatalogEngine({getLocal:()=>local2,isEnabled:()=>true,setConflict:()=>{},applyRows:r=>{applied=r;}});
+  assert.equal((await engine2.sync()).ok,true);
+  const session2=await engine2.prepareImport();
+  const next2=structuredClone(base2); next2.products=[]; next2.categories=next2.categories.filter(c=>c.id==='cat-system-schuss');
+  await engine2.commitImport(session2,next2);
+  const gone=pushed.filter(r=>r.deleted).map(r=>r.kind+':'+r.id).sort();
+  assert.deepEqual(gone,['category:cat-drinks','product:p-old']);
+  assert(!pushed.some(r=>r.id==='cat-system-schuss'||r.kind==='setting'),'SCHUSS und Einstellungen werden nie gelöscht');
+  assert(applied.some(r=>r.id==='p-old'&&r.deleted),'lokal wird die Löschung übernommen');
+ }
  // A first-device conflict must block preview preparation.
  const other=loader({...stubs,storage:{...stubs.storage,loadJSON:(_k,f)=>f,saveJSON:()=>{}}})('catalogEngine').createCatalogEngine({getLocal:()=>({...base,shotOptions:[]}),isEnabled:()=>true,setConflict:()=>{},applyRows:()=>{}});
  assert.equal((await other.sync()).ok,false);

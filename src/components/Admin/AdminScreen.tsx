@@ -598,7 +598,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
           </span>
         </div>
       </div>
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+      <div className="-mx-6 -mt-4 mb-0 flex gap-1.5 overflow-x-auto px-6 pb-6 pt-4">
         <button onClick={() => setFilterCat('')} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${!filterCat ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>Alle</button>
         {[...categories].filter((cat) => cat.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
           <button key={cat.id} onClick={() => setFilterCat(cat.id)} style={cat.color.startsWith("#") ? { backgroundColor: cat.color } : cat.color.startsWith("linear-gradient(") ? { background: cat.color } : undefined} className={`whitespace-nowrap rounded-lg bg-gradient-to-r px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 ${cat.color.startsWith("#") || cat.color.startsWith("linear-gradient(") ? "" : cat.color} ${filterCat === cat.id ? "woodmo-filter-active" : "opacity-85"}`}>{cat.name}</button>
@@ -1528,24 +1528,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
   const checkRef = useRef(onCheck);
   checkRef.current = onCheck;
 
-  async function runCheck() {
-    if (!checkRef.current || testMode) return;
-    setChecking(true);
-    setReport(null);
-    setSavedBackup(false);
-    setBackupRequested(false);
-    setConfirmed(false);
-    setError(null);
-    try {
-      await checkRef.current(setReport);
-    } catch (cause) {
-      setError('Prüfung fehlgeschlagen: ' + (cause instanceof Error ? cause.message : String(cause)));
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  // First opening performs a real scan; clicking "Erneut prüfen" reruns it.
+  // First opening performs a real scan; the dialog must be reopened to scan again.
   useEffect(() => {
     if (!testMode) {
             void checkRef.current?.(setReport)
@@ -1675,13 +1658,9 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
               <p role="status" className="mt-3 font-semibold">
                 {report.resetAllowed
                   ? 'Alle technischen Reset-Prüfungen bestanden.'
-                  : 'Prüfung abgeschlossen: Rote Punkte zuerst beheben, dann erneut prüfen.'}
+                  : 'Prüfung abgeschlossen: Rote Punkte zuerst beheben, danach den Dialog schließen und neu öffnen.'}
               </p>
             )}
-            <button type="button" onClick={() => void runCheck()} disabled={busy || checking}
-              className="mt-3 rounded-lg border border-amber-600 px-3 py-1.5 font-semibold disabled:opacity-50">
-              {checking ? 'Wird geprüft …' : 'Erneut prüfen'}
-            </button>
             <p className="mt-2 text-xs">100 % bedeutet: Alle Prüfungen wurden ausgeführt, nicht automatisch bestanden.
               Offline-Daten anderer Geräte sind von hier nicht vollständig kontrollierbar.</p>
           </section>

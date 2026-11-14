@@ -11,6 +11,7 @@ import {
   type CatalogSyncState,
   type LocalCatalog,
 } from '@/lib/catalogSync';
+import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
 
 export type ConflictChoice = 'cloud' | 'local';
@@ -194,12 +195,24 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
       const changes = [...buildLocalEntries(next, Date.now()).entries()]
         .filter(([key, entry]) => before.get(key)?.json !== entry.json)
         .map(([, entry]): CatalogRow => ({kind: entry.kind, id: entry.id, data: JSON.parse(entry.json!), updated_at: entry.updatedAt, deleted: false}));
-      if (!changes.length) return;
-      const accepted = await commitCatalogImport(session.cloud, changes);
-      state.synced = Object.fromEntries(accepted.map(row => [keyOf(row.kind, row.id), rowToEntry(row)]));
-      state.pending = {};
+      // Entries that exist in the old catalog but not in the new one are deleted afterwards
+      // as tombstones (the database never hard-deletes). Shot settings and the SCHUSS group are never removed.
+      const after = buildLocalEntries(next, 0);
+      const removals = [...before.entries()].filter(([key, entry]) => !after.has(key) && entry.kind !== 'setting' && entry.id !== SHOT_CATEGORY_ID).map(([, entry]) => entry);
+      if (!changes.length && !removals.length) return;
+      let accepted = session.cloud;
+      if (changes.length) {
+        accepted = await commitCatalogImport(session.cloud, changes);
+        state.synced = Object.fromEntries(accepted.map(row => [keyOf(row.kind, row.id), rowToEntry(row)]));
+        state.pending = {};
+      }
+      const now = Date.now();
+      const tombstones: CatalogRow[] = removals.map(entry => ({ kind: entry.kind, id: entry.id, data: JSON.parse(state.synced[keyOf(entry.kind, entry.id)]?.json ?? entry.json ?? '{}'), updated_at: now, deleted: true }));
+      for (const row of tombstones) state.pending[keyOf(row.kind, row.id)] = { kind: row.kind, id: row.id, json: null, updatedAt: now };
       persist();
-      deps.applyRows(accepted, new Set());
+      deps.applyRows([...accepted, ...tombstones], new Set());
+      // If this upload fails, the tombstones stay pending and the normal sync retries them.
+      if (tombstones.length) { try { await pushPending(); } catch (err) { console.warn('Löschungen werden später synchronisiert.', err); } }
     } finally { importing = false; }
   }
   return { sync, localChanged, resolveConflict, prepareImport, commitImport };
