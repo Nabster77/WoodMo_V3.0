@@ -264,6 +264,19 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="catalog-transfer-title">
     <div className="flex max-h-[94vh] w-full max-w-3xl flex-col rounded-2xl bg-white p-4 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
       <div className="flex items-center justify-between gap-4"><h2 id="catalog-transfer-title" className="text-lg font-bold">Artikel per Excel ändern</h2><button disabled={busy} onClick={onClose} className={button}>Schließen</button></div>
+      {helpOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="catalog-help-title">
+        <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl bg-white p-5 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
+          <h3 id="catalog-help-title" className="text-lg font-bold">So geht’s</h3>
+          <div className="mt-3 space-y-4 overflow-auto text-sm leading-relaxed">
+            <div><p className="font-bold">1. Excel und Bilder holen</p><p>Unter „Aktuellen Stand exportieren“ auf „Excel + Bilder exportieren“ klicken und die ZIP-Datei entpacken.</p></div>
+            <div><p className="font-bold">2. Excel bearbeiten</p><p>Preise, Namen und Warengruppen ändern oder Zeilen ergänzen. <strong>Eine gelöschte Zeile löscht den Artikel.</strong> Die Zeilen mit dem Pfand oben und die Spaltenüberschriften nicht verändern.</p></div>
+            <div><p className="font-bold">3. Bilder austauschen (optional)</p><p>Neues Bild mit dem Namen des Artikels in den Ordner der Warengruppe legen, z. B. „Handwerk/Duftvase.jpg“. Den Hauptordner wieder als ZIP packen. Groß-/Kleinschreibung, Umlaute und kleine Tippfehler sind egal. (S) oder S bedeutet Schnaps, (L) oder L bedeutet Likör.</p></div>
+            <div><p className="font-bold">4. Importieren</p><p>Excel und ZIP auswählen, „Vorschau erstellen“, Liste prüfen, bestätigen und „Jetzt importieren“. Vor dem Löschen vorher ein Backup machen.</p></div>
+            <p className="rounded-lg border border-gray-400 p-2">Gut zu wissen: Die neue Excel gilt. Bilder aus dem ZIP ersetzen alte Bilder. Artikel ohne Bild bekommen ein Symbol, ein eigenes Bild geht später in der Artikelverwaltung. Buchungen bleiben immer unverändert. Eine Vorlage gibt es unter „Aktuellen Stand exportieren“.</p>
+          </div>
+          <button type="button" autoFocus onClick={() => setHelpOpen(false)} className={`${primary} mt-4 self-start`}>Zurück</button>
+        </div>
+      </div>}
       {fileError && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="presentation">
         <div role="alertdialog" aria-modal="true" aria-labelledby="catalog-file-error-title" aria-describedby="catalog-file-error-text" className="w-full max-w-md rounded-xl bg-white p-5 text-gray-900 shadow-2xl dark:bg-gray-800 dark:text-white">
           <h3 id="catalog-file-error-title" className="text-lg font-bold text-red-600">Dateifehler</h3>
@@ -289,16 +302,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
           {zipSummary && zip && <p role="status" className="text-sm font-semibold">{zipSummary}</p>}
           {testMode && <p className="rounded-xl bg-amber-100 p-3 text-amber-900">Testmodus: Vorschau und Export möglich, Import gesperrt.</p>}
           <button disabled={busy || !excel} onClick={preview} className={primary}>{busy ? 'Bitte warten …' : 'Vorschau erstellen'}</button>
-          <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(v => !v)} className={`${button} ml-2`}>{helpOpen ? 'Hilfe schließen' : 'Hilfe: Was gilt beim Import?'}</button>
-          {helpOpen && <ul className="list-disc space-y-1 rounded-xl border border-gray-400 p-3 pl-6 text-sm">
-            <li>Die neue Excel ist die Wahrheit. Artikel, die dort fehlen, werden gelöscht (vorher Liste und Bestätigung).</li>
-            <li>Behalte die Pfandzeilen oben und die Spaltenüberschriften bei. Die Mustervorlage zeigt den Aufbau.</li>
-            <li>Bildname = Artikelname. Umlaute, Groß-/Kleinschreibung und kleine Tippfehler sind egal.</li>
-            <li>(S) oder S = Schnaps, (L) oder L = Likör; klein / groß bleiben unterscheidbar. Der Ordnername hilft bei der Zuordnung.</li>
-            <li>Bilder aus dem ZIP ersetzen vorhandene Bilder. Nicht quadratische Bilder werden ohne Abschneiden quadratisch eingepasst.</li>
-            <li>Ohne Bild bekommt der Artikel ein Symbol. Ein eigenes Bild kannst du später in der Artikelverwaltung hochladen.</li>
-            <li>Buchungen und Tagesabschlüsse werden nie verändert.</li>
-          </ul>}
+          <button type="button" onClick={() => setHelpOpen(true)} className={`${button} ml-2`}>Hilfe</button>
         </section>
         {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 p-4" role="status">
           <h3 className="text-xl font-extrabold text-emerald-300">✓ Import erfolgreich abgeschlossen</h3>
