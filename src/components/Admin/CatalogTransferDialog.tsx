@@ -91,9 +91,10 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   const [helpOpen, setHelpOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<{done:number;total:number;stage:string} | null>(null);
   const [message, setMessage] = useState('');
+  const [importError, setImportError] = useState('');
   const [fileError, setFileError] = useState('');
   const [done, setDone] = useState(false);
-  const invalidate = () => {setGenerated({});setZipSummary('');setPlan(null); setSession(null); setConfirmed(false); setConfirmedDelete(false); setDone(false); setImportProgress(null); setMessage('');};
+  const invalidate = () => {setGenerated({});setZipSummary('');setPlan(null); setSession(null); setConfirmed(false); setConfirmedDelete(false); setDone(false); setImportError(''); setImportProgress(null); setMessage('');};
   const stale = session && JSON.stringify(session.base) !== JSON.stringify(catalog);
   function chooseFile(file: File | null, kind: 'excel' | 'zip') {
     invalidate();
@@ -153,7 +154,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
   }
   async function commit() {
     if (!plan || !session || !confirmed || (plan.removed.length && !confirmedDelete) || plan.errors.length || stale || testMode || busy || done) return;
-    setBusy(true); setMessage('');
+    setBusy(true); setMessage(''); setImportError('');
     const imageCount = Object.keys(plan.images).length + Object.keys(generated).length + (autoIllustrations ? plan.next.products.filter(p => !p.imageUrl && !plan.images[p.id] && !generated[p.id] && plan.rows.some(r => r.kind === 'Artikel' && r.id === p.id)).length : 0);
     const totalSteps = imageCount + 1;
     let completedSteps = 0;
@@ -192,7 +193,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
       setImportProgress({done:totalSteps,total:totalSteps,stage:'Import abgeschlossen'});
       setDone(true); setConfirmed(false); setConfirmedDelete(false); setMessage(`Import abgeschlossen.${plan.removed.length ? ` ${plan.removed.length} Einträge gelöscht.` : ''}`);
     } catch (e) {
-      setMessage(`${(e as Error).message}${uploaded ? ` ${uploaded} neue Bilddateien wurden hochgeladen und können unreferenziert sein. Vor erneutem Import synchronisieren und Vorschau neu erstellen.` : ''}`); setConfirmed(false);
+      setImportError(`${(e as Error).message}${uploaded ? ` ${uploaded} neue Bilddateien wurden hochgeladen und können unreferenziert sein. Vor erneutem Import synchronisieren und Vorschau neu erstellen.` : ''}`); setConfirmed(false);
       // After an uncertain network result, force a fresh cloud read rather than retrying stale data.
       setSession(null);
     } finally {setBusy(false);}
@@ -299,11 +300,14 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <li>Buchungen und Tagesabschlüsse werden nie verändert.</li>
           </ul>}
         </section>
-        {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-500 p-4" role="status">
-          <h3 className="text-base font-bold text-emerald-400">✓ Import abgeschlossen</h3>
-          <p className="text-sm">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>
+        {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 p-4" role="status">
+          <h3 className="text-xl font-extrabold text-emerald-300">✓ Import erfolgreich abgeschlossen</h3>
+          <p className="text-base font-semibold text-emerald-100">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>
+          {plan.removed.length > 0 && <p className="text-sm text-emerald-100">Gelöscht: {plan.removed.map(r => r.kind === 'Warengruppe' ? `Warengruppe „${r.name}“` : r.name).join(', ')}</p>}
+          {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').length > 0 && <p className="text-sm text-emerald-100">Neu: {plan.rows.filter(r => r.status === 'neu' && r.kind === 'Artikel').map(r => r.name).join(', ')}</p>}
           <button type="button" className={primary} onClick={onClose}>Schließen</button>
         </section>}
+        {importError && !done && <div role="alert" className="rounded-xl border-2 border-red-500 bg-red-950/60 p-4"><h3 className="text-lg font-extrabold text-red-300">✗ Import fehlgeschlagen</h3><p className="mt-1 whitespace-pre-wrap text-sm text-red-100">{importError}</p></div>}
         {message && !done && <p role="status" className="whitespace-pre-wrap rounded-xl border border-blue-400 p-3">{message}</p>}
         {plan && !done && <section className="space-y-3">
           <h3 className="font-semibold">3. Vorschau prüfen und importieren</h3>
