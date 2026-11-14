@@ -794,20 +794,25 @@ export default function App() {
             products={store.products}
             activeSession={store.activeSession}
             transactions={store.transactions}
-            onCheckout={async (tx) => {
+            onCheckout={async (transactions) => {
               const session = store.activeSession;
               const employee = currentStaff;
               if (!employee || !session || session.closed) throw new Error('Keine aktive Kasse oder Mitarbeiteranmeldung. Buchung nicht ausgefuehrt.');
-              const booked = { ...tx, cashSessionId: session.id, employeeId: employee.id, employeeName: employee.name };
-              // Only a durable IndexedDB receipt may be reported as booked.
+              if (transactions.length === 0) throw new Error('Leerer Bon. Buchung nicht ausgefuehrt.');
+              const booked = transactions.map((tx) => ({ ...tx, cashSessionId: session.id, employeeId: employee.id, employeeName: employee.name }));
+              // Only a durable IndexedDB receipt may be reported as booked. A card
+              // sale with cash Pfand payout writes both receipts in ONE IndexedDB
+              // transaction: either both are booked or none.
               if (!testMode) {
-                await enqueueEntries([{ table: 'pos_transactions', row: {
-                  id: booked.id, booking_generation: knownBookingReset().generation,
-                  location: booked.location, timestamp: booked.timestamp, data: booked,
-                } }]);
+                await enqueueEntries(booked.map((entry) => ({ table: 'pos_transactions' as const, row: {
+                  id: entry.id, booking_generation: knownBookingReset().generation,
+                  location: entry.location, timestamp: entry.timestamp, data: entry,
+                } })));
               }
-              store.addTransaction(booked);
-              store.recordStaffActivity(session.id, { id: `activity-${Date.now().toString(36)}`, type: 'sale', staffId: employee.id, staffName: employee.name, timestamp: tx.timestamp, amount: tx.total });
+              booked.forEach((entry, index) => {
+                store.addTransaction(entry);
+                store.recordStaffActivity(session.id, { id: `activity-${Date.now().toString(36)}-${index}`, type: 'sale', staffId: employee.id, staffName: employee.name, timestamp: entry.timestamp, amount: entry.total });
+              });
               return testMode ? 'test' : online && navigator.onLine ? 'queued-online' : 'queued-offline';
             }}
             onOpenCash={async (location, balance) => {

@@ -124,6 +124,13 @@ export interface Transaction {
   amountPaid?: number; // cash given
   change?: number; // change returned
   location: Location;
+  /**
+   * Card payment with Pfand-Retoure: the goods are booked on card and the
+   * Pfand-Retoure is paid out in cash as a separate receipt. Both receipts of
+   * one customer checkout share this id.
+   */
+  paymentSplitId?: string;
+  paymentSplitRole?: 'card-goods' | 'cash-pfand-payout';
   // Legacy fields, kept for backward compatibility with old stored transactions
   tax7?: number;
   tax19?: number;

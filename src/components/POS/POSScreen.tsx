@@ -27,7 +27,8 @@ interface Props {
   categories: Category[];
   products: Product[];
   activeSession: CashSession | null;
-  onCheckout: (tx: Transaction) => Promise<'queued-online' | 'queued-offline' | 'test'>;
+  /** One checkout = 1 receipt, or 2 when a card payment pays out Pfand-Retoure in cash. Saved atomically. */
+  onCheckout: (transactions: Transaction[]) => Promise<'queued-online' | 'queued-offline' | 'test'>;
   onOpenCash: (location: Location, openingBalance: number) => Promise<boolean>;
   onCorrectOpening: (newAmount: number, reason: string) => void;
   onCashEntry: (type: 'deposit' | 'withdrawal', amount: number, reason: string, isPfandRetoure?: boolean) => void;
@@ -249,8 +250,8 @@ export function POSScreen({
 
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
-    async function handleCheckoutComplete(tx: Transaction): Promise<'queued-online' | 'queued-offline' | 'test'> {
-    const result = await onCheckout(tx);
+    async function handleCheckoutComplete(transactions: Transaction[]): Promise<'queued-online' | 'queued-offline' | 'test'> {
+    const result = await onCheckout(transactions);
     setCheckoutCommitted(true);
     return result;
   }
