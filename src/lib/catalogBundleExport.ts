@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import type { LocalCatalog } from './catalogSync';
-import { exportWorkbook, normalizeName } from './catalogTransfer';
+import { exportWorkbook } from './catalogTransfer';
 
 type ImageFile = { fileName: string; bytes: Uint8Array };
 
