@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import type { LocalCatalog } from './catalogSync';
-import { exportWorkbook } from './catalogTransfer';
+import { exportSimpleWorkbook } from './catalogTransfer';
 
 type ImageFile = { fileName: string; bytes: Uint8Array };
 
@@ -122,11 +122,11 @@ export async function buildCatalogBundle(
 ): Promise<CatalogBundle> {
   const picturesResult = await buildCatalogImagesZip(catalog, storageOrigin, onProgress, fetchImage);
   onProgress?.('Excel und Bilder-ZIP erstellen');
-  const excel = new Uint8Array(await exportWorkbook(catalog));
+  const excel = new Uint8Array(await exportSimpleWorkbook(catalog));
   const manual = strToU8(
     'WOODMO Kassen-App: Katalog-Export mit Bildern\n\n' +
     '1. Dieses Paket entpacken.\n' +
-    '2. WOODMO_Katalog.xlsx bearbeiten (Spalte „ID“ und Überschriften nicht ändern). Artikel, die in der Excel fehlen, werden beim Import gelöscht.\n' +
+    '2. WOODMO_Katalog.xlsx bearbeiten (Pfandzeilen oben und Überschriften nicht ändern). Artikel, die in der Excel fehlen, werden beim Import gelöscht.\n' +
     '3. Bilder: Im ZIP gibt es je Warengruppe einen Ordner. Neues Bild einfach mit demselben Namen wie der Artikel in den Ordner legen (JPG, PNG oder WebP).\n' +
     '4. In der App: Excel und Bilder-ZIP auswählen und Vorschau prüfen. Bilder aus dem ZIP ersetzen vorhandene Bilder automatisch.\n' +
     '5. Artikel ohne Bild bekommen beim Import ein Symbol. Eigenes Bild später in der Artikelverwaltung hochladen.\n' +

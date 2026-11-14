@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildImportPlan, exportWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
+import { buildImportPlan, exportWorkbook, exportSimpleWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
 import { seedCategories, seedProducts } from '../src/lib/seed';
 import { DEFAULT_SHOTS, normalizeCategories } from '../src/lib/shotCatalog';
 import { taxRateForProduct } from '../src/lib/tax';
@@ -96,6 +96,19 @@ assert.deepEqual(twice.next,modified,'explicit rates and shot overrides roundtri
   const sheet = {Tabelle1:[[...headers,'Bild'],[withImage.products[0].name,withImage.products[0].prices.Friedrichshafen,cat.name,'fix',19,20,'https://x.supabase.co/storage/v1/object/public/article-images/old.png']]};
   const stale = buildImportPlan(sheet, withImage);
   assert.equal(stale.next.products.find(p => p.id === withImage.products[0].id)!.imageUrl.endsWith('new.png'), true, 'altes Bild aus der Excel setzt nichts zurück');
+}
+
+// Einfacher Export (Layout der Preisliste, ohne IDs) lässt sich ohne Verlust wieder importieren.
+{
+  const withLocation: LocalCatalog = structuredClone(base);
+  withLocation.products[0].prices.Bregenz = withLocation.products[0].prices.Friedrichshafen + 1;
+  const simple = buildImportPlan(await readWorkbook(await exportSimpleWorkbook(withLocation)), withLocation);
+  assert.deepEqual(simple.errors, []);
+  assert.equal(simple.removed.length, 0, 'einfacher Export löscht nichts');
+  assert.deepEqual(simple.next.products, withLocation.products, 'Preise je Standort bleiben erhalten');
+  assert.deepEqual(simple.next.shotOptions, withLocation.shotOptions);
+  const plain = buildImportPlan(await readWorkbook(await exportSimpleWorkbook(base)), base);
+  assert(plain.rows.every(r => r.status === 'unverändert'), 'einfacher Export ohne Änderungen = alles unverändert');
 }
 if (process.argv[2]) {
  const bytes = fs.readFileSync(process.argv[2]);
