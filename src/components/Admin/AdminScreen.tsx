@@ -601,7 +601,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
       <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
         <button onClick={() => setFilterCat('')} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${!filterCat ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>Alle</button>
         {[...categories].filter((cat) => cat.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
-          <button key={cat.id} onClick={() => setFilterCat(cat.id)} style={cat.color.startsWith("#") ? { backgroundColor: cat.color } : cat.color.startsWith("linear-gradient(") ? { background: cat.color } : undefined} className={`whitespace-nowrap rounded-lg bg-gradient-to-r px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 ${cat.color.startsWith("#") || cat.color.startsWith("linear-gradient(") ? "" : cat.color} ${filterCat === cat.id ? "ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-900" : "opacity-85"}`}>{cat.name}</button>
+          <button key={cat.id} onClick={() => setFilterCat(cat.id)} style={cat.color.startsWith("#") ? { backgroundColor: cat.color } : cat.color.startsWith("linear-gradient(") ? { background: cat.color } : undefined} className={`whitespace-nowrap rounded-lg bg-gradient-to-r px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 ${cat.color.startsWith("#") || cat.color.startsWith("linear-gradient(") ? "" : cat.color} ${filterCat === cat.id ? "woodmo-filter-active" : "opacity-85"}`}>{cat.name}</button>
         ))}
       </div>
       <div className="mb-3 flex flex-wrap items-center justify-start gap-3">
@@ -615,7 +615,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
               else { setFilterCat(''); setSortMode(value as 'alphabetical' | 'reverse' | 'manual'); }
               setDragEnabled(false);
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+            className={`rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white ${filterCat ? 'woodmo-filter-active' : ''}`}>
             <option value="manual">Eigene Reihenfolge</option>
             <option value="alphabetical">Aufsteigend (A–Z)</option>
             <option value="reverse">Absteigend (Z–A)</option>
