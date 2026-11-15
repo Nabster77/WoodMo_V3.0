@@ -41,7 +41,7 @@ import { CatalogConflictDialog } from '@/components/CatalogConflictDialog';
 import { knownBookingReset, rememberBookingReset, resetCloudBookings } from '@/lib/bookingReset';
 import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
 import { sessionTransactions } from '@/lib/sessionTransactions';
-import { prepareBackupTarget, saveBackupFile, saveJournalPdf } from '@/lib/journalPdfFile';
+import { prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdf } from '@/lib/journalPdfFile';
 import { closedSessionReport } from '@/lib/dailyReport';
 import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
 import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
@@ -870,9 +870,13 @@ export default function App() {
               if (stornoLedger.status !== 'ready') {
                 return { ok: false, error: 'Stornojournal nicht sicher synchronisiert. Vor endgültigem Tagesabschluss zuerst Cloud und Stornobelege prüfen.' };
               }
+              // Ask Android for folder access NOW, while the tap is active;
+              // the PDF is saved only after the cloud steps below.
+              const archiveAccess = requestArchiveAccess();
               const finalizedAt = Date.now();
               const finalizedIntervals = (session.staffLoginIntervals ?? []).map((interval) => interval.logoutAt ? interval : { ...interval, logoutAt: finalizedAt });
               try {
+                await archiveAccess;
                 const sync = await syncEverything();
                 if (!sync.ok) throw new Error(sync.error ?? 'Kassensitzung konnte nicht mit der Cloud abgeglichen werden.');
                 // A final close without the cloud-wide, immutable receipt

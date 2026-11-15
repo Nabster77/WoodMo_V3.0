@@ -163,6 +163,19 @@ export async function grantArchiveFolder(): Promise<boolean> {
  * Directory handles are persisted in IndexedDB (not embedded in an URL).
  * Android browsers may not support selecting a persistent local folder.
  */
+/**
+ * Call as the FIRST thing in a tap that will save files later (daily close,
+ * backup). Android Chrome forgets folder access after a reload and only
+ * grants it again during a tap. Never throws; asks at most once per start.
+ */
+export async function requestArchiveAccess(): Promise<void> {
+  if (readDeviceSetup()?.archiveMode !== 'folder') return;
+  try {
+    const folder = await loadExportFolder();
+    if (folder) await canWrite(folder as WritableDirectoryHandle);
+  } catch { /* The later save shows the real problem. */ }
+}
+
 export type FolderSetupResult = { mode: 'folder' | 'downloads' | 'cancelled' | 'needs-write'; folderName?: string };
 
 let pendingFolder: WritableDirectoryHandle | null = null;
@@ -183,6 +196,9 @@ export async function configureJournalExportFolder(): Promise<FolderSetupResult>
   try {
     // Call picker directly from the button handler to preserve user activation.
     const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
+    if (/^Kasse \d{4}$/.test(selected.name)) {
+      throw new Error(`Bitte nicht den Ordner „${selected.name}“ selbst wählen, sondern den Ordner darüber (z. B. „Woodmo“). „${selected.name}“ legt die Kasse darin selbst an.`);
+    }
     // Android may grant only READ access at this point although readwrite was
     // requested. Writing then fails with NotAllowedError. In that case a
     // second, fresh tap must ask for write access (see grantWriteForPendingFolder).
