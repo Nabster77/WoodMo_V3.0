@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CartItem, Transaction, PaymentMethod, Location } from '@/types';
 import { formatCurrency } from '@/lib/format';
 import { buildCheckoutTransactions, checkoutTotals, isCardWithCashPfandPayout } from '@/lib/checkoutTransactions';
-import { X, Check, Receipt, Banknote, CreditCard, Coins, Recycle, AlertTriangle } from 'lucide-react';
+import { X, Check, Receipt, Banknote, CreditCard, Coins, Recycle } from 'lucide-react';
 
 export type CheckoutSaveResult = 'queued-online' | 'queued-offline' | 'test';
 
@@ -11,8 +11,9 @@ interface Props {
   location: Location;
   onComplete: (transactions: Transaction[]) => Promise<CheckoutSaveResult>;
   /** Called once after the booking was saved. The parent closes the dialog
-   * and empties the cart in the same step (no extra "saved" window). */
-  onPaid: (result: CheckoutSaveResult) => void;
+   * and empties the cart in the same step (no extra "saved" window).
+   * `hint` repeats what the cashier must still hand out (change, Pfand). */
+  onPaid: (result: CheckoutSaveResult, hint?: string) => void;
   onCancel: () => void;
 }
 
@@ -20,7 +21,6 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [givenAmount, setGivenAmount] = useState('');
   const [paid, setPaid] = useState(false);
-  const [confirmBooking, setConfirmBooking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -34,6 +34,15 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
   const given = givenEntered ? (parseFloat(givenAmount.replace(',', '.')) || 0) : total;
   const change = given - total;
   const cashPayment = !isPfandOnly && paymentMethod === 'cash';
+  // Shown briefly after booking (the old last-confirmation window repeated it).
+  const paidHint = splitPayout
+    ? `Pfand bar auszahlen: ${formatCurrency(cashPayout)}`
+    : isPfandOnly
+      ? `Pfand auszahlen: ${formatCurrency(Math.abs(total))}`
+      : cashPayment && givenEntered && change > 0.004
+        ? `Rückgeld: ${formatCurrency(change)}`
+        : undefined;
+  const canPay = !saving && !paid && (isPfandOnly || (!!paymentMethod && !(paymentMethod === 'cash' && given < total)));
 
     async function handleConfirm() {
     if (saving || paid) return;
@@ -45,19 +54,17 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
     // `paid` stays true: a second tap can never book the same cart twice,
     // even if the parent needs another render to close this dialog.
     setPaid(true);
-    setConfirmBooking(false);
-    onPaid(result);
+    onPaid(result, paidHint);
     } catch (cause) {
-      setConfirmBooking(false);
       setSaveError(cause instanceof Error ? cause.message : 'Die Buchung konnte nicht gesichert werden.');
     } finally {
       setSaving(false);
     }
   }
 
-  // No "Buchung gesichert" window after saving (operator request 15.11.2026):
-  // change and the cash Pfand payout are already shown in this dialog and in
-  // the final "Verkauf buchen?" confirmation before the booking is made.
+  // No "Buchung gesichert" window and no extra last-confirmation question
+  // (operator requests 15./16.11.2026): change and the cash Pfand payout are
+  // shown in this dialog; one tap on the green button books the sale.
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center" onClick={onCancel}>
       <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-3xl bg-white shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
@@ -167,85 +174,15 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
           </>)}
                     {saveError && <p role="alert" className="rounded-xl border border-red-500 p-2 text-sm text-red-600 dark:text-red-300">Buchung nicht gespeichert: {saveError}</p>}
           <button
-            onClick={() => setConfirmBooking(true)}
-            disabled={saving || (!isPfandOnly && (!paymentMethod || (paymentMethod === 'cash' && given < total)))}
+            onClick={() => void handleConfirm()}
+            disabled={!canPay}
             className={`sticky bottom-0 w-full rounded-xl py-4 text-lg font-bold text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${isPfandOnly ? 'bg-teal-600 hover:bg-teal-700' : paymentMethod === 'card' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
           >
-            {isPfandOnly ? 'Pfandausgabe' : 'Bezahlen bestätigen'}
+            <Check className="mr-1.5 inline h-5 w-5" />
+            {saving ? 'Wird gebucht …' : isPfandOnly ? 'Pfandausgabe abschließen & buchen' : 'Bezahlen abschließen & buchen'}
           </button>
         </div>
       </div>
-
-      {confirmBooking && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-4 sm:items-center" onClick={() => { if (!saving) setConfirmBooking(false); }}>
-          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex flex-col items-center gap-3 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/30">
-                <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{isPfandOnly ? 'Pfandausgabe buchen?' : 'Verkauf buchen?'}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Letzte Bestätigung</p>
-              </div>
-            </div>
-            <div className="mb-4 space-y-1.5 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900/40">
-              {splitPayout ? (
-                <>
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span>Karte belasten</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(goodsTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-teal-700 dark:text-teal-300">
-                    <span>Pfand bar auszahlen</span>
-                    <span className="font-bold">{formatCurrency(cashPayout)}</span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                  <span>Gesamtbetrag</span>
-                  <span className={`font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>{formatCurrency(total)}</span>
-                </div>
-              )}
-              {cashPayment && (
-                <>
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span>Gegeben</span>
-                    <span className="font-medium">{formatCurrency(given)}</span>
-                  </div>
-                  {change > 0 && (
-                    <div className="flex justify-between text-green-600 dark:text-green-400">
-                      <span>Rückgeld</span>
-                      <span className="font-bold">{formatCurrency(change)}</span>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Zahlungsart</span>
-                <span className="font-medium">{isPfandOnly ? 'Pfandausgabe' : splitPayout ? 'Karte + Pfandausgabe bar' : paymentMethod === 'cash' ? 'Bar' : 'Karte'}</span>
-              </div>
-            </div>
-            <p className="mb-4 text-center text-sm text-gray-600 dark:text-gray-300">
-              Möchten Sie diesen Verkauf wirklich buchen und den Kassenbestand aktualisieren? Nach der Bestätigung ist der Vorgang <strong className="text-gray-900 dark:text-gray-100">nicht mehr abänderbar</strong>.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setConfirmBooking(false)}
-                className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-              >
-                Nein, abbrechen
-              </button>
-              <button
-                                onClick={() => void handleConfirm()}
-                disabled={saving}
-                className="flex-1 rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white shadow-md transition hover:bg-green-700 active:scale-95"
-              >
-                <Check className="mr-1.5 inline h-4 w-4" /> Ja, buchen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
