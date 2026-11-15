@@ -18,6 +18,12 @@ export function InstallPrompt() {
       setVisible(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
+    const early = () => {
+      const saved = (window as Window & { __woodmoInstallPrompt?: Event }).__woodmoInstallPrompt;
+      if (saved) { setDeferred(saved as BeforeInstallPromptEvent); setVisible(true); }
+    };
+    early();
+    window.addEventListener('woodmo:install-available', early);
 
     const installedHandler = () => {
       setInstalled(true);
@@ -38,6 +44,7 @@ export function InstallPrompt() {
     return () => {
       if (fallback) window.clearTimeout(fallback);
       window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('woodmo:install-available', early);
       window.removeEventListener('appinstalled', installedHandler);
     };
   }, []);
@@ -61,6 +68,7 @@ export function InstallPrompt() {
         {deferred && <button
           onClick={async () => {
             await deferred.prompt();
+            (window as Window & { __woodmoInstallPrompt?: Event }).__woodmoInstallPrompt = undefined;
             setDeferred(null);
             setVisible(false);
           }}
