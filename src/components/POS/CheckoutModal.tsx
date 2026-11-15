@@ -28,7 +28,10 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
   // Card + Pfand-Retoure: goods on card, Pfand-Retoure paid out in cash.
   const splitPayout = isCardWithCashPfandPayout(items, paymentMethod);
   const cashPayout = -pfandRetoure;
-  const given = parseFloat(givenAmount.replace(',', '.')) || 0;
+  // "Gegeben" is optional (operator request 15.11.2026): an empty field means
+  // the customer paid exactly. Only a typed amount is checked for change/too little.
+  const givenEntered = givenAmount.trim() !== '';
+  const given = givenEntered ? (parseFloat(givenAmount.replace(',', '.')) || 0) : total;
   const change = given - total;
   const cashPayment = !isPfandOnly && paymentMethod === 'cash';
 
@@ -138,17 +141,16 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
           {paymentMethod === 'cash' && (
             <div className="space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben (€)</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben (€) <span className="font-normal text-gray-500 dark:text-gray-400">– optional, leer = passend</span></label>
                 <input
                   value={givenAmount}
                   onChange={(e) => setGivenAmount(e.target.value)}
                   placeholder={formatCurrency(total)}
                   inputMode="decimal"
-                  autoFocus
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
               </div>
-              {given > 0 && (
+              {givenEntered && given > 0 && (
                 <div className={`flex flex-col items-center justify-center gap-1 pt-1 text-center ${change < 0 ? 'text-red-600 dark:text-red-400' : change === 0 ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>
                   <div className="flex items-center gap-1.5 text-sm font-semibold">
                     <Coins className="h-4 w-4" />
