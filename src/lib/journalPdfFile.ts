@@ -4,7 +4,7 @@ import { buildJournalHTML, type JournalReportData } from '@/lib/journalPdf';
 import { getWeekNumber } from '@/lib/format';
 import type { Location } from '@/types';
 import { colorNegativeMoney } from '@/lib/movementStyle';
-import { batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
+import { archiveDate, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
 import { ensureReportFolder, ensureYearStructure, hasDirectory, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
 import { BACKUP_FOLDER } from '@/lib/archiveRoot';
 import { readDeviceSetup } from '@/lib/deviceSetup';
@@ -221,7 +221,7 @@ async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: Jo
     throw new Error('Für einen endgültigen Tagesabschluss fehlt das originale Berichtsdatum.');
   }
   const now = Date.now();
-  await ensureArchiveRootsPresent(folder, [now, data.reportPeriodStart ?? now]);
+  await ensureArchiveRootsPresent(folder, [now, archiveDate(data, now)]);
   const target = await ensureReportFolder(folder, data, now);
   // Never overwrite: an existing name gets a copy "Name (1).pdf".
   await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);

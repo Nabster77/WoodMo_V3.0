@@ -1,5 +1,5 @@
 import { archiveRootName, BACKUP_FOLDER } from './archiveRoot';
-import { archiveSubfolders, type ArchiveReport } from './archivePaths';
+import { archiveDate, archiveSubfolders, type ArchiveReport } from './archivePaths';
 
 export const ARCHIVE_LOCATIONS = ['Friedrichshafen', 'Bregenz', 'Alle-Standorte'] as const;
 /** Visible report folders beneath every location. Further types are created on demand. */
@@ -37,8 +37,9 @@ export async function hasDirectory(parent: FileSystemDirectoryHandle, name: stri
 }
 
 /**
- * Reports are filed in the calendar year of their period, so a December
- * report exported in January stays in last year's „Kasse JJJJ“.
+ * Reports are filed in the calendar year of their period (daily closes: of
+ * their closing), so a December report exported in January stays in last
+ * year's „Kasse JJJJ“.
  */
 export async function ensureReportFolder(
   parent: FileSystemDirectoryHandle,
@@ -46,7 +47,7 @@ export async function ensureReportFolder(
   now = Date.now(),
 ): Promise<FileSystemDirectoryHandle> {
   await ensureYearStructure(parent, now);
-  const root = await ensureYearStructure(parent, report.reportPeriodStart ?? now);
+  const root = await ensureYearStructure(parent, archiveDate(report, now));
   let target = root;
   for (const segment of archiveSubfolders(report)) {
     target = await target.getDirectoryHandle(segment, { create: true });
