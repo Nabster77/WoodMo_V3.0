@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import { isStaleOutboxEntry, summarizeResetQuarantine, type ResetQuarantineEntry } from '@/lib/resetQuarantine';
+import { canClearResetQuarantine, isStaleOutboxEntry, summarizeResetQuarantine, type ResetQuarantineEntry } from '@/lib/resetQuarantine';
 
 const DB_NAME = 'tablet-kasse-sync';
 const STORE = 'outbox';
@@ -151,8 +151,9 @@ export async function readResetQuarantineSummary() {
 }
 
 /** No automatic deletion of quarantined records. The operator can download
- * the original queued rows and full local snapshots for an audited review. */
-export async function exportResetQuarantine(): Promise<void> {
+ * the original queued rows and full local snapshots for an audited review.
+ * Returns the keys of the exported records (needed before any deletion). */
+export async function exportResetQuarantine(): Promise<string[]> {
   const entries = await readResetQuarantine();
   if (!entries.length) throw new Error('Keine archivierten Offline-Buchungen gefunden.');
   const json = JSON.stringify({
@@ -172,6 +173,42 @@ export async function exportResetQuarantine(): Promise<void> {
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  return entries.map(record => record.key);
+}
+
+/** Operator-confirmed deletion of the local reset archive (never automatic).
+ * Touches ONLY the quarantine store; the upload queue (`outbox`) with
+ * not-yet-sent bookings is never opened for writing here. The rule is
+ * re-checked inside the same IndexedDB transaction that deletes. */
+export async function clearResetQuarantine(exportedKeys: readonly string[]): Promise<number> {
+  const db = await openDb();
+  const tx = db.transaction(QUARANTINE_STORE, 'readwrite');
+  const store = tx.objectStore(QUARANTINE_STORE);
+  let refusal: string | null = null;
+  let deleted = 0;
+  const request = store.getAll();
+  // Check and delete synchronously inside the success callback, so the
+  // transaction is guaranteed to still be active in every browser.
+  request.onsuccess = () => {
+    const entries = request.result as ResetQuarantineEntry[];
+    const verdict = canClearResetQuarantine(entries, exportedKeys);
+    if (!verdict.ok) {
+      refusal = verdict.reason;
+      tx.abort();
+      return;
+    }
+    for (const record of entries) store.delete(record.key);
+    deleted = entries.length;
+  };
+  request.onerror = () => tx.abort();
+  try {
+    await transactionDone(tx);
+  } catch (cause) {
+    if (refusal) throw new Error(refusal);
+    throw cause instanceof Error ? cause : new Error('Offline-Quarantäne konnte nicht gelöscht werden.');
+  }
+  window.dispatchEvent(new Event(RESET_QUARANTINE_EVENT));
+  return deleted;
 }
 
 // Uploads the oldest queued entries and removes them once the cloud has them.

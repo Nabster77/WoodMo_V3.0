@@ -53,6 +53,7 @@ interface Props {
   onImportBackup?: (file: File) => void;
   resetQuarantineCount?: number;
   onExportResetQuarantine?: () => Promise<void>;
+  onClearResetQuarantine?: () => Promise<void>;
   pfandSettings: PfandSettings;
   onUpdatePfandSettings: (settings: PfandSettings) => Promise<'cloud' | 'local'>;
   getProductPfand: (product: Product, loc: Location) => number;
@@ -104,7 +105,7 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, menuOpen, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
   const [tab, setTab] = useState<'sessions' | 'categories' | 'products' | 'shots' | 'staff'>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
@@ -234,6 +235,13 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                     onClick={() => openAdminAction(() => { void onExportResetQuarantine(); })}>
                     <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
                     Offline-Quarantäne sichern ({resetQuarantineCount})
+                  </button>
+                )}
+                {onClearResetQuarantine && resetQuarantineCount > 0 && (
+                  <button type="button" className={adminMenuItem}
+                    onClick={() => openAdminAction(() => { void onClearResetQuarantine(); })}>
+                    <Trash2 className="h-5 w-5 shrink-0 text-amber-300" />
+                    Offline-Quarantäne löschen
                   </button>
                 )}
                 {onResetAllData && (
