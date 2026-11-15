@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, FolderOpen, ShieldCheck, X } from 'lucide-react';
-import { configureJournalExportFolder } from '@/lib/journalPdfFile';
+import { configureJournalExportFolder, folderPickerSupported } from '@/lib/journalPdfFile';
 import { readDeviceSetup, saveDeviceSetup } from '@/lib/deviceSetup';
 
 interface Props {
@@ -13,6 +13,8 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previous = readDeviceSetup();
+  // Devices that can pick a folder must use one: no folder, no register.
+  const folderOnly = folderPickerSupported();
 
   async function chooseFolder() {
     if (busy) return;
@@ -57,11 +59,11 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
         <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
           <p>Wähle nur den <strong>Speicherort</strong>. WOODMO verwaltet alle Unterordner automatisch.</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Beispiel: Kasse 26 / Friedrichshafen / November / Tagesabschluss
+            Beispiel: Kasse 2026 / Friedrichshafen / Tagesjournal · Sicherungen: Kasse 2026 / Backup
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Alternativ kannst du Dateien selbst speichern. Die Auswahl ist später in der Verwaltung änderbar.
-          </p>
+          {folderOnly
+            ? <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Ohne Speicherort kann die Kasse auf diesem Gerät nicht verwendet werden.</p>
+            : <p className="text-xs text-slate-500 dark:text-slate-400">Dieser Browser kann keinen Ordner auswählen. Dateien werden dann selbst gespeichert (Downloads / Teilen).</p>}
         </div>
         {previous?.folderLabel && <p className="rounded-lg bg-slate-100 p-2 text-xs dark:bg-slate-800">
           Aktueller Speicherort: <strong>{previous.folderLabel}</strong>
@@ -69,12 +71,12 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
         <div className="space-y-2">
           <button type="button" onClick={() => void chooseFolder()} disabled={busy}
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">
-            <FolderOpen size={19} /> {busy ? 'Ordner wird geprüft …' : 'Speicherort auswählen – automatisch'}
+            <FolderOpen size={19} /> {busy ? 'Ordner wird geprüft …' : 'Speicherort auswählen'}
           </button>
-          <button type="button" onClick={chooseDownloads} disabled={busy}
+          {!folderOnly && <button type="button" onClick={chooseDownloads} disabled={busy}
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800">
             <Download size={19} /> Selbst verwalten (Downloads / Teilen)
-          </button>
+          </button>}
         </div>
         {error && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
         <p className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>PDFs bleiben lokal auf diesem Gerät.</p>
