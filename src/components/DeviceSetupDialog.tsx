@@ -15,7 +15,10 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
   const [needsWrite, setNeedsWrite] = useState<string | null>(null);
   const previous = readDeviceSetup();
   // Devices that can pick a folder must use one: no folder, no register.
-  const folderOnly = folderPickerSupported();
+  const [folderFailed, setFolderFailed] = useState(false);
+  // If writing into the chosen folder fails on this device, offer the manual
+  // save mode so the register stays usable.
+  const folderOnly = folderPickerSupported() && !folderFailed;
 
   async function chooseFolder() {
     if (busy) return;
@@ -24,6 +27,7 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
     try {
       handleResult(await configureJournalExportFolder());
     } catch (reason) {
+      setFolderFailed(true);
       setError(reason instanceof Error ? reason.message : 'Ordner konnte nicht ausgewählt werden.');
     } finally {
       setBusy(false);
@@ -53,6 +57,7 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
     try {
       handleResult(await grantWriteForPendingFolder());
     } catch (reason) {
+      setFolderFailed(true);
       setError(reason instanceof Error ? reason.message : 'Schreibzugriff wurde nicht erteilt.');
     } finally {
       setBusy(false);
@@ -97,7 +102,7 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
           </button>
           {!folderOnly && <button type="button" onClick={chooseDownloads} disabled={busy}
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800">
-            <Download size={19} /> Selbst verwalten (Downloads / Teilen)
+            <Download size={19} /> Selbst verwalten (bei jedem PDF „Speichern unter“)
           </button>}
         </div>
         {needsWrite && <div className="space-y-2 rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
