@@ -40,7 +40,7 @@ import { CatalogConflictDialog } from '@/components/CatalogConflictDialog';
 import { knownBookingReset, rememberBookingReset, resetCloudBookings } from '@/lib/bookingReset';
 import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
 import { sessionTransactions } from '@/lib/sessionTransactions';
-import { saveJournalPdf } from '@/lib/journalPdfFile';
+import { prepareBackupTarget, saveBackupFile, saveJournalPdf } from '@/lib/journalPdfFile';
 import { closedSessionReport } from '@/lib/dailyReport';
 import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
 import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
@@ -989,6 +989,8 @@ export default function App() {
               onToggleMode={() => setModeConfirm(testMode ? 'to-active' : 'to-test')}
               onExportBackup={async () => {
                 try {
+                // Folder access must be requested while the tap is still active.
+                const backupTarget = await prepareBackupTarget();
                 // The download must reflect the confirmed V3 Cloud ledger,
                 // not just this browser's potentially stale local snapshot.
                 if (testMode) throw new Error('Eine vollständige Cloud-Sicherung ist nur im Aktivmodus möglich. Testbuchungen werden nicht als echte Buchungen gesichert.');
@@ -1047,14 +1049,8 @@ export default function App() {
                   },
                 };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `kasse-backup-${formatDateISO(Date.now())}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                const savedAs = await saveBackupFile(backupTarget, blob, `kasse-backup-${formatDateISO(Date.now())}.json`);
+                if (backupTarget.mode === 'folder') alert(`Backup gespeichert: ${savedAs}`);
                 } catch (error) {
                   // Keep the existing error dialog and propagate failure to the
                   // reset checklist: a failed download must never become green.

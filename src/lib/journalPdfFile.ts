@@ -5,7 +5,8 @@ import { getWeekNumber } from '@/lib/format';
 import type { Location } from '@/types';
 import { colorNegativeMoney } from '@/lib/movementStyle';
 import { batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
-import { ensureReportFolder, ensureYearStructure, savePdfInFolder } from '@/lib/archiveFolders';
+import { ensureReportFolder, ensureYearStructure, hasDirectory, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
+import { BACKUP_FOLDER } from '@/lib/archiveRoot';
 import { readDeviceSetup } from '@/lib/deviceSetup';
 import { archiveRootName } from '@/lib/archiveRoot';
 import { PdfArchiveSetupRequired, requirePdfArchiveSetup } from '@/lib/pdfArchiveSetup';
@@ -49,7 +50,7 @@ type SaveFilePicker = (options: {
 type DirectoryPicker = (options: {
   id: string;
   mode: 'readwrite';
-  startIn: 'desktop';
+  startIn: 'documents';
 }) => Promise<FileSystemDirectoryHandle>;
 
 type WritableDirectoryHandle = FileSystemDirectoryHandle & {
@@ -126,11 +127,12 @@ export async function configureJournalExportFolder(): Promise<{ mode: 'folder' |
   if (!picker) return { mode: 'downloads' };
   try {
     // Call picker directly from the button handler to preserve user activation.
-    const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'desktop' });
+    const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' });
     // Only create missing components of this year's base structure.
     const configuredAt = Date.now();
     await ensureYearStructure(selected, configuredAt);
     await rememberExportFolder(selected);
+    rememberArchiveRoot(archiveRootName(configuredAt));
     return { mode: 'folder', folderName: `${selected.name}/${archiveRootName(configuredAt)}` };
   } catch (error) {
     if (isAbortError(error)) return { mode: 'cancelled' };
@@ -138,13 +140,87 @@ export async function configureJournalExportFolder(): Promise<{ mode: 'folder' |
   }
 }
 
+const ARCHIVE_ROOTS_KEY = 'woodmo.archive.knownRoots';
+
+function knownArchiveRoots(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(ARCHIVE_ROOTS_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberArchiveRoot(name: string): void {
+  try {
+    const roots = new Set(knownArchiveRoots());
+    roots.add(name);
+    localStorage.setItem(ARCHIVE_ROOTS_KEY, JSON.stringify([...roots]));
+  } catch { /* Storage full or blocked: the check below simply stays lenient. */ }
+}
+
+/**
+ * A main folder „Kasse JJJJ“ that existed once and is now missing was removed
+ * or moved by someone: ask again instead of silently creating a new, empty one.
+ * A new calendar year (folder never seen) is created normally.
+ */
+async function ensureArchiveRootsPresent(folder: FileSystemDirectoryHandle, years: number[]): Promise<void> {
+  const known = new Set(knownArchiveRoots());
+  for (const at of years) {
+    const name = archiveRootName(at);
+    if (known.has(name) && !(await hasDirectory(folder, name))) {
+      requirePdfArchiveSetup(`Der Hauptordner „${name}“ wurde auf diesem Gerät nicht gefunden. Bitte im Geräte-Setup den Speicherort erneut auswählen.`);
+    }
+  }
+  for (const at of years) rememberArchiveRoot(archiveRootName(at));
+}
+
 async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<void> {
   if (data.documentStatus === 'Endgültig abgeschlossen' && data.reportPeriodStart == null) {
     throw new Error('Für einen endgültigen Tagesabschluss fehlt das originale Berichtsdatum.');
   }
-  const target = await ensureReportFolder(folder, data);
-  await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob,
-    data.documentStatus === 'Endgültig abgeschlossen');
+  const now = Date.now();
+  await ensureArchiveRootsPresent(folder, [now, data.reportPeriodStart ?? now]);
+  const target = await ensureReportFolder(folder, data, now);
+  // Never overwrite: an existing name gets a copy "Name (1).pdf".
+  await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
+}
+
+type ArchiveTarget = { mode: 'downloads' } | { mode: 'folder'; folder: FileSystemDirectoryHandle };
+
+/**
+ * Get write access BEFORE rendering: Android only grants folder access during
+ * the tap itself, and rendering a PDF takes longer than that window.
+ */
+async function acquireArchiveTarget(): Promise<ArchiveTarget> {
+  const setup = readDeviceSetup();
+  if (!setup) return requirePdfArchiveSetup('Für den PDF-Export muss zuerst auf diesem Gerät ein Speicherort im Setup eingerichtet werden.');
+  if (setup.archiveMode === 'downloads') return { mode: 'downloads' };
+  return { mode: 'folder', folder: await localArchiveFolder() };
+}
+
+/**
+ * Backup JSON: with a configured folder it goes to „Kasse JJJJ/Backup“
+ * (never overwriting), otherwise it is downloaded as before.
+ * Call prepareBackupTarget() at the very start of the click handler.
+ */
+export async function prepareBackupTarget(): Promise<ArchiveTarget> {
+  const setup = readDeviceSetup();
+  if (setup?.archiveMode !== 'folder') return { mode: 'downloads' };
+  return { mode: 'folder', folder: await localArchiveFolder() };
+}
+
+export async function saveBackupFile(target: ArchiveTarget, blob: Blob, fileName: string): Promise<string> {
+  if (target.mode === 'downloads') {
+    downloadBlob(blob, fileName);
+    return fileName;
+  }
+  const now = Date.now();
+  await ensureArchiveRootsPresent(target.folder, [now]);
+  const root = await ensureYearStructure(target.folder, now);
+  const backup = await root.getDirectoryHandle(BACKUP_FOLDER, { create: true });
+  const written = await saveFileNoOverwrite(backup, fileName, blob);
+  return `${archiveRootName(now)}/${BACKUP_FOLDER}/${written}`;
 }
 
 function waitForLoad(iframe: HTMLIFrameElement): Promise<void> {
@@ -455,20 +531,17 @@ async function localArchiveFolder(): Promise<FileSystemDirectoryHandle> {
   return stored;
 }
 
-async function saveManualPdfToConfiguredArchive(data: JournalReportData, blob: Blob): Promise<void> {
-  const setup = readDeviceSetup();
-  if (!setup) {
-    return requirePdfArchiveSetup('Für den PDF-Export muss zuerst auf diesem Gerät ein Speicherort im Setup eingerichtet werden.');
-  }
-  if (setup.archiveMode === 'downloads') {
+async function saveManualPdfToConfiguredArchive(target: ArchiveTarget, data: JournalReportData, blob: Blob): Promise<void> {
+  if (target.mode === 'downloads') {
     const started = await savePdfWithUserChoice(data, blob);
     if (!started) throw new Error('PDF-Speicherung wurde abgebrochen.');
     return;
   }
-  const selected = await localArchiveFolder();
+  const selected = target.folder;
   try {
     await saveIntoJournalFolder(selected, data, blob);
   } catch (error) {
+    if (error instanceof PdfArchiveSetupRequired) throw error;
     console.warn('Der eingestellte PDF-Ordner kann nicht beschrieben werden.', error);
     return requirePdfArchiveSetup('Der PDF-Speicherordner oder ein benötigter Unterordner ist nicht beschreibbar. Bitte den Speicherort im Geräte-Setup überprüfen.');
   }
@@ -486,8 +559,9 @@ function showPdfExportError(error: unknown): void {
  */
 export async function exportAuditDocumentPdf(data: JournalReportData, html: string): Promise<boolean> {
   try {
+    const target = await acquireArchiveTarget();
     const blob = await renderPdfHtml(html);
-    await saveManualPdfToConfiguredArchive(data, blob);
+    await saveManualPdfToConfiguredArchive(target, data, blob);
     return true;
   } catch (error) {
     showPdfExportError(error);
@@ -497,8 +571,9 @@ export async function exportAuditDocumentPdf(data: JournalReportData, html: stri
 
 export async function exportJournalPdf(data: JournalReportData): Promise<void> {
   try {
+    const target = await acquireArchiveTarget();
     const blob = await renderJournalPdf(data);
-    await saveManualPdfToConfiguredArchive(data, blob);
+    await saveManualPdfToConfiguredArchive(target, data, blob);
   } catch (error) {
     showPdfExportError(error);
   }
@@ -507,10 +582,11 @@ export async function exportJournalPdf(data: JournalReportData): Promise<void> {
 export async function exportJournalPdfBatch(reports: JournalReportData[], fileName: string): Promise<void> {
   if (reports.length === 0) return;
   try {
+    const target = await acquireArchiveTarget();
     const blob = await renderPdfHtml(buildJournalBatchHTML(reports));
     const location = batchArchiveLocation(reports.map((report) => report.location), fileName);
     const archiveData = { ...reports[0], location, fileName };
-    await saveManualPdfToConfiguredArchive(archiveData, blob);
+    await saveManualPdfToConfiguredArchive(target, archiveData, blob);
   } catch (error) {
     showPdfExportError(error);
   }
@@ -556,17 +632,19 @@ export async function saveJournalPdf(data: JournalReportData): Promise<void> {
   const setup = readDeviceSetup();
   if (!setup) return requirePdfArchiveSetup('Bitte zuerst den PDF-Speicherort im Geräte-Setup festlegen.');
 
-  const blob = await renderJournalPdf(data);
   if (setup.archiveMode === 'downloads') {
+    const blob = await renderJournalPdf(data);
     const saved = await savePdfWithUserChoice(data, blob);
     if (!saved) throw new Error('PDF-Speicherung abgebrochen. Der Tagesabschluss bleibt unverändert.');
     return;
   }
 
   const folder = await localArchiveFolder();
+  const blob = await renderJournalPdf(data);
   try {
     await saveIntoJournalFolder(folder, data, blob);
   } catch (error) {
+    if (error instanceof PdfArchiveSetupRequired) throw error;
     console.warn('Tagesabschluss-PDF konnte nicht lokal archiviert werden.', error);
     return requirePdfArchiveSetup('Der Tagesabschluss ist als Buchung erfasst, aber das PDF konnte nicht im gewählten lokalen Ordner gespeichert werden. Bitte den Speicherort im Setup reparieren und das PDF aus dem Journal erneut erzeugen.');
   }

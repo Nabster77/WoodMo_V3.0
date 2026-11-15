@@ -57,7 +57,7 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
         <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
           <p>Wähle nur den <strong>Speicherort</strong>. WOODMO verwaltet alle Unterordner automatisch.</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Beispiel: Kasse 26 / Friedrichshafen / November / Tagesabschluss
+            Beispiel: Kasse 2026 / Friedrichshafen / Tagesjournal · Sicherungen: Kasse 2026 / Backup
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Alternativ kannst du Dateien selbst speichern. Die Auswahl ist später in der Verwaltung änderbar.

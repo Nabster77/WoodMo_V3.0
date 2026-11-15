@@ -34,9 +34,9 @@ class MemDirectory {
 }
 const parent=new MemDirectory();
 const configuredAt=Date.parse('2026-11-12T12:00:00Z');
-assert.equal(archiveRootName(configuredAt),'Kasse 26');
-assert.deepEqual(backupDirectorySegments(configuredAt,'Backup1'),['Kasse 26','Sicherung','Backup1']);
-assert.deepEqual(backupDirectorySegments(configuredAt,'Backup2'),['Kasse 26','Sicherung','Backup2']);
+assert.equal(archiveRootName(configuredAt),'Kasse 2026');
+assert.deepEqual(backupDirectorySegments(configuredAt,'Backup1'),['Kasse 2026','Backup','Backup1']);
+assert.deepEqual(backupDirectorySegments(configuredAt,'Backup2'),['Kasse 2026','Backup','Backup2']);
 
 const now=Date.parse('2026-11-12T22:00:00Z');
 let state={cloudSyncedAt:now-1000,backup1SyncedAt:null,backup2SyncedAt:null,
@@ -62,7 +62,7 @@ assert.deepEqual(mirrored.changedSections,['cashSessions','staffUsers','transact
 state=afterVerifiedBackup(state,'backup2',mirrored.revision,now+1);
 assert.deepEqual(await loadArchivedBackup(parent,configuredAt,'Backup2'),original);
 
-const root=parent.folders.get('Kasse 26').folders.get('Sicherung');
+const root=parent.folders.get('Kasse 2026').folders.get('Backup');
 const b2dir=root.folders.get('Backup2');
 const initialWrites=b2dir.writes.length;
 const unchanged=await mirrorBackup2(parent,configuredAt,state,conditions);
@@ -95,15 +95,15 @@ const yearConditions={...conditions,now:jan2027};
 const oldFiles=new Map(b1dir.files);
 const nextYearBackup={...changed,exportedAt:new Date(jan2027).toISOString()};
 const first2027=await saveBackup1(parent,configuredAt,nextYearBackup,nextYearState,yearConditions,true);
-assert.ok(parent.folders.has('Kasse 27'));
+assert.ok(parent.folders.has('Kasse 2027'));
 assert.deepEqual(new Map(b1dir.files),oldFiles,'Vorjahres-Backup darf nicht verändert werden.');
-const backup2027=parent.folders.get('Kasse 27').folders.get('Sicherung').folders.get('Backup1');
+const backup2027=parent.folders.get('Kasse 2027').folders.get('Backup').folders.get('Backup1');
 assert.ok(backup2027.files.has('current.json'),'Neue Sicherung gehört nach Kasse 27.');
 assert.deepEqual(await loadArchivedBackup(parent,jan2027,'Backup1'),nextYearBackup);
 await assert.rejects(loadArchivedBackup(parent,Date.parse('2028-01-01T12:00:00Z'),'Backup1'),/Missing|NotFound/);
-assert.equal(parent.folders.has('Kasse 28'),false,'Lesen einer fehlenden Sicherung darf keine Ordner erstellen.');
+assert.equal(parent.folders.has('Kasse 2028'),false,'Lesen einer fehlenden Sicherung darf keine Ordner erstellen.');
 const deniedParent=new MemDirectory();
 await assert.rejects(saveBackup1(deniedParent,configuredAt,nextYearBackup,nextYearState,{...yearConditions,cloudOnline:false},false),/offline/);
 assert.equal(deniedParent.folders.size,0,'Verbotenes Backup darf keine Ordner erzeugen.');
 assert.ok(first2027.changedSections.length>0);
-console.log('BACKUP-ARCHIV: Kasse 26/27, inkrementell, Mitarbeiter-Gate, Vorjahresschutz, Offline-Schreibsperre, Integrität OK.');
+console.log('BACKUP-ARCHIV: Kasse 2026/2027, inkrementell, Mitarbeiter-Gate, Vorjahresschutz, Offline-Schreibsperre, Integrität OK.');

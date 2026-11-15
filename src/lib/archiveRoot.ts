@@ -7,11 +7,14 @@ export function archiveRootName(configuredAt: number): string {
   if (!Number.isFinite(configuredAt)) throw new Error('Ungültiges Datum der Geräte-Einrichtung.');
   const year = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric' }).format(new Date(configuredAt)));
   if (year < 2000 || year > 9999) throw new Error('Ungültiges Archivjahr.');
-  return `Kasse ${String(year).slice(-2)}`;
+  return `Kasse ${year}`;
 }
+
+/** Visible backup folder directly beneath „Kasse JJJJ“. */
+export const BACKUP_FOLDER = 'Backup';
 
 export type BackupSlot = 'Backup1' | 'Backup2';
 export function backupDirectorySegments(configuredAt: number, slot: BackupSlot): string[] {
   if (slot !== 'Backup1' && slot !== 'Backup2') throw new Error('Unbekannter Sicherungsordner.');
-  return [archiveRootName(configuredAt), 'Sicherung', slot];
+  return [archiveRootName(configuredAt), BACKUP_FOLDER, slot];
 }

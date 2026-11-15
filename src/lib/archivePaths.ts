@@ -10,31 +10,33 @@ export interface ArchiveReport {
   reportPeriodStart?: number;
 }
 
-const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-
 export function archiveSubfolders(report: ArchiveReport): string[] {
+  // The date is still validated: a report without a valid period must not be
+  // filed at all. The calendar year selects „Kasse JJJJ“ (see archiveFolders).
   const date = new Date(report.reportPeriodStart ?? Date.now());
   if (!Number.isFinite(date.getTime())) throw new Error('Ungültiger Berichtszeitraum.');
-  // Both cash locations use Central European civil dates, including DST.
-  const month = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', month: 'numeric' }).format(date));
-  if (month < 1 || month > 12) throw new Error('Ungültiger Berichtsmonat.');
   const scope = report.location.trim().toLocaleLowerCase('de-DE');
   const location = scope.includes('alle') || scope.includes('beide')
     ? 'Alle-Standorte'
     : scope.includes('bregenz') ? 'Bregenz'
       : scope.includes('friedrichshafen') ? 'Friedrichshafen' : null;
   if (!location) throw new Error('Unbekannter Standort im PDF-Bericht.');
+  return [location, reportKindFolder(report)];
+}
+
+/** Folder per report type, directly beneath the location (no month level). */
+export function reportKindFolder(report: Pick<ArchiveReport, 'fileName' | 'documentTitle'>): string {
   const name = (report.documentTitle ?? '') + ' ' + report.fileName;
-  const kind = /Tagesabschluss/i.test(name) ? 'Tagesabschluss'
+  return /Tagesabschluss/i.test(name) ? 'Tagesabschluss'
     : /Wochenjournal/i.test(name) ? 'Wochenjournal'
     : /Monatsjournal/i.test(name) ? 'Monatsjournal'
     : /Jahresjournal/i.test(name) ? 'Jahresjournal'
     : /Tagesjournal/i.test(name) ? 'Tagesjournal'
+    : /Journal_\d{2}-\d{2}-\d{4}_bis_/i.test(name) ? 'Individuell'
     : /Einzel(?:beleg|bon)/i.test(name) ? 'Einzelbelege'
     : /Kassen(?:uebersicht|übersicht)/i.test(name) ? 'Kassenuebersicht'
     : /Storno/i.test(name) ? 'Storno'
     : 'Weitere-Berichte';
-  return [location, MONTH_NAMES[month - 1], kind];
 }
 
 export function safeArchiveFileName(name: string): string {
