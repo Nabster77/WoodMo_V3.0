@@ -5,10 +5,10 @@ import { getWeekNumber } from '@/lib/format';
 import type { Location } from '@/types';
 import { colorNegativeMoney } from '@/lib/movementStyle';
 import { archiveDate, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
-import { ensureReportFolder, ensureYearStructure, hasDirectory, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
+import { ensureReportFolder, ensureYearStructure, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
 import { BACKUP_FOLDER } from '@/lib/archiveRoot';
 import { readDeviceSetup } from '@/lib/deviceSetup';
-import { archiveRootName } from '@/lib/archiveRoot';
+import { archiveRootName, wrongArchiveFolderMessage } from '@/lib/archiveRoot';
 import { PdfArchiveSetupRequired, requirePdfArchiveSetup } from '@/lib/pdfArchiveSetup';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -153,9 +153,7 @@ export async function grantArchiveFolder(): Promise<boolean> {
     return false;
   }
   if (permission !== 'granted') return false;
-  const now = Date.now();
-  await ensureArchiveRootsPresent(folder, [now]);
-  await ensureYearStructure(folder, now);
+  await ensureYearStructure(folder, Date.now());
   return true;
 }
 
@@ -185,7 +183,6 @@ async function finishFolderSetup(selected: WritableDirectoryHandle): Promise<Fol
   const configuredAt = Date.now();
   await ensureYearStructure(selected, configuredAt);
   await rememberExportFolder(selected);
-  rememberArchiveRoot(archiveRootName(configuredAt));
   pendingFolder = null;
   return { mode: 'folder', folderName: `${selected.name}/${archiveRootName(configuredAt)}` };
 }
@@ -196,9 +193,8 @@ export async function configureJournalExportFolder(): Promise<FolderSetupResult>
   try {
     // Call picker directly from the button handler to preserve user activation.
     const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
-    if (/^Kasse \d{4}$/.test(selected.name)) {
-      throw new Error(`Bitte nicht den Ordner „${selected.name}“ selbst wählen, sondern den Ordner darüber (z. B. „Woodmo“). „${selected.name}“ legt die Kasse darin selbst an.`);
-    }
+    const wrongFolder = wrongArchiveFolderMessage(selected.name);
+    if (wrongFolder) throw new Error(wrongFolder);
     // Android may grant only READ access at this point although readwrite was
     // requested. Writing then fails with NotAllowedError. In that case a
     // second, fresh tap must ask for write access (see grantWriteForPendingFolder).
@@ -249,47 +245,19 @@ export async function grantWriteForPendingFolder(): Promise<FolderSetupResult> {
   }
 }
 
-const ARCHIVE_ROOTS_KEY = 'woodmo.archive.knownRoots';
-
-function knownArchiveRoots(): string[] {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(ARCHIVE_ROOTS_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function rememberArchiveRoot(name: string): void {
-  try {
-    const roots = new Set(knownArchiveRoots());
-    roots.add(name);
-    localStorage.setItem(ARCHIVE_ROOTS_KEY, JSON.stringify([...roots]));
-  } catch { /* Storage full or blocked: the check below simply stays lenient. */ }
-}
-
-/**
- * A main folder „Kasse JJJJ“ that existed once and is now missing was removed
- * or moved by someone: ask again instead of silently creating a new, empty one.
- * A new calendar year (folder never seen) is created normally.
+/*
+ * Ordnerregel (Wunsch des Nutzers, 15.11.2026): Im zuletzt gewählten Ordner
+ * wird „Kasse JJJJ“ samt Unterordnern benutzt, wenn er existiert, und sonst
+ * still neu angelegt – auch wenn ihn jemand gelöscht hat. Kein erneutes Setup.
+ * Nur wenn der gewählte Ordner selbst fehlt, fragt das Setup neu
+ * (siehe canWrite / localArchiveFolder / saveManualPdfToConfiguredArchive).
  */
-async function ensureArchiveRootsPresent(folder: FileSystemDirectoryHandle, years: number[]): Promise<void> {
-  const known = new Set(knownArchiveRoots());
-  for (const at of years) {
-    const name = archiveRootName(at);
-    if (known.has(name) && !(await hasDirectory(folder, name))) {
-      requirePdfArchiveSetup(`Der Hauptordner „${name}“ wurde auf diesem Gerät nicht gefunden. Bitte im Geräte-Setup den Speicherort erneut auswählen.`);
-    }
-  }
-  for (const at of years) rememberArchiveRoot(archiveRootName(at));
-}
 
 async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<void> {
   if (data.documentStatus === 'Endgültig abgeschlossen' && data.reportPeriodStart == null) {
     throw new Error('Für einen endgültigen Tagesabschluss fehlt das originale Berichtsdatum.');
   }
   const now = Date.now();
-  await ensureArchiveRootsPresent(folder, [now, archiveDate(data, now)]);
   const target = await ensureReportFolder(folder, data, now);
   // Never overwrite: an existing name gets a copy "Name (1).pdf".
   await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
@@ -329,7 +297,6 @@ export async function saveBackupFile(target: ArchiveTarget, blob: Blob, fileName
     return fileName;
   }
   const now = Date.now();
-  await ensureArchiveRootsPresent(target.folder, [now]);
   const root = await ensureYearStructure(target.folder, now);
   const backup = await root.getDirectoryHandle(BACKUP_FOLDER, { create: true });
   const written = await saveFileNoOverwrite(backup, fileName, blob);
