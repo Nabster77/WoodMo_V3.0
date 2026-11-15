@@ -163,20 +163,72 @@ export async function grantArchiveFolder(): Promise<boolean> {
  * Directory handles are persisted in IndexedDB (not embedded in an URL).
  * Android browsers may not support selecting a persistent local folder.
  */
-export async function configureJournalExportFolder(): Promise<{ mode: 'folder' | 'downloads' | 'cancelled'; folderName?: string }> {
+export type FolderSetupResult = { mode: 'folder' | 'downloads' | 'cancelled' | 'needs-write'; folderName?: string };
+
+let pendingFolder: WritableDirectoryHandle | null = null;
+
+async function finishFolderSetup(selected: WritableDirectoryHandle): Promise<FolderSetupResult> {
+  // Only create missing components of this year's base structure.
+  const configuredAt = Date.now();
+  await ensureYearStructure(selected, configuredAt);
+  await rememberExportFolder(selected);
+  rememberArchiveRoot(archiveRootName(configuredAt));
+  pendingFolder = null;
+  return { mode: 'folder', folderName: `${selected.name}/${archiveRootName(configuredAt)}` };
+}
+
+export async function configureJournalExportFolder(): Promise<FolderSetupResult> {
   const picker = (window as Window & { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker;
   if (!picker) return { mode: 'downloads' };
   try {
     // Call picker directly from the button handler to preserve user activation.
-    const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' });
-    // Only create missing components of this year's base structure.
-    const configuredAt = Date.now();
-    await ensureYearStructure(selected, configuredAt);
-    await rememberExportFolder(selected);
-    rememberArchiveRoot(archiveRootName(configuredAt));
-    return { mode: 'folder', folderName: `${selected.name}/${archiveRootName(configuredAt)}` };
+    const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
+    // Android may grant only READ access at this point although readwrite was
+    // requested. Writing then fails with NotAllowedError. In that case a
+    // second, fresh tap must ask for write access (see grantWriteForPendingFolder).
+    let permission: PermissionState | undefined;
+    try { permission = await selected.queryPermission?.({ mode: 'readwrite' }); } catch { permission = undefined; }
+    if (permission !== undefined && permission !== 'granted') {
+      try { permission = await selected.requestPermission?.({ mode: 'readwrite' }); } catch { /* needs a new tap */ }
+    }
+    if (permission !== undefined && permission !== 'granted') {
+      pendingFolder = selected;
+      return { mode: 'needs-write', folderName: selected.name };
+    }
+    try {
+      return await finishFolderSetup(selected);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        pendingFolder = selected;
+        return { mode: 'needs-write', folderName: selected.name };
+      }
+      throw error;
+    }
   } catch (error) {
     if (isAbortError(error)) return { mode: 'cancelled' };
+    throw error;
+  }
+}
+
+/** Second tap in the Setup: ask Android for WRITE access to the chosen folder. */
+export async function grantWriteForPendingFolder(): Promise<FolderSetupResult> {
+  const selected = pendingFolder;
+  if (!selected) return { mode: 'cancelled' };
+  let permission: PermissionState | undefined;
+  try {
+    permission = await selected.requestPermission?.({ mode: 'readwrite' });
+  } catch (error) {
+    throw new Error(`Schreibzugriff konnte nicht angefragt werden (${error instanceof Error ? error.name + ': ' + error.message : String(error)}).`);
+  }
+  if (permission !== undefined && permission !== 'granted') {
+    throw new Error(`Das Tablet erlaubt das Schreiben in „${selected.name}“ nicht (Status: ${permission}). Bitte erneut versuchen oder einen anderen Ordner wählen, z. B. einen neuen Ordner unter „Documents“.`);
+  }
+  try {
+    return await finishFolderSetup(selected);
+  } catch (error) {
+    if (error instanceof DOMException) {
+      throw new Error(`Ordner „${selected.name}“ ist nicht beschreibbar (${error.name}). Dieses Tablet lässt Web-Apps hier keine Ordner anlegen.`);
+    }
     throw error;
   }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, FolderOpen, ShieldCheck, X } from 'lucide-react';
-import { configureJournalExportFolder, folderPickerSupported } from '@/lib/journalPdfFile';
+import { configureJournalExportFolder, folderPickerSupported, grantWriteForPendingFolder, type FolderSetupResult } from '@/lib/journalPdfFile';
 import { readDeviceSetup, saveDeviceSetup } from '@/lib/deviceSetup';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
 export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsWrite, setNeedsWrite] = useState<string | null>(null);
   const previous = readDeviceSetup();
   // Devices that can pick a folder must use one: no folder, no register.
   const folderOnly = folderPickerSupported();
@@ -21,17 +22,38 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const result = await configureJournalExportFolder();
-      if (result.mode === 'cancelled') return;
-      if (result.mode === 'folder') {
-        saveDeviceSetup('folder', result.folderName);
-        onComplete();
-      } else {
-        // The filesystem picker is unavailable on this browser (notably Android).
-        setError('Dieser Browser unterstützt keine automatische Ordnerverwaltung. Bitte manuell speichern.');
-      }
+      handleResult(await configureJournalExportFolder());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Ordner konnte nicht ausgewählt werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleResult(result: FolderSetupResult) {
+    if (result.mode === 'cancelled') return;
+    if (result.mode === 'needs-write') {
+      setNeedsWrite(result.folderName ?? 'gewählter Ordner');
+      return;
+    }
+    setNeedsWrite(null);
+    if (result.mode === 'folder') {
+      saveDeviceSetup('folder', result.folderName);
+      onComplete();
+    } else {
+      // The filesystem picker is unavailable on this browser.
+      setError('Dieser Browser unterstützt keine automatische Ordnerverwaltung. Bitte manuell speichern.');
+    }
+  }
+
+  async function grantWrite() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      handleResult(await grantWriteForPendingFolder());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Schreibzugriff wurde nicht erteilt.');
     } finally {
       setBusy(false);
     }
@@ -78,6 +100,13 @@ export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
             <Download size={19} /> Selbst verwalten (Downloads / Teilen)
           </button>}
         </div>
+        {needsWrite && <div className="space-y-2 rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <p>Ordner „<strong>{needsWrite}</strong>“ gewählt. Das Tablet erlaubt bisher nur das <strong>Lesen</strong>. Bitte jetzt das Schreiben erlauben:</p>
+          <button type="button" onClick={() => void grantWrite()} disabled={busy}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">
+            <FolderOpen size={19} /> {busy ? 'Wird erlaubt …' : 'Schreiben im Ordner erlauben'}
+          </button>
+        </div>}
         {error && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
         <p className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>PDFs bleiben lokal auf diesem Gerät.</p>
       </section>
