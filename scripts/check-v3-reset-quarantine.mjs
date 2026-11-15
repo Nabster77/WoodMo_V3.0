@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { isStaleOutboxEntry, summarizeResetQuarantine } from '../src/lib/resetQuarantine.ts';
+import { readFileSync } from 'node:fs';
+import { canClearResetQuarantine, isStaleOutboxEntry, summarizeResetQuarantine } from '../src/lib/resetQuarantine.ts';
 
 let passed=0;
 const check=(label,fn)=>{fn();passed++;console.log('BESTANDEN: '+label);};
@@ -36,5 +37,47 @@ check('06 Reset-Snapshot erhält auch lokale Einträge ohne Outboxbeleg',()=>{
 check('07 Ohne Quarantäne keine falsche Buchungswarnung',()=>{
   assert.deepEqual(summarizeResetQuarantine([]),
     {pendingReceipts:0,pendingSessions:0,localSnapshots:0,localReceipts:0,archivedEntries:0});
+});
+const snapshot=(gen)=>({key:'snapshot:generation-'+gen,archivedAt:1,targetGeneration:gen,kind:'local-snapshot',
+  transactions:[{id:'t'+gen}],cashSessions:[{id:'s'+gen}]});
+const pending={key:'outbox:9',archivedAt:1,targetGeneration:8,kind:'pending-outbox',entry:entries[0]};
+check('08 Löschen erlaubt: nur Altstände, genau diese vorher gesichert',()=>{
+  const records=[snapshot(7),snapshot(8)];
+  assert.deepEqual(canClearResetQuarantine(records,['snapshot:generation-7','snapshot:generation-8']),{ok:true});
+});
+check('09 Löschen gesperrt ohne vorheriges Sichern',()=>{
+  assert.equal(canClearResetQuarantine([snapshot(7)],null).ok,false);
+});
+check('10 Löschen gesperrt bei nicht übertragenen Bons (evtl. einzige Kopie)',()=>{
+  const verdict=canClearResetQuarantine([snapshot(7),pending],['snapshot:generation-7','outbox:9']);
+  assert.equal(verdict.ok,false);
+  assert.match(verdict.reason,/nicht übertragene/);
+});
+check('11 Löschen gesperrt, wenn seit dem Sichern ein neuer Altstand dazukam',()=>{
+  assert.equal(canClearResetQuarantine([snapshot(7),snapshot(8)],['snapshot:generation-7']).ok,false);
+});
+check('12 Leere Quarantäne: nichts zu löschen',()=>{
+  assert.equal(canClearResetQuarantine([],[]).ok,false);
+});
+check('13 Löschen berührt nur den Quarantäne-Speicher, nie die Upload-Warteschlange',()=>{
+  const outbox=readFileSync('src/lib/outbox.ts','utf8');
+  const fn=outbox.slice(outbox.indexOf('export async function clearResetQuarantine'));
+  const body=fn.slice(0,fn.indexOf('\n}\n'));
+  assert.match(body,/db\.transaction\(QUARANTINE_STORE, 'readwrite'\)/);
+  assert.doesNotMatch(body,/\bSTORE\b(?!_)/,'outbox store must not be opened');
+  assert.match(body,/canClearResetQuarantine\(entries, exportedKeys\)/,'rule re-checked inside the delete transaction');
+});
+check('14 Bezahlen: kein Extra-Fenster, Warenkorb wird sofort geleert, keine Doppelbuchung',()=>{
+  const modal=readFileSync('src/components/POS/CheckoutModal.tsx','utf8');
+  const pos=readFileSync('src/components/POS/POSScreen.tsx','utf8');
+  assert.doesNotMatch(modal,/Weiter kassieren|Buchung lokal gesichert/);
+  assert.match(modal,/if \(saving \|\| paid\) return;/);
+  assert.match(modal,/const result = await onComplete\(transactions\);[\s\S]*setPaid\(true\);[\s\S]*onPaid\(result\);/,
+    'onPaid only after the booking was saved');
+  const finish=pos.slice(pos.indexOf('function finishCheckout'));
+  assert.match(finish.slice(0,finish.indexOf('\n  }\n')),/setShowCheckout\(false\);\s*setCart\(\[\]\);/);
+  assert.match(pos,/onPaid=\{finishCheckout\}/);
+  assert.match(modal,/Rückgeld/,'change still shown before booking');
+  assert.match(modal,/Pfand bar auszahlen/,'cash Pfand payout still shown before booking');
 });
 console.log('WOODMO V3 OFFLINE-RESET-QUARANTÄNE: '+passed+'/'+passed+' VERHALTENSTESTS BESTANDEN.');

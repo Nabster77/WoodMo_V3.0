@@ -4,27 +4,34 @@ import { formatCurrency } from '@/lib/format';
 import { buildCheckoutTransactions, checkoutTotals, isCardWithCashPfandPayout } from '@/lib/checkoutTransactions';
 import { X, Check, Receipt, Banknote, CreditCard, Coins, Recycle, AlertTriangle } from 'lucide-react';
 
+export type CheckoutSaveResult = 'queued-online' | 'queued-offline' | 'test';
+
 interface Props {
   items: CartItem[];
   location: Location;
-  onComplete: (transactions: Transaction[]) => Promise<'queued-online' | 'queued-offline' | 'test'>;
+  onComplete: (transactions: Transaction[]) => Promise<CheckoutSaveResult>;
+  /** Called once after the booking was saved. The parent closes the dialog
+   * and empties the cart in the same step (no extra "saved" window). */
+  onPaid: (result: CheckoutSaveResult) => void;
   onCancel: () => void;
 }
 
-export function CheckoutModal({ items, location, onComplete, onCancel }: Props) {
+export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [givenAmount, setGivenAmount] = useState('');
   const [paid, setPaid] = useState(false);
   const [confirmBooking, setConfirmBooking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedWhere, setSavedWhere] = useState<'queued-online' | 'queued-offline' | 'test' | null>(null);
 
   const { total, goodsTotal, pfandRetoure, isPfandOnly, totalPfand, taxLines } = checkoutTotals(items, location);
   // Card + Pfand-Retoure: goods on card, Pfand-Retoure paid out in cash.
   const splitPayout = isCardWithCashPfandPayout(items, paymentMethod);
   const cashPayout = -pfandRetoure;
-  const given = parseFloat(givenAmount.replace(',', '.')) || 0;
+  // "Gegeben" is optional (operator request 15.11.2026): an empty field means
+  // the customer paid exactly. Only a typed amount is checked for change/too little.
+  const givenEntered = givenAmount.trim() !== '';
+  const given = givenEntered ? (parseFloat(givenAmount.replace(',', '.')) || 0) : total;
   const change = given - total;
   const cashPayment = !isPfandOnly && paymentMethod === 'cash';
 
@@ -35,9 +42,11 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
     try {
     const transactions = buildCheckoutTransactions({ items, location, paymentMethod, given });
         const result = await onComplete(transactions);
-    setSavedWhere(result);
-    setConfirmBooking(false);
+    // `paid` stays true: a second tap can never book the same cart twice,
+    // even if the parent needs another render to close this dialog.
     setPaid(true);
+    setConfirmBooking(false);
+    onPaid(result);
     } catch (cause) {
       setConfirmBooking(false);
       setSaveError(cause instanceof Error ? cause.message : 'Die Buchung konnte nicht gesichert werden.');
@@ -46,36 +55,9 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
     }
   }
 
-  if (paid) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center" onClick={onCancel}>
-        <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col items-center gap-4 overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
-            <Check className="h-12 w-12 text-green-600 dark:text-green-400" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{savedWhere === 'test' ? 'Testbuchung erfasst' : 'Buchung lokal gesichert'}</h2>
-          <p role="status" className="text-center text-sm text-gray-600 dark:text-gray-300">
-            {savedWhere === 'test'
-              ? 'Testmodus: Dieser Beleg wird nicht dauerhaft gespeichert.'
-              : savedWhere === 'queued-offline'
-                ? 'Offline-Warteschlange gespeichert. Die Cloud-Uebertragung erfolgt nach Wiederverbindung.'
-                : 'Auf diesem Geraet gespeichert. Die Cloud-Synchronisierung folgt; erst deren Bestaetigung bedeutet Cloud-Speicherung.'}
-          </p>
-          <p className={`text-3xl font-bold ${(splitPayout ? goodsTotal : total) < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(splitPayout ? goodsTotal : total)}</p>
-          {splitPayout && (
-            <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">Jetzt bar auszahlen (Pfand): {formatCurrency(cashPayout)}</p>
-          )}
-          {paymentMethod === 'cash' && change > 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Rückgeld: <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(change)}</span></p>
-          )}
-          <button onClick={onCancel} className="w-full rounded-xl bg-blue-600 py-3 text-base font-semibold text-white transition hover:bg-blue-700 active:scale-95">
-            Weiter kassieren
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // No "Buchung gesichert" window after saving (operator request 15.11.2026):
+  // change and the cash Pfand payout are already shown in this dialog and in
+  // the final "Verkauf buchen?" confirmation before the booking is made.
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center" onClick={onCancel}>
       <div className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-3xl bg-white shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
@@ -159,17 +141,16 @@ export function CheckoutModal({ items, location, onComplete, onCancel }: Props) 
           {paymentMethod === 'cash' && (
             <div className="space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben (€)</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben (€) <span className="font-normal text-gray-500 dark:text-gray-400">– optional, leer = passend</span></label>
                 <input
                   value={givenAmount}
                   onChange={(e) => setGivenAmount(e.target.value)}
                   placeholder={formatCurrency(total)}
                   inputMode="decimal"
-                  autoFocus
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
               </div>
-              {given > 0 && (
+              {givenEntered && given > 0 && (
                 <div className={`flex flex-col items-center justify-center gap-1 pt-1 text-center ${change < 0 ? 'text-red-600 dark:text-red-400' : change === 0 ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>
                   <div className="flex items-center gap-1.5 text-sm font-semibold">
                     <Coins className="h-4 w-4" />

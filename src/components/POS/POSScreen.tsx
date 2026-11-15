@@ -3,7 +3,7 @@ import type { CartItem, Category, CashSession, Product, Transaction, ShotOption,
 import { ProductTile } from './ProductTile';
 import { CartItemRow } from './CartItemRow';
 import { CartSummary } from './CartSummary';
-import { CheckoutModal } from './CheckoutModal';
+import { CheckoutModal, type CheckoutSaveResult } from './CheckoutModal';
 import { CashOpeningDialog } from './CashOpeningDialog';
 import { CashEntryDialog } from './CashEntryDialog';
 import { CashCorrectionDialog } from './CashCorrectionDialog';
@@ -82,6 +82,13 @@ export function POSScreen({
   const [search, setSearch] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutCommitted, setCheckoutCommitted] = useState(false);
+  // Short, non-blocking hint after an offline or test booking (no click needed).
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!checkoutNotice) return;
+    const id = window.setTimeout(() => setCheckoutNotice(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [checkoutNotice]);
   // Der Dialog wird beim ersten Laden passend zum Sitzungsstatus geöffnet.
   // Danach darf nur ein tatsächlich bestätigter Tagesabschluss ihn erneut öffnen.
   // Kurzzeitige Leerstände während Import oder Cloud-Abgleich sind kein Abschluss.
@@ -261,6 +268,20 @@ export function POSScreen({
     if (checkoutCommitted) {
       setCart([]);
       setCheckoutCommitted(false);
+    }
+  }
+
+  /** Booking saved: close the dialog and empty the cart immediately. Done
+   * explicitly here (not via closeCheckout) because `checkoutCommitted` from
+   * this render may still be stale, which would leave a booked cart behind. */
+  function finishCheckout(result: CheckoutSaveResult) {
+    setShowCheckout(false);
+    setCart([]);
+    setCheckoutCommitted(false);
+    if (result === 'queued-offline') {
+      setCheckoutNotice('Offline gebucht – wird übertragen, sobald wieder Internet da ist.');
+    } else if (result === 'test') {
+      setCheckoutNotice('Testbuchung – wird nicht gespeichert.');
     }
   }
 
@@ -510,7 +531,13 @@ export function POSScreen({
         />
       )}
       {showCheckout && cart.length > 0 && (
-        <CheckoutModal items={cart} location={currentLocation} onComplete={handleCheckoutComplete} onCancel={closeCheckout} />
+        <CheckoutModal items={cart} location={currentLocation} onComplete={handleCheckoutComplete} onPaid={finishCheckout} onCancel={closeCheckout} />
+      )}
+      {checkoutNotice && (
+        <div role="status" aria-live="polite"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-40 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-2xl border border-amber-400/70 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 shadow-xl dark:bg-amber-950 dark:text-amber-100">
+          {checkoutNotice}
+        </div>
       )}
     </div>
   );
