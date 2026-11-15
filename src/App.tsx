@@ -39,7 +39,7 @@ import { SyncToast } from '@/components/SyncToast';
 import { SyncDialog } from '@/components/SyncDialog';
 import { CatalogConflictDialog } from '@/components/CatalogConflictDialog';
 import { knownBookingReset, rememberBookingReset, resetCloudBookings } from '@/lib/bookingReset';
-import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
+import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, clearResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
 import type { JournalReportData } from '@/lib/journalPdf';
@@ -101,6 +101,9 @@ export default function App() {
     pendingReceipts: number; pendingSessions: number; localSnapshots: number;
     localReceipts: number; archivedEntries: number;
   } | null>(null);
+  // Keys of the quarantine records exported in THIS app session. Deleting is
+  // only possible for exactly these records (see canClearResetQuarantine).
+  const [exportedQuarantineKeys, setExportedQuarantineKeys] = useState<string[] | null>(null);
   useEffect(() => {
     let mounted = true;
     const refresh = () => {
@@ -978,8 +981,28 @@ export default function App() {
               onMoveProductTo={store.moveProductTo}
               resetQuarantineCount={resetArchive?.archivedEntries ?? 0}
               onExportResetQuarantine={async () => {
-                try { await exportResetQuarantine(); }
+                try { setExportedQuarantineKeys(await exportResetQuarantine()); }
                 catch (error) { alert(error instanceof Error ? error.message : 'Quarantäne-Export fehlgeschlagen.'); }
+              }}
+              onClearResetQuarantine={async () => {
+                const summary = resetArchive;
+                if (summary && (summary.pendingReceipts > 0 || summary.pendingSessions > 0)) {
+                  alert('Löschen gesperrt: Die Quarantäne enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.');
+                  return;
+                }
+                if (!exportedQuarantineKeys) {
+                  alert('Bitte zuerst „Offline-Quarantäne sichern“ ausführen und die Datei aufbewahren. Danach kann gelöscht werden.');
+                  return;
+                }
+                if (!window.confirm('Offline-Quarantäne auf diesem Gerät endgültig löschen?\n\n' +
+                  'Gelöscht werden nur die archivierten Altstände vor einem Reset (diese liegen weiterhin in der Cloud). ' +
+                  'Laufende Kassen, aktuelle Buchungen und noch nicht übertragene Buchungen bleiben unberührt.')) return;
+                try {
+                  await clearResetQuarantine(exportedQuarantineKeys);
+                  setExportedQuarantineKeys(null);
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : 'Offline-Quarantäne konnte nicht gelöscht werden.');
+                }
               }}
               onCheckResetSafety={checkResetSafety}
               onResetAllData={resetBookings}
