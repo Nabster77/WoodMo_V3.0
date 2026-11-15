@@ -17,6 +17,7 @@ import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
 import { parsePfandAmount } from '@/lib/pfandValidation';
+import { parsePriceInput } from '@/lib/priceInput';
 import { ShotManager } from '@/components/Admin/ShotManager';
 import { StaffManager } from '@/components/Admin/StaffManager';
 
@@ -713,6 +714,7 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
   const [hasIndividualPrice, setHasIndividualPrice] = useState(product?.hasIndividualPrice ?? false);
   const [priceF, setPriceF] = useState(String(product?.prices.Friedrichshafen ?? ''));
   const [priceB, setPriceB] = useState(String(product?.prices.Bregenz ?? ''));
+  const [priceErrors, setPriceErrors] = useState<Partial<Record<Location, string>>>({});
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -744,9 +746,20 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
   }
 
   function handleSave() {
-    const pF = parseFloat(priceF.replace(',', '.')) || 0;
-    const pB = parseFloat(priceB.replace(',', '.')) || 0;
     if (!name.trim() || !categoryId) return;
+    let pF = product?.prices.Friedrichshafen ?? 0;
+    let pB = product?.prices.Bregenz ?? 0;
+    if (!hasIndividualPrice) {
+      const rF = parsePriceInput(priceF);
+      const rB = parsePriceInput(priceB);
+      const errors: Partial<Record<Location, string>> = {};
+      if (!rF.ok) errors.Friedrichshafen = rF.error;
+      if (!rB.ok) errors.Bregenz = rB.error;
+      setPriceErrors(errors);
+      if (!rF.ok || !rB.ok) return;
+      pF = rF.value;
+      pB = rB.value;
+    }
     const pfandF = isPfandArticle ? pfandSettings.Friedrichshafen : 0;
     const pfandB = isPfandArticle ? pfandSettings.Bregenz : 0;
     onSave({
@@ -808,12 +821,16 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
               LOCATIONS.map((loc) => {
                 const priceVal = loc === 'Friedrichshafen' ? priceF : priceB;
                 const setPrice = loc === 'Friedrichshafen' ? setPriceF : setPriceB;
+                const error = priceErrors[loc];
                 return (
-                  <div key={loc} className="mb-2 flex items-center gap-2">
-                    <span className="w-28 text-xs font-semibold text-gray-600 dark:text-gray-300">{loc}</span>
-                    <input value={priceVal} onChange={(e) => setPrice(e.target.value)} placeholder="Preis" inputMode="decimal"
-                      className="w-24 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-                    <span className="text-xs text-gray-400">€</span>
+                  <div key={loc} className="mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-28 text-xs font-semibold text-gray-600 dark:text-gray-300">{loc}</span>
+                      <input value={priceVal} onChange={(e) => { setPrice(e.target.value); setPriceErrors(prev => ({ ...prev, [loc]: undefined })); }} placeholder="Preis" inputMode="decimal" aria-invalid={!!error}
+                        className={`w-24 rounded-lg border bg-white px-2.5 py-2 text-sm text-gray-900 focus:outline-none dark:bg-gray-900 dark:text-gray-100 ${error ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200 focus:border-blue-500 dark:border-gray-700'}`} />
+                      <span className="text-xs text-gray-400">€</span>
+                    </div>
+                    {error && <p role="alert" className="mt-1 text-xs font-semibold text-red-500">{error}</p>}
                   </div>
                 );
               })
