@@ -72,12 +72,18 @@ check('14 Bezahlen: kein Extra-Fenster, Warenkorb wird sofort geleert, keine Dop
   const pos=readFileSync('src/components/POS/POSScreen.tsx','utf8');
   assert.doesNotMatch(modal,/Weiter kassieren|Buchung lokal gesichert/);
   assert.match(modal,/if \(saving \|\| paid\) return;/);
-  assert.match(modal,/const result = await onComplete\(transactions\);[\s\S]*setPaid\(true\);[\s\S]*onPaid\(result\);/,
+  assert.match(modal,/const result = await onComplete\(transactions\);[\s\S]*setPaid\(true\);[\s\S]*onPaid\(result(?:, paidHint)?\);/,
     'onPaid only after the booking was saved');
   const finish=pos.slice(pos.indexOf('function finishCheckout'));
   assert.match(finish.slice(0,finish.indexOf('\n  }\n')),/setShowCheckout\(false\);\s*setCart\(\[\]\);/);
   assert.match(pos,/onPaid=\{finishCheckout\}/);
   assert.match(modal,/Rückgeld/,'change still shown before booking');
   assert.match(modal,/Pfand bar auszahlen/,'cash Pfand payout still shown before booking');
+  // 16.11.2026: one tap books, no extra "Verkauf buchen?" question; short fading success hint.
+  assert.doesNotMatch(modal,/Verkauf buchen\?|confirmBooking/,'no second confirmation window');
+  assert.match(modal,/Bezahlen abschließen & buchen/);
+  assert.match(modal,/onClick=\{\(\) => void handleConfirm\(\)\}/,'green button books directly');
+  assert.match(pos,/Zahlung erfolgreich/);
+  assert.match(pos,/pointer-events-none fixed bottom-6/,'success hint never blocks the next tap');
 });
 console.log('WOODMO V3 OFFLINE-RESET-QUARANTÄNE: '+passed+'/'+passed+' VERHALTENSTESTS BESTANDEN.');

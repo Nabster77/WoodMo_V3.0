@@ -83,11 +83,17 @@ export function POSScreen({
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutCommitted, setCheckoutCommitted] = useState(false);
   // Short, non-blocking hint after an offline or test booking (no click needed).
-  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
+  // Success shows ~2 s and then fades out; offline/test hints stay a bit longer.
+  // pointer-events-none: the hint never blocks the next tap.
+  const [checkoutNotice, setCheckoutNotice] = useState<{ id: number; tone: 'success' | 'warn'; title: string; detail?: string } | null>(null);
+  const [checkoutNoticeFading, setCheckoutNoticeFading] = useState(false);
   useEffect(() => {
     if (!checkoutNotice) return;
-    const id = window.setTimeout(() => setCheckoutNotice(null), 4000);
-    return () => window.clearTimeout(id);
+    setCheckoutNoticeFading(false);
+    const visibleMs = checkoutNotice.tone === 'success' ? (checkoutNotice.detail ? 2600 : 1600) : 3600;
+    const fade = window.setTimeout(() => setCheckoutNoticeFading(true), visibleMs);
+    const hide = window.setTimeout(() => setCheckoutNotice(null), visibleMs + 700);
+    return () => { window.clearTimeout(fade); window.clearTimeout(hide); };
   }, [checkoutNotice]);
   // Der Dialog wird beim ersten Laden passend zum Sitzungsstatus geöffnet.
   // Danach darf nur ein tatsächlich bestätigter Tagesabschluss ihn erneut öffnen.
@@ -274,14 +280,17 @@ export function POSScreen({
   /** Booking saved: close the dialog and empty the cart immediately. Done
    * explicitly here (not via closeCheckout) because `checkoutCommitted` from
    * this render may still be stale, which would leave a booked cart behind. */
-  function finishCheckout(result: CheckoutSaveResult) {
+  function finishCheckout(result: CheckoutSaveResult, hint?: string) {
     setShowCheckout(false);
     setCart([]);
     setCheckoutCommitted(false);
+    const id = Date.now();
     if (result === 'queued-offline') {
-      setCheckoutNotice('Offline gebucht – wird übertragen, sobald wieder Internet da ist.');
+      setCheckoutNotice({ id, tone: 'warn', title: 'Zahlung erfolgreich – offline gebucht', detail: hint ? `${hint} · wird übertragen, sobald wieder Internet da ist` : 'Wird übertragen, sobald wieder Internet da ist.' });
     } else if (result === 'test') {
-      setCheckoutNotice('Testbuchung – wird nicht gespeichert.');
+      setCheckoutNotice({ id, tone: 'warn', title: 'Testbuchung – wird nicht gespeichert', detail: hint });
+    } else {
+      setCheckoutNotice({ id, tone: 'success', title: 'Zahlung erfolgreich', detail: hint });
     }
   }
 
@@ -534,9 +543,14 @@ export function POSScreen({
         <CheckoutModal items={cart} location={currentLocation} onComplete={handleCheckoutComplete} onPaid={finishCheckout} onCancel={closeCheckout} />
       )}
       {checkoutNotice && (
-        <div role="status" aria-live="polite"
-          className="pointer-events-none fixed bottom-6 left-1/2 z-40 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-2xl border border-amber-400/70 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 shadow-xl dark:bg-amber-950 dark:text-amber-100">
-          {checkoutNotice}
+        <div key={checkoutNotice.id} role="status" aria-live="polite"
+          className={`pointer-events-none fixed bottom-6 left-1/2 z-40 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-2xl border px-4 py-3 text-center shadow-xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
+            checkoutNotice.tone === 'success'
+              ? 'border-green-400/70 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
+              : 'border-amber-400/70 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100'
+          }`}>
+          <p className="text-base font-bold">{checkoutNotice.title}</p>
+          {checkoutNotice.detail && <p className="mt-0.5 text-lg font-extrabold">{checkoutNotice.detail}</p>}
         </div>
       )}
     </div>
