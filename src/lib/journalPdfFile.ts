@@ -118,7 +118,48 @@ async function canWrite(folder: WritableDirectoryHandle): Promise<boolean> {
   }
 }
 
-/** Called directly from a user click in the first-run/administration Setup.
+/** True if this browser can let the user pick a folder (Chrome/Edge, recent Android Chrome). */
+export function folderPickerSupported(): boolean {
+  return typeof window !== 'undefined' && typeof (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function';
+}
+
+export type ArchiveFolderStatus = 'ok' | 'needs-permission' | 'missing';
+
+/** Check at app start WITHOUT prompting (no tap available yet). */
+export async function archiveFolderStatus(): Promise<ArchiveFolderStatus> {
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return 'missing';
+  try {
+    const permission = await folder.queryPermission?.({ mode: 'readwrite' });
+    return permission === 'granted' ? 'ok' : 'needs-permission';
+  } catch {
+    return 'needs-permission';
+  }
+}
+
+/**
+ * Must be called directly from a tap. Re-grants access to the remembered
+ * folder (Android forgets it after the app is closed) and recreates any
+ * missing subfolder. A removed „Kasse JJJJ“ leads back to the Setup.
+ */
+export async function grantArchiveFolder(): Promise<boolean> {
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return false;
+  let permission: PermissionState | undefined;
+  try {
+    permission = await folder.queryPermission?.({ mode: 'readwrite' });
+    if (permission !== 'granted') permission = await folder.requestPermission?.({ mode: 'readwrite' });
+  } catch {
+    return false;
+  }
+  if (permission !== 'granted') return false;
+  const now = Date.now();
+  await ensureArchiveRootsPresent(folder, [now]);
+  await ensureYearStructure(folder, now);
+  return true;
+}
+
+
  * Directory handles are persisted in IndexedDB (not embedded in an URL).
  * Android browsers may not support selecting a persistent local folder.
  */

@@ -14,6 +14,7 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
+import { ArchivePermissionGate } from '@/components/ArchivePermissionGate';
 import { readDeviceSetup } from '@/lib/deviceSetup';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
 import { RootPasswordWarning } from '@/components/RootPasswordWarning';
@@ -184,6 +185,7 @@ export default function App() {
     window.addEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
     return () => window.removeEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
   }, []);
+  const openDeviceSetup = useCallback(() => setDeviceSetupOpen(true), []);
 
   // The last finalized balance per location is a suggestion only. It is not
   // copied until the user actually opens the next cash session.
@@ -1191,6 +1193,7 @@ export default function App() {
           onCancel={() => setStaffAdminLoginOpen(false)}
         />
       )}
+      <ArchivePermissionGate suspended={deviceSetupOpen} onOpenSetup={openDeviceSetup} />
       {deviceSetupOpen && <DeviceSetupDialog warning={pdfArchiveWarning} onComplete={() => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); }} onCancel={readDeviceSetup() ? () => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); } : undefined} />}
       <InstallPrompt />
       <RootPasswordWarning visible={signedInUser === 'admin' && rootWarningOpen} onClose={() => { saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); setRootWarningOpen(false); }} />
