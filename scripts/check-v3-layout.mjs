@@ -30,7 +30,7 @@ assert.match(app, /setOpeningManagementAccess\(null\)/,
   'Personal admin passwords must be possible');
 assert.match(app, /persistFinalizedCashSession\(closed\)/,
   'Finalized close remains cloud-confirmed');
-assert.match(app, /await saveJournalPdf\(/,
+assert.match(app, /await saveJournalPdfIfAllowed\(/,
   'Local close PDF retention remains enabled');
 assert.match(pos, /sm:grid-cols-\[minmax\(0,1\.85fr\)_minmax\(220px,1fr\)\]/,
   'Portrait tablet left/right split must be defined');

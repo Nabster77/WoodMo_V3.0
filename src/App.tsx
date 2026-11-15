@@ -41,7 +41,8 @@ import { CatalogConflictDialog } from '@/components/CatalogConflictDialog';
 import { knownBookingReset, rememberBookingReset, resetCloudBookings } from '@/lib/bookingReset';
 import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
 import { sessionTransactions } from '@/lib/sessionTransactions';
-import { prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdf } from '@/lib/journalPdfFile';
+import { prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
+import type { JournalReportData } from '@/lib/journalPdf';
 import { closedSessionReport } from '@/lib/dailyReport';
 import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
 import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
@@ -119,6 +120,7 @@ export default function App() {
   // This is deliberately separate from `currentStaff`: opening Verwaltung
   // must never replace the person currently working at the cash register.
   const [managementAdministrator, setManagementAdministrator] = useState<StaffUser | null>(null);
+  const [pendingClosePdf, setPendingClosePdf] = useState<JournalReportData | null>(null);
   const [lastStaffId, setLastStaffId] = useState<string | null>(() => loadJSON<string | null>(STORAGE_KEYS.lastStaffId, null));
   const [staffAdminLoginOpen, setStaffAdminLoginOpen] = useState(false);
   const [rootWarningOpen, setRootWarningOpen] = useState(() => !loadJSON<boolean>(STORAGE_KEYS.rootPasswordChanged, false) && !loadJSON<boolean>(STORAGE_KEYS.rootPasswordNoticeDismissed, false));
@@ -903,11 +905,14 @@ export default function App() {
                 // only then reflect the irreversible result in the local UI.
                 await persistFinalizedCashSession(closed);
                 store.commitFinalizedSession(closed);
+                const closeReport = closedSessionReport(closed, store.transactions, store.categories, currentStaff.name, verifiedStornos);
                 try {
-                  await saveJournalPdf(closedSessionReport(closed, store.transactions, store.categories, currentStaff.name, verifiedStornos));
+                  // Without an active folder permission, a button lets the
+                  // user save with a fresh tap instead of a system alert.
+                  if (await saveJournalPdfIfAllowed(closeReport) === 'needs-tap') setPendingClosePdf(closeReport);
                 } catch (pdfError) {
                   console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
-                  alert('Der Tagesabschluss wurde in Supabase bestätigt. Das PDF konnte auf diesem Gerät nicht gespeichert werden. Bitte im Geräte-Setup den Speicherordner prüfen und das PDF im Journal erneut erzeugen. Die Kasse nicht erneut abschließen.');
+                  setPendingClosePdf(closeReport);
                 }
                 return { ok: true };
               } catch (error) {
@@ -1197,6 +1202,7 @@ export default function App() {
           onCancel={() => setStaffAdminLoginOpen(false)}
         />
       )}
+      {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
       <ArchivePermissionGate suspended={deviceSetupOpen} onOpenSetup={openDeviceSetup} />
       {deviceSetupOpen && <DeviceSetupDialog warning={pdfArchiveWarning} onComplete={() => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); }} onCancel={readDeviceSetup() ? () => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); } : undefined} />}
       <InstallPrompt />
@@ -1214,6 +1220,41 @@ function readableSyncError(cause: unknown): string {
     if (parts.length > 0) return parts.join(' · ');
   }
   return String(cause);
+}
+
+function PendingClosePdfDialog({ report, onDone }: { report: JournalReportData; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await saveJournalPdfFromTap(report));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Das PDF konnte nicht gespeichert werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm">
+      <section role="dialog" aria-modal="true" className="w-full max-w-md space-y-4 rounded-3xl border border-emerald-700/40 bg-white p-6 shadow-2xl dark:bg-slate-900">
+        <h2 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">✓ Tagesabschluss gespeichert</h2>
+        {result ? <>
+          <p className="text-sm text-slate-700 dark:text-slate-200">Das PDF wurde gespeichert {result}.</p>
+          <button type="button" onClick={onDone} className="min-h-12 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white">Fertig</button>
+        </> : <>
+          <p className="text-sm text-slate-700 dark:text-slate-200">Der Abschluss ist sicher in der Cloud. Jetzt noch das PDF auf diesem Tablet ablegen – bei der Frage des Tablets bitte „Zulassen“ tippen.</p>
+          <button type="button" onClick={() => void save()} disabled={busy} className="min-h-12 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-50">{busy ? 'Wird gespeichert …' : 'PDF jetzt speichern'}</button>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Die Kasse nicht erneut abschließen. Das PDF kann auch später im Journal erzeugt werden.</p>
+          <button type="button" onClick={onDone} disabled={busy} className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 dark:border-slate-600 dark:text-slate-200">Später</button>
+        </>}
+        {error && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
+      </section>
+    </div>
+  );
 }
 
 function AdminAccessGate({ onManagerSuccess, onStaffLogin, onCancel, staffUsers, title, access = null }: { onManagerSuccess: (administrator?: StaffUser) => void; onStaffLogin?: () => void; onCancel?: () => void; staffUsers: StaffUser[]; title: string; access?: OpeningManagementAccess }) {

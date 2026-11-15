@@ -295,7 +295,7 @@ async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: Jo
   await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
 }
 
-type ArchiveTarget = { mode: 'downloads' } | { mode: 'folder'; folder: FileSystemDirectoryHandle };
+type ArchiveTarget = { mode: 'downloads' } | { mode: 'fallback' } | { mode: 'folder'; folder: FileSystemDirectoryHandle };
 
 /**
  * Get write access BEFORE rendering: Android only grants folder access during
@@ -305,7 +305,11 @@ async function acquireArchiveTarget(): Promise<ArchiveTarget> {
   const setup = readDeviceSetup();
   if (!setup) return requirePdfArchiveSetup('Für den PDF-Export muss zuerst auf diesem Gerät ein Speicherort im Setup eingerichtet werden.');
   if (setup.archiveMode === 'downloads') return { mode: 'downloads' };
-  return { mode: 'folder', folder: await localArchiveFolder() };
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return requirePdfArchiveSetup('Für den PDF-Export muss zuerst auf diesem Gerät ein Speicherort im Setup eingerichtet werden.');
+  // Access refused or not granted in this tap: never lose the PDF.
+  if (!(await canWrite(folder))) return { mode: 'fallback' };
+  return { mode: 'folder', folder };
 }
 
 /**
@@ -320,7 +324,7 @@ export async function prepareBackupTarget(): Promise<ArchiveTarget> {
 }
 
 export async function saveBackupFile(target: ArchiveTarget, blob: Blob, fileName: string): Promise<string> {
-  if (target.mode === 'downloads') {
+  if (target.mode !== 'folder') {
     downloadBlob(blob, fileName);
     return fileName;
   }
@@ -646,6 +650,11 @@ async function saveManualPdfToConfiguredArchive(target: ArchiveTarget, data: Jou
     if (!started) throw new Error('PDF-Speicherung wurde abgebrochen.');
     return;
   }
+  if (target.mode === 'fallback') {
+    downloadBlob(blob, safeArchiveFileName(data.fileName));
+    alert('Der Speicherordner war nicht freigegeben. Das PDF wurde stattdessen im Ordner „Download“ gespeichert.');
+    return;
+  }
   const selected = target.folder;
   try {
     await saveIntoJournalFolder(selected, data, blob);
@@ -733,6 +742,55 @@ function openPrintHtml(html: string): void {
   // delayed call is enough; an additional load handler opened the dialog twice
   // in some Firefox installations.
   window.setTimeout(print, 250);
+}
+
+/**
+ * After a daily close (no tap active any more): save into the folder only if
+ * access is still granted. Otherwise report 'needs-tap' – the app then shows
+ * a „PDF jetzt speichern“ button. Never opens the Setup by itself.
+ */
+export async function saveJournalPdfIfAllowed(data: JournalReportData): Promise<'saved' | 'needs-tap'> {
+  const setup = readDeviceSetup();
+  if (setup?.archiveMode !== 'folder') {
+    await saveJournalPdf(data);
+    return 'saved';
+  }
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return 'needs-tap';
+  let permission: PermissionState | undefined;
+  try { permission = await folder.queryPermission?.({ mode: 'readwrite' }); } catch { permission = undefined; }
+  if (permission !== 'granted') return 'needs-tap';
+  const blob = await renderJournalPdf(data);
+  try {
+    await saveIntoJournalFolder(folder, data, blob);
+    return 'saved';
+  } catch {
+    return 'needs-tap';
+  }
+}
+
+/**
+ * Called directly from the „PDF jetzt speichern“ tap. Asks for folder access
+ * FIRST (needs the tap), then saves into „Kasse JJJJ/…“. If the folder cannot
+ * be used, the PDF is downloaded instead, so it is never lost.
+ * Returns a short German description of where the file went.
+ */
+export async function saveJournalPdfFromTap(data: JournalReportData): Promise<string> {
+  const folder = readDeviceSetup()?.archiveMode === 'folder'
+    ? await loadExportFolder() as WritableDirectoryHandle | null
+    : null;
+  const allowed = folder ? await canWrite(folder) : false;
+  const blob = await renderJournalPdf(data);
+  if (folder && allowed) {
+    try {
+      await saveIntoJournalFolder(folder, data, blob);
+      return `im Speicherordner „${folder.name}“ unter ${archiveRootName(archiveDate(data))}`;
+    } catch (error) {
+      console.warn('PDF konnte nicht im Speicherordner abgelegt werden, Download stattdessen.', error);
+    }
+  }
+  downloadBlob(blob, safeArchiveFileName(data.fileName));
+  return 'im Ordner „Download“ (der Speicherordner war nicht freigegeben)';
 }
 
 // Daily-close PDFs are kept on this device only. Cloud stores the underlying
