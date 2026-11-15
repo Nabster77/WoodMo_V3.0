@@ -159,7 +159,7 @@ export async function grantArchiveFolder(): Promise<boolean> {
   return true;
 }
 
-
+/** Called directly from a user click in the first-run/administration Setup.
  * Directory handles are persisted in IndexedDB (not embedded in an URL).
  * Android browsers may not support selecting a persistent local folder.
  */
