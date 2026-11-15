@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import type { CatalogImportSession } from '@/lib/catalogEngine';
 import { buildImportPlan, exportWorkbook, exportSimpleWorkbook, exportTemplateWorkbook, readImageZip, readWorkbook, type ImageEntry, type ImportPlan } from '@/lib/catalogTransfer';
@@ -314,15 +314,27 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <button disabled={busy} onClick={downloadFull} className={button} title="Mit IDs und allen technischen Spalten (für Fachleute)">Excel vollständig (mit IDs)</button>
           </div>
         </details>
-        <section className={done ? 'hidden' : 'space-y-2'}>
+        <section className={done ? 'hidden' : 'space-y-3'}>
           <h3 className="font-semibold">2. Neue Dateien auswählen</h3>
-          <label className="flex flex-wrap items-center gap-2">Excel (.xlsx)<input disabled={busy} type="file" accept=".xlsx" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'excel'); e.target.value = '';}} /><span className={excel ? 'font-semibold text-emerald-400' : 'opacity-60'}>{excel ? `✓ ${excel.name}` : 'noch keine Datei'}</span></label>
-          <label className="flex flex-wrap items-center gap-2">Bilder-ZIP (optional)<input disabled={busy} type="file" accept=".zip" onChange={e => {chooseFile(e.target.files?.[0] ?? null, 'zip'); e.target.value = '';}} /><span className={zip ? 'font-semibold text-emerald-400' : 'opacity-60'}>{zip ? `✓ ${zip.name}` : 'noch keine Datei'}</span></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy} checked={autoIllustrations} onChange={e => {invalidate();setAutoIllustrations(e.target.checked);}} />Artikel ohne Bild bekommen ein eigenes Symbol</label>
-          {zipSummary && zip && <p role="status" className="text-sm font-semibold">{zipSummary}</p>}
+          <div className="grid grid-cols-[9rem_auto_1fr] items-center gap-x-3 gap-y-2 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+            {([['excel', 'Excel-Liste', '.xlsx', excel], ['zip', 'Bilder-ZIP', '.zip', zip]] as const).map(([kind, label, accept, file]) => (
+              <Fragment key={kind}>
+                <span className="font-semibold">{label}{kind === 'zip' && <span className="block text-xs font-normal opacity-60">optional</span>}</span>
+                <label className={`${button} cursor-pointer text-center ${busy ? 'pointer-events-none opacity-40' : ''}`}>
+                  Datei wählen
+                  <input className="sr-only" disabled={busy} type="file" accept={accept} onChange={e => {chooseFile(e.target.files?.[0] ?? null, kind); e.target.value = '';}} />
+                </label>
+                <span className={`truncate ${file ? 'font-semibold text-emerald-400' : 'opacity-60'}`} title={file?.name}>{file ? `✓ ${file.name}` : 'noch keine Datei'}</span>
+              </Fragment>
+            ))}
+            {zipSummary && zip && <p role="status" className="col-span-3 text-xs opacity-80">{zipSummary}</p>}
+            <label className="col-span-3 flex items-center gap-2 border-t border-slate-700 pt-2 text-sm"><input type="checkbox" disabled={busy} checked={autoIllustrations} onChange={e => {invalidate();setAutoIllustrations(e.target.checked);}} />Artikel ohne Bild bekommen ein eigenes Symbol</label>
+          </div>
           {testMode && <p className="rounded-xl bg-amber-100 p-3 text-amber-900">Testmodus: Vorschau und Export möglich, Import gesperrt.</p>}
-          <button disabled={busy || !excel} onClick={preview} className={primary}>{busy ? 'Bitte warten …' : 'Vorschau erstellen'}</button>
-          <button type="button" onClick={() => setHelpOpen(true)} className={`${button} ml-2`}>Hilfe</button>
+          <div className="flex gap-2">
+            <button disabled={busy || !excel} onClick={preview} className={primary}>{busy ? 'Bitte warten …' : 'Vorschau erstellen'}</button>
+            <button type="button" onClick={() => setHelpOpen(true)} className={button}>Hilfe</button>
+          </div>
         </section>
         {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 p-4" role="status">
           <h3 className="text-xl font-extrabold text-emerald-300">✓ Import erfolgreich abgeschlossen</h3>
