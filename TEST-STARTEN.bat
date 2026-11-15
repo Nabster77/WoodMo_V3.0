@@ -2,6 +2,10 @@
 setlocal
 REM WOODMO V3 - lokaler Testserver. Doppelklick genuegt. Nur V3-Datenbank erlaubt.
 set "BRANCH=main"
+echo Welcher Stand soll getestet werden? Einfach Enter = main ^(veroeffentlichter Stand^).
+set /p "BRANCH=Branch [main]: "
+if "%BRANCH%"=="" set "BRANCH=main"
+echo Teste Branch: %BRANCH%
 set "DIR=C:\Users\szmai\WOODMO\WOODMO_V3_TEST"
 set "V3URL=https://tulndunkpsynkbbebenf.supabase.co"
 set "REPO=https://github.com/Nabster77/WoodMo_V3.0.git"
@@ -39,8 +43,9 @@ if exist ".env" (
 
 call npm.cmd install || goto :fehler
 echo.
-echo Server startet. Firefox oeffnet gleich http://127.0.0.1:5173
-start "" firefox "http://127.0.0.1:5173"
+echo Server startet. Microsoft Edge oeffnet gleich http://127.0.0.1:5173
+echo ^(Edge statt Firefox: nur Edge/Chrome koennen einen Speicherordner auswaehlen.^)
+start "" msedge "http://127.0.0.1:5173"
 call npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
 goto :ende
 
