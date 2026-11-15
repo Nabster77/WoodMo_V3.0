@@ -25,11 +25,18 @@ export function InstallPrompt() {
     };
     window.addEventListener('appinstalled', installedHandler);
 
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setInstalled(true);
-    }
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (standalone) setInstalled(true);
+
+    // Tablets: ask on EVERY start in the browser until the app is installed.
+    // If the browser offers no install button (e.g. after an earlier „Abbrechen“
+    // or in Samsung Internet), show how to install via the browser menu.
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const fallback = !standalone && touch ? window.setTimeout(() => setVisible(true), 1500) : undefined;
 
     return () => {
+      if (fallback) window.clearTimeout(fallback);
       window.removeEventListener('beforeinstallprompt', handler);
       window.removeEventListener('appinstalled', installedHandler);
     };
@@ -44,23 +51,27 @@ export function InstallPrompt() {
           <Download className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">App installieren</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Als App auf dem Tablet hinzufügen — funktioniert auch offline.</p>
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Bitte als App installieren</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {deferred
+              ? 'Die Kasse ist für den Betrieb als App gedacht – mit festem Speicherordner, auch offline.'
+              : 'Oben rechts im Browser-Menü ⋮ auf „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ tippen.'}
+          </p>
         </div>
-        <button
+        {deferred && <button
           onClick={async () => {
-            await deferred?.prompt();
+            await deferred.prompt();
             setDeferred(null);
             setVisible(false);
           }}
           className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-blue-700 active:scale-95"
         >
           Installieren
-        </button>
+        </button>}
         <button
           onClick={() => setVisible(false)}
           className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-          aria-label="Schließen"
+          aria-label="Später"
         >
           <X className="h-4 w-4" />
         </button>
