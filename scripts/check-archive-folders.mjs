@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { archiveRootName, backupDirectorySegments } from '../src/lib/archiveRoot.ts';
+import { archiveRootName, backupDirectorySegments, wrongArchiveFolderMessage } from '../src/lib/archiveRoot.ts';
 import { ensureYearStructure, ensureReportFolder, savePdfInFolder, saveFileNoOverwrite, copyName } from '../src/lib/archiveFolders.ts';
 
 class MemoryHandle {
@@ -82,4 +82,20 @@ assert.equal(target.files.get('Test (2).pdf'),'PDF-v2');
 const backup=base.folders.get('Backup');
 assert.equal(await saveFileNoOverwrite(backup,'b.json',new Blob(['{}'])),'b.json');
 assert.equal(await saveFileNoOverwrite(backup,'b.json',new Blob(['{}'])),'b (1).json');
-console.log('ARCHIV-ORDNER: Kasse 2026/2027, Standorte + Berichtsarten + Backup, fehlende Ordner neu, nie überschreiben, Kopien (1) OK.');
+
+// Hauptordner „Kasse 2026“ komplett gelöscht → wird im gewählten Ordner still neu angelegt, „Kasse 2027“ bleibt unberührt.
+const kasse2027=parent.folders.get('Kasse 2027');
+parent.folders.delete('Kasse 2026');
+const rebuilt=await ensureReportFolder(parent,{location:'Bregenz',fileName:'Bregenz_Tagesjournal.pdf',reportPeriodStart:dec},dec);
+assert.ok(parent.folders.has('Kasse 2026'),'Gelöschter Hauptordner wird neu angelegt.');
+assert.deepEqual([...parent.folders.get('Kasse 2026').folders.keys()],['Friedrichshafen','Bregenz','Alle-Standorte','Backup'],'Komplette Struktur neu.');
+assert.strictEqual(rebuilt,parent.folders.get('Kasse 2026').folders.get('Bregenz').folders.get('Tagesjournal'));
+assert.strictEqual(parent.folders.get('Kasse 2027'),kasse2027,'Anderes Jahr bleibt unverändert.');
+assert.deepEqual([...parent.folders.keys()].sort(),['Kasse 2026','Kasse 2027'],'Kein doppelter Hauptordner.');
+
+// Falscher Ordner gewählt: „Kasse JJJJ“ selbst → klare Meldung ohne festen Namen wie „Woodmo“; jeder andere Name (WoodMo, XY …) ist erlaubt.
+assert.match(wrongArchiveFolderMessage('Kasse 2026'),/nicht den Ordner „Kasse 2026“ selbst/);
+assert.doesNotMatch(wrongArchiveFolderMessage('Kasse 2027'),/Woodmo/i);
+for (const ok of ['WoodMo','XY','Kassenbuch','Kasse','Kasse 26','Documents']) assert.equal(wrongArchiveFolderMessage(ok),null,`„${ok}“ ist ein erlaubter Speicherort.`);
+
+console.log('ARCHIV-ORDNER: Kasse 2026/2027, Standorte + Berichtsarten + Backup, fehlende Ordner neu (auch gelöschter Hauptordner), falscher Ordner erkannt, nie überschreiben, Kopien (1) OK.');

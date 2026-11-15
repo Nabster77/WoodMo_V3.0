@@ -10,6 +10,17 @@ export function archiveRootName(configuredAt: number): string {
   return `Kasse ${year}`;
 }
 
+/**
+ * The user must choose the folder ABOVE „Kasse JJJJ“ (any name, e.g. „WoodMo“
+ * or „XY“). If „Kasse JJJJ“ itself is chosen, WOODMO would create
+ * „Kasse JJJJ/Kasse JJJJ“, so the choice is refused with this message.
+ * Returns null for every other folder name.
+ */
+export function wrongArchiveFolderMessage(selectedName: string): string | null {
+  if (!/^Kasse \d{4}$/.test(selectedName.trim())) return null;
+  return `Bitte nicht den Ordner „${selectedName}“ selbst wählen, sondern den Ordner, in dem er liegt. Die App legt „${selectedName}“ darin selbst an.`;
+}
+
 /** Visible backup folder directly beneath „Kasse JJJJ“. */
 export const BACKUP_FOLDER = 'Backup';
 
