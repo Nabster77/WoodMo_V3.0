@@ -45,7 +45,7 @@ const base=await ensureYearStructure(parent,dec);
 assert.deepEqual(parent.created,['Kasse 2026']);
 assert.deepEqual(base.created,['Friedrichshafen','Bregenz','Alle-Standorte','Backup']);
 for (const loc of ['Friedrichshafen','Bregenz','Alle-Standorte']) {
-  assert.deepEqual([...base.folders.get(loc).folders.keys()],['Tagesabschluss','Tagesjournal','Wochenjournal','Monatsjournal','Jahresjournal','Individuell'],`Unterordner ${loc}`);
+  assert.deepEqual([...base.folders.get(loc).folders.keys()],['Tagesabschlüsse','Tagesjournal','Wochenjournal','Monatsjournal','Jahresjournal','Individuell'],`Unterordner ${loc}`);
 }
 const fn=base.folders.get('Friedrichshafen');
 const daily=fn.folders.get('Tagesjournal');
@@ -63,10 +63,10 @@ const target=await ensureReportFolder(parent,report,jan);
 assert.strictEqual(target,daily,'Tagesjournal ohne Monatsordner.');
 assert.ok(parent.folders.has('Kasse 2027'),'Neues Jahr bekommt eigenen Hauptordner.');
 const january=await ensureReportFolder(parent,{location:'Bregenz',fileName:'Tagesabschluss.pdf',documentTitle:'Tagesabschluss',reportPeriodStart:jan},jan);
-assert.strictEqual(january,parent.folders.get('Kasse 2027').folders.get('Bregenz').folders.get('Tagesabschluss').folders.get('Januar'),'Tagesabschluss im Monatsordner.');
-assert.deepEqual([...parent.folders.get('Kasse 2027').folders.get('Bregenz').folders.get('Tagesabschluss').folders.keys()],['Januar'],'Nur benötigter Monat.');
+assert.strictEqual(january,parent.folders.get('Kasse 2027').folders.get('Bregenz').folders.get('Tagesabschlüsse').folders.get('Januar'),'Tagesabschluss im Monatsordner.');
+assert.deepEqual([...parent.folders.get('Kasse 2027').folders.get('Bregenz').folders.get('Tagesabschlüsse').folders.keys()],['Januar'],'Nur benötigter Monat.');
 const closedNewYear=await ensureReportFolder(parent,{location:'Friedrichshafen',fileName:'Friedrichshafen_Tagesabschluss_2026-12-31.pdf',documentTitle:'Tagesabschluss',reportPeriodStart:dec,cashSessionPeriod:{closedAt:jan}},jan);
-assert.strictEqual(closedNewYear,parent.folders.get('Kasse 2027').folders.get('Friedrichshafen').folders.get('Tagesabschluss').folders.get('Januar'),'Abschluss nach Mitternacht am 1.1. zählt ins neue Jahr.');
+assert.strictEqual(closedNewYear,parent.folders.get('Kasse 2027').folders.get('Friedrichshafen').folders.get('Tagesabschlüsse').folders.get('Januar'),'Abschluss nach Mitternacht am 1.1. zählt ins neue Jahr.');
 const custom=await ensureReportFolder(parent,{location:'Alle Standorte',fileName:'Alle-Standorte_Journal_01-11-2026_bis_15-11-2026.pdf',reportPeriodStart:dec},jan);
 assert.strictEqual(custom,base.folders.get('Alle-Standorte').folders.get('Individuell'));
 

@@ -21,7 +21,7 @@ const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli
  */
 export function archiveDate(report: ArchiveReport, now = Date.now()): number {
   const closedAt = report.cashSessionPeriod?.closedAt;
-  if (reportKindFolder(report) === 'Tagesabschluss' && Number.isFinite(closedAt)) return closedAt as number;
+  if (reportKindFolder(report) === 'Tagesabschlüsse' && Number.isFinite(closedAt)) return closedAt as number;
   return report.reportPeriodStart ?? now;
 }
 
@@ -44,13 +44,13 @@ export function archiveSubfolders(report: ArchiveReport): string[] {
   if (!location) throw new Error('Unbekannter Standort im PDF-Bericht.');
   const kind = reportKindFolder(report);
   // Daily closes: one folder per month (all closes of October in „Oktober“).
-  return kind === 'Tagesabschluss' ? [location, kind, monthName(at)] : [location, kind];
+  return kind === 'Tagesabschlüsse' ? [location, kind, monthName(at)] : [location, kind];
 }
 
 /** Folder per report type, directly beneath the location (no month level). */
 export function reportKindFolder(report: Pick<ArchiveReport, 'fileName' | 'documentTitle'>): string {
   const name = (report.documentTitle ?? '') + ' ' + report.fileName;
-  return /Tagesabschluss/i.test(name) ? 'Tagesabschluss'
+  return /Tagesabschluss/i.test(name) ? 'Tagesabschlüsse'
     : /Wochenjournal/i.test(name) ? 'Wochenjournal'
     : /Monatsjournal/i.test(name) ? 'Monatsjournal'
     : /Jahresjournal/i.test(name) ? 'Jahresjournal'

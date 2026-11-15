@@ -3,7 +3,7 @@ import { archiveDate, archiveSubfolders, type ArchiveReport } from './archivePat
 
 export const ARCHIVE_LOCATIONS = ['Friedrichshafen', 'Bregenz', 'Alle-Standorte'] as const;
 /** Visible report folders beneath every location. Further types are created on demand. */
-export const ARCHIVE_REPORT_FOLDERS = ['Tagesabschluss', 'Tagesjournal', 'Wochenjournal', 'Monatsjournal', 'Jahresjournal', 'Individuell'] as const;
+export const ARCHIVE_REPORT_FOLDERS = ['Tagesabschlüsse', 'Tagesjournal', 'Wochenjournal', 'Monatsjournal', 'Jahresjournal', 'Individuell'] as const;
 
 /**
  * Structure beneath the folder the user selected once:

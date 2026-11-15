@@ -14,7 +14,7 @@ assert.deepEqual(archiveSubfolders({
   location: 'Bregenz',
   documentTitle: 'Tagesabschluss',
   reportPeriodStart: currentYear,
-}), ['Bregenz', 'Tagesabschluss', 'November']);
+}), ['Bregenz', 'Tagesabschlüsse', 'November']);
 assert.deepEqual(archiveSubfolders({
   fileName: 'Alle-Standorte_Wochenjournal_KW46.pdf',
   location: 'Alle Standorte',
@@ -37,7 +37,7 @@ assert.deepEqual(archiveSubfolders({
   fileName:'Bregenz_Tagesabschluss_2027-01-01.pdf',
   location:'Bregenz',
   reportPeriodStart:Date.parse('2026-12-31T23:30:00Z'),
-}), ['Bregenz','Tagesabschluss','Januar'], 'Berlin/Bregenz bereits im neuen Jahr');
+}), ['Bregenz','Tagesabschlüsse','Januar'], 'Berlin/Bregenz bereits im neuen Jahr');
 assert.deepEqual(archiveSubfolders({
   fileName:'Bregenz_Tagesjournal_2026-12-31.pdf',
   location:'Bregenz',
@@ -48,7 +48,7 @@ assert.deepEqual(archiveSubfolders({fileName:'Bregenz_Monatsjournal_Nov-2026.pdf
 assert.deepEqual(archiveSubfolders({fileName:'Friedrichshafen_Jahresjournal_2026.pdf',location:'Friedrichshafen',reportPeriodStart:currentYear}), ['Friedrichshafen','Jahresjournal']);
 // Tagesabschluss: Monat des Abschlusses, nicht der Eröffnung.
 assert.deepEqual(archiveSubfolders({fileName:'Friedrichshafen_Tagesabschluss_2026-10-31_TA-FN-2026-000009.pdf',location:'Friedrichshafen',documentTitle:'Tagesabschluss',
-  reportPeriodStart:new Date(2026,9,31,0).getTime(),cashSessionPeriod:{closedAt:Date.parse('2026-11-01T01:30:00+01:00')}}), ['Friedrichshafen','Tagesabschluss','November']);
+  reportPeriodStart:new Date(2026,9,31,0).getTime(),cashSessionPeriod:{closedAt:Date.parse('2026-11-01T01:30:00+01:00')}}), ['Friedrichshafen','Tagesabschlüsse','November']);
 assert.deepEqual(archiveSubfolders({fileName:'Bregenz_Tagesabschluss_2026-10-03.pdf',location:'Bregenz',documentTitle:'Tagesabschluss',
-  reportPeriodStart:new Date(2026,9,3).getTime(),cashSessionPeriod:{closedAt:new Date(2026,9,3,22).getTime()}}), ['Bregenz','Tagesabschluss','Oktober']);
+  reportPeriodStart:new Date(2026,9,3).getTime(),cashSessionPeriod:{closedAt:new Date(2026,9,3,22).getTime()}}), ['Bregenz','Tagesabschlüsse','Oktober']);
 console.log('PDF-Archivpfade bestanden: Zeitbezug, Standorte, Berichtsarten, Monats- und Jahreswechsel.');
