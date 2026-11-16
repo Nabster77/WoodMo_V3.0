@@ -3,6 +3,7 @@ import type { JournalReportData } from './journalPdf';
 import { formatCurrency } from './format';
 import { escapeHtml } from './escapeHtml';
 import { exportAuditDocumentPdf } from './journalPdfFile';
+import { getTaxByRate, transactionNet } from './tax';
 
 const eur = (n: number) => escapeHtml(formatCurrency(n));
 const dateTime = (ts: number) => new Date(ts).toLocaleString('de-DE', {
@@ -27,8 +28,9 @@ export function buildStornoDocumentHTML(storno: StornoRecord, simulation = false
     <td class="num">${eur(-item.price * item.quantity)}</td>
     <td class="num">${eur(-item.pfand)}</td>
   </tr>`).join('');
-  const taxRows = Object.entries(original.taxByRate).sort((a,b)=>Number(a[0])-Number(b[0]))
-    .map(([rate,tax])=>`<tr><th>MwSt ${escapeHtml(rate)}%</th><td class="num">${eur(-tax)}</td></tr>`).join('');
+  // Inkl. Pfand-USt (ab 17.11.2026); aeltere Bons haben nur die Ware.
+  const taxRows = [...getTaxByRate(original).entries()].sort((a,b)=>a[0]-b[0])
+    .map(([rate,tax])=>`<tr><th>MwSt ${escapeHtml(String(rate))}%</th><td class="num">${eur(-tax)}</td></tr>`).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"/>
   <title>${escapeHtml(stornoDocumentName(storno, simulation))}</title>
   <style>
@@ -65,7 +67,7 @@ export function buildStornoDocumentHTML(storno: StornoRecord, simulation = false
   <section class="report-table-section"><h2>Finanzielle Wirkung</h2>
   <table class="summary"><tbody>
     <tr><th>Umsatz brutto ohne Pfand</th><td class="num">${eur(-original.subtotal)}</td></tr>
-    <tr><th>Umsatz netto</th><td class="num">${eur(-original.totalNet)}</td></tr>
+    <tr><th>Umsatz netto (inkl. Pfand)</th><td class="num">${eur(-transactionNet(original))}</td></tr>
     ${taxRows}
     <tr><th>Pfand</th><td class="num">${eur(-original.totalPfand)}</td></tr>
     <tr><th>Gesamter Stornobetrag</th><td class="num negative">${eur(-original.total)}</td></tr>

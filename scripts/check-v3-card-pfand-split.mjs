@@ -33,14 +33,17 @@ const cardEffect = (txs) => txs.filter((t) => t.paymentMethod === 'card').reduce
 // Fall aus dem Screenshot 14.11.: 2× Glühwein Weiß + 5× Pfand-Retoure, Bregenz (20 %).
 const screenshot = [line(gluehwein, 2), retoure(15, 5)];
 
-await test('01 Anzeige-Summen wie im Bezahldialog (Ware 9 €, Pfand 6 €, MwSt 1,50 €, Saldo 0 €)', () => {
+await test('01 Anzeige-Summen wie im Bezahldialog (Ware 9 €, Pfand 6 €, MwSt Ware 1,50 € − Pfand-Saldo 1,50 € = 0 €, Saldo 0 €)', () => {
   const t = checkoutTotals(screenshot, 'Bregenz');
   assert.equal(cents(t.subtotal), 900);
   assert.equal(cents(t.totalPfand), 600);
   assert.equal(cents(t.pfandRetoure), -1500);
   assert.equal(cents(t.total), 0);
   assert.equal(cents(t.goodsTotal), 1500);
-  assert.deepEqual(t.taxLines.map((l) => [l.rate, cents(l.tax)]), [[20, 150]]);
+  // Ab 17.11.2026 inkl. Pfand-USt: Ware +1,50 €, Pfand +1,00 €, Retoure −2,50 €.
+  assert.equal(cents(t.totalTax), 150, 'USt der Ware unverändert');
+  assert.equal(cents(t.pfandTax), -150);
+  assert.deepEqual(t.taxLines.map((l) => [l.rate, cents(l.tax)]), [[20, 0]]);
 });
 await test('02 Karte + Pfand-Retoure ergibt zwei Belege mit gemeinsamer paymentSplitId', () => {
   assert.equal(isCardWithCashPfandPayout(screenshot, 'card'), true);
@@ -65,7 +68,7 @@ await test('03 Kartenbeleg: nur Ware inkl. Ware-Pfand (15 €), Umsatz 9 €, Mw
   assert.equal(cents(card.totalTax), 150);
   assert.equal(cents(card.taxByRate[20]), 150);
 });
-await test('04 Pfandausgabe bar: −15 €, keine MwSt, kein Umsatz', () => {
+await test('04 Pfandausgabe bar: −15 €, Ware-MwSt 0 (DB-Regel), Pfand-USt −2,50 € separat', () => {
   const [, payout] = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', makeId });
   assert.equal(cents(payout.total), -1500);
   assert.equal(cents(payout.totalPfand), -1500);
@@ -74,6 +77,9 @@ await test('04 Pfandausgabe bar: −15 €, keine MwSt, kein Umsatz', () => {
   assert.deepEqual(payout.taxByRate, {});
   assert.equal(payout.items.length, 1);
   assert.equal(payout.items[0].isPfandRetoure, true);
+  // Entgeltminderung steht in eigenen Feldern (DB-Prüfung verlangt oben 0).
+  assert.equal(cents(payout.pfandTaxByRate[20]), -250);
+  assert.equal(cents(payout.pfandNet), -1250);
 });
 await test('05 Kassenbestand sinkt um 15 € (bar ausgezahlt), Karte +15 €, Saldo unverändert 0 €', () => {
   const txs = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', makeId });
