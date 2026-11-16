@@ -35,3 +35,4 @@ assert.match(pos, /'Bilder aus' : 'Bilder an'/);
 assert.match(readFileSync('src/components/POS/CartItemRow.tsx', 'utf8'), /<SpiritBadge kind=\{item\.product\.spiritType\} \/>/);
 console.log('KOMPAKT-ANSICHT: Umschalter Bilder an/aus pro Gerät, Likör-Kennzeichnung geprüft.');
 console.log('ARTIKELBILDER: quadratisches Vollbild, randlos, kontrastreiche Preis/Pfand-Texte und Touch-/Drag-Funktionen geprüft.');
+assert.match(pos, /const kindRank = \(p: Product\) => p\.spiritType === 'schnaps' \? 0 : p\.spiritType === 'likoer' \? 1 : 2;/);

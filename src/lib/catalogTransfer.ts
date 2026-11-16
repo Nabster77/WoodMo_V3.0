@@ -171,7 +171,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
     if (seen.has(key)) throw new Error(`Doppelter Eintrag „${value.name ?? value.id}“.`);
     seen.add(key);
     const old = before as Record<string, unknown> | undefined;
-    const diff = Object.entries(value).filter(([k, v]) => stableStringify(v) !== stableStringify(old?.[k]));
+    const diff: [string, unknown][] = Object.entries(value).filter(([k, v]) => stableStringify(v) !== stableStringify(old?.[k]));
     // A removed Kennzeichnung must also appear in the preview.
     if (old?.spiritType !== undefined && !('spiritType' in value)) diff.push(['spiritType', undefined]);
     const changes = diff.map(([k, v]) => `${label[k] ?? k}: ${show(k, old?.[k])} → ${show(k, v)}`);

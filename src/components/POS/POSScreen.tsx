@@ -191,10 +191,12 @@ export function POSScreen({
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
+    // A–Z / Z–A keeps marked articles together: first Schnaps, then Likör, then the rest.
+    const kindRank = (p: Product) => p.spiritType === 'schnaps' ? 0 : p.spiritType === 'likoer' ? 1 : 2;
     return [...list].sort(sortMode === 'asc'
-      ? (a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+      ? (a, b) => kindRank(a) - kindRank(b) || a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
       : sortMode === 'desc'
-        ? (a, b) => b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
+        ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
   }, [products, activeCat, search, sortMode]);
 
