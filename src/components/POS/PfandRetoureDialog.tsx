@@ -11,7 +11,21 @@ interface Props {
 }
 
 export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: Props) {
-  const [count, setCount] = useState(0);
+  // Anzahl per +/- oder direkt eintippen (Zahlentastatur). Nur ganze Zahlen 0–999.
+  const [count, setCountRaw] = useState(0);
+  const [entry, setEntry] = useState('0');
+  const setCount = (next: number | ((c: number) => number)) => {
+    setCountRaw((current) => {
+      const value = Math.min(999, Math.max(0, typeof next === 'function' ? next(current) : next));
+      setEntry(String(value));
+      return value;
+    });
+  };
+  const onType = (raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 3);
+    setEntry(digits);
+    setCountRaw(digits ? Number(digits) : 0);
+  };
 
   const location = session.location;
   const pfandAmount = pfandSettings[location];
@@ -27,7 +41,7 @@ export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: 
       <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
           <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
-            <Recycle className="h-5 w-5 text-teal-600 dark:text-teal-400" /> Pfand-Retoure
+            <Recycle className="h-5 w-5 text-green-600 dark:text-green-400" /> Pfand-Retoure
           </h3>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="h-5 w-5" />
@@ -36,10 +50,10 @@ export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: 
 
         <div className="p-5">
           <div className="mb-5 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5 dark:bg-gray-900/40">
-            <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <MapPin className="h-4 w-4 text-slate-500 dark:text-slate-300" />
             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{location}</span>
             <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
-              Pfandbetrag: <span className="font-bold text-teal-600 dark:text-teal-400">{formatCurrency(pfandAmount)}</span> pro Artikel
+              Pfandbetrag: <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(pfandAmount)}</span> pro Artikel
             </span>
           </div>
 
@@ -53,7 +67,16 @@ export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: 
               >
                 <Minus className="h-6 w-6" />
               </button>
-              <span className="w-16 text-center text-4xl font-bold text-gray-900 dark:text-gray-100">{count}</span>
+              <input
+                type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off"
+                aria-label="Anzahl retournierte Pfandartikel eingeben"
+                value={entry}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => onType(e.target.value)}
+                onBlur={() => setEntry(String(count))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+                className="w-24 rounded-2xl border-2 border-gray-300 bg-white py-1 text-center text-4xl font-bold text-gray-900 focus:border-green-500 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+              />
               <button
                 onClick={() => setCount((c) => c + 1)}
                 className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-2xl font-bold text-gray-700 transition active:scale-90 dark:bg-gray-700 dark:text-gray-200"
@@ -64,7 +87,7 @@ export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: 
 
             <div className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-center dark:border-gray-700 dark:bg-gray-900/40">
               <p className="text-xs text-gray-500 dark:text-gray-400">{count} Artikel × {formatCurrency(pfandAmount)}</p>
-              <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">{formatCurrency(total)}</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(total)}</p>
             </div>
           </div>
         </div>
@@ -73,7 +96,7 @@ export function PfandRetoureDialog({ session, pfandSettings, onSave, onClose }: 
           <button
             onClick={handleSave}
             disabled={count <= 0}
-            className="w-full rounded-xl bg-teal-600 py-3 text-base font-semibold text-white shadow-md transition hover:bg-teal-700 active:scale-95 disabled:opacity-50"
+            className="w-full rounded-xl bg-green-400 py-3 text-base font-bold text-slate-950 shadow-md transition hover:bg-green-300 active:scale-95 disabled:opacity-50"
           >
             <Check className="mr-1.5 inline h-4 w-4" /> Pfand-Retoure verbuchen
           </button>
