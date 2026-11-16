@@ -43,3 +43,11 @@ assert.match(pos, /cart\.length > 0 && !cartCollapsed && <div/);
 assert.match(pos, /onClick=\{\(\) => setShowPfandRetoure\(true\)\}/);
 assert.match(pos, /onClick=\{\(\) => activeSession && currentStaff && setShowCheckout\(true\)\}/);
 console.log('WARENKORB: zuklappbar, Summe sichtbar, Pfand-Retoure/Bonliste/Bezahlen bleiben.');
+// Aktive Warengruppe: Überschrift größer und in Gruppenfarbe, Rahmen + Überschrift pulsieren gleich.
+const css = readFileSync('src/index.css', 'utf8');
+assert.match(css, /@keyframes woodmo-cat-ring/);
+assert.match(css, /\.woodmo-cat-pulse-text \{ color: var\(--cat-accent\)/);
+assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.woodmo-cat-pulse-ring/);
+assert.match(pos, /woodmo-cat-pulse-ring/);
+assert.match(pos, /<span className="woodmo-cat-pulse-text">\{cat\.name\}<\/span>/);
+console.log('WARENGRUPPE: Überschrift und Rahmen pulsieren in der Gruppenfarbe.');

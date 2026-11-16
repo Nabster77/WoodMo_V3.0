@@ -18,6 +18,7 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
+import { categoryAccentStyle } from '@/lib/categoryAccent';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen,
 } from 'lucide-react';
@@ -330,8 +331,8 @@ export function POSScreen({
                 type="button"
                 aria-pressed={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
-                style={cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : undefined}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-sm bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'border-emerald-300 ring-2 ring-emerald-400/70' : 'border-transparent opacity-90'}`}
+                style={{ ...categoryAccentStyle(cat.color), ...(cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : {}) }}
+                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-sm bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'woodmo-cat-pulse-ring border-transparent' : 'border-transparent opacity-80'}`}
               >
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 break-words text-center">{cat.name}</span>
@@ -348,11 +349,11 @@ export function POSScreen({
               }
               if (cat) {
                 return (
-                  <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl" style={categoryAccentStyle(cat.color)}>
                     <span style={cat.color.startsWith("linear-gradient(") ? { background: cat.color } : cat.color.startsWith("#") ? { backgroundColor: cat.color } : undefined} className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${cat.color.startsWith("linear-gradient(") || cat.color.startsWith("#") ? "" : cat.color} text-white`}>
                       <DynamicIcon name={cat.icon} className="h-4 w-4" />
                     </span>
-                    <span className="text-gray-900 dark:text-gray-100">{cat.name}</span>
+                    <span className="woodmo-cat-pulse-text">{cat.name}</span>
                     <span className="text-sm font-normal text-gray-400">
                       ({visibleProducts.length} {visibleProducts.length === 1 ? 'Artikel' : 'Artikel'})
                     </span>
