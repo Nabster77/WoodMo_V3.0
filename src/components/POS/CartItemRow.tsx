@@ -11,15 +11,13 @@ interface Props {
   onDec: () => void;
   onRemove: () => void;
   onEditShot?: () => void;
-  /** Artikel aus einer Flaschen-Gruppe (andere Kennzeichnungsfarben). */
-  bottle?: boolean;
 }
 
 /**
  * Two-row cart entry stays usable in a narrow right-hand tablet column.
  * All quantity, shot and deposit operations remain wired to the original handlers.
  */
-export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot, bottle = false }: Props) {
+export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot }: Props) {
   const unitTotal = item.unitPrice + item.unitPfand;
   const shotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
   const basePrice = item.unitPrice - shotPrice;
@@ -32,7 +30,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
         <p className={`break-words text-sm font-semibold leading-tight ${item.isPfandRetoure ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-slate-100'}`}>
           {item.isPfandRetoure && <Recycle className="mr-1 inline h-3.5 w-3.5" />}
           {item.product.name}
-          {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} bottle={bottle} /></span>}
+          {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} /></span>}
           {!item.isPfandRetoure && item.shot && item.shot.id !== 'none' && (
             <span className="text-blue-600 dark:text-blue-400"> + {item.shot.name}</span>
           )}

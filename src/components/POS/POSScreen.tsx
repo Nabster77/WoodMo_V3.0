@@ -18,8 +18,7 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
-import { categoryAccentStyle } from '@/lib/categoryAccent';
-import { isBottleGroup } from '@/lib/spiritColors';
+import { categoryAccent, categoryAccentStyle } from '@/lib/categoryAccent';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight,
 } from 'lucide-react';
@@ -332,7 +331,7 @@ export function POSScreen({
             <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Wechseln</span>
           </div>
           {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
-          <div className="mb-2 grid max-h-[min(27dvh,13.5rem)] shrink-0 gap-1.5 overflow-y-auto overscroll-contain pr-1 text-sm font-bold sm:text-base"
+          <div className="mb-2 grid max-h-[min(30dvh,15rem)] shrink-0 gap-2 overflow-y-auto overscroll-contain p-2 text-sm font-bold sm:text-base"
             style={{ gridTemplateColumns: `repeat(auto-fill, min(100%, calc(${longestCategoryName * 1.1}ch + 3.75rem)))` }}>
             {shownCategories.map((cat) => (
               <button
@@ -415,12 +414,12 @@ export function POSScreen({
             ) : (
               <div className={showImages
                 ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
-                : 'grid grid-cols-2 gap-1.5 min-[480px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1240px]:grid-cols-5 min-[1600px]:grid-cols-6'}>
+                : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
                   <ProductTile
                     key={product.id}
                     compact={!showImages}
-                    bottle={isBottleGroup(categories.find((c) => c.id === product.categoryId)?.name)}
+                    groupColor={categoryAccent(categories.find((c) => c.id === product.categoryId)?.color)}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}
@@ -538,7 +537,7 @@ export function POSScreen({
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
             )}
             {cart.map((item, index) => (
-              <CartItemRow key={index} item={item} location={currentLocation} bottle={isBottleGroup(categories.find((c) => c.id === item.product.categoryId)?.name)} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
+              <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
           )}
