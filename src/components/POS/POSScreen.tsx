@@ -21,7 +21,7 @@ import { formatCurrency } from '@/lib/format';
 import { categoryAccentStyle } from '@/lib/categoryAccent';
 import { isBottleGroup } from '@/lib/spiritColors';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 // Ansicht der Artikel-Kacheln, nur auf diesem Gerät gespeichert (keine Cloud,
@@ -454,7 +454,13 @@ export function POSScreen({
         </div>
 
         {/* Right: cart */}
-        <div className={`flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
+        <div className={`relative flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
+          {/* Griff am linken Rand (Hoch- und Querformat): Pfeil zum Zu- bzw. Aufklappen. */}
+          <button type="button" onClick={toggleCart}
+            aria-label={cartCollapsed ? 'Warenkorb aufklappen (Pfeil)' : 'Warenkorb zuklappen (Pfeil)'}
+            className="absolute left-0 top-1/2 z-10 hidden h-16 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-blue-500/70 bg-white text-blue-700 shadow-lg transition hover:bg-blue-50 active:scale-95 dark:bg-slate-900 dark:text-blue-200 sm:flex">
+            {cartCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          </button>
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -465,8 +471,8 @@ export function POSScreen({
               <button type="button" onClick={toggleCart} aria-pressed={cartCollapsed}
                 aria-label={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'}
                 title={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen – mehr Platz für Artikel'}
-                className="flex min-h-10 shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700">
-                {cartCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+                className={`flex min-h-12 items-center justify-center gap-1.5 rounded-xl border-2 border-blue-500/70 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-100 active:scale-[0.98] dark:bg-blue-950/60 dark:text-blue-200 dark:hover:bg-blue-900/60 ${cartCollapsed ? 'basis-full' : 'shrink-0'}`}>
+                {cartCollapsed ? <PanelRightOpen className="h-5 w-5" /> : <PanelRightClose className="h-5 w-5" />}
                 {cartCollapsed ? 'Auf' : 'Zu'}
               </button>
               {cart.length > 0 && !cartCollapsed && (
