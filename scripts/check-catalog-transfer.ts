@@ -205,3 +205,20 @@ try {
   assert(wb.Pfand && !wb.Einstellungen,'Voll-Export nennt das Blatt „Pfand“');
   console.log('PFAND-BLATT: „Pfand“ und alte „Einstellungen“ werden gelesen.');
 }
+
+// Berichte: Bons einer zusammengelegten (gelöschten) Warengruppe zählen zur heutigen Gruppe des Artikels.
+{
+  const { withCurrentCategories } = await import('../src/lib/reportCategory');
+  const cats = [{ id: 'kurze', name: 'Kurze', icon: 'Package', color: '', sortOrder: 0 }];
+  const prods = [{ ...base.products[0], id: 'p-kaffee', categoryId: 'kurze' }];
+  const tx = { ...({} as Record<string, unknown>), id: 't1', items: [
+    { productId: 'p-kaffee', name: 'Kaffee (L)', categoryId: 'alt-likoer' },
+    { productId: 'p-weg', name: 'Gelöscht', categoryId: 'alt-x' },
+    { productId: 'p-kaffee', name: 'Kaffee', categoryId: 'kurze' },
+  ] } as never;
+  const out = withCurrentCategories([tx], cats as never, prods as never);
+  assert.deepEqual((out[0] as { items: { categoryId: string }[] }).items.map(i => i.categoryId), ['kurze', 'alt-x', 'kurze']);
+  assert.equal((tx as { items: { categoryId: string }[] }).items[0].categoryId, 'alt-likoer', 'gespeicherter Bon bleibt unverändert');
+  const same = [tx]; assert.equal(withCurrentCategories(same, [{ id: 'alt-likoer' }, { id: 'alt-x' }, { id: 'kurze' }] as never, prods as never), same);
+  console.log('BERICHTE: zusammengelegte Warengruppen werden der heutigen Gruppe zugeordnet (nur Anzeige).');
+}
