@@ -2,6 +2,7 @@ import type { CartItem, Location } from '@/types';
 import { formatCurrency } from '@/lib/format';
 import { taxRateForProduct } from '@/lib/tax';
 import { Minus, Plus, Trash2, Recycle } from 'lucide-react';
+import { SpiritBadge } from './ProductTile';
 
 interface Props {
   item: CartItem;
@@ -29,6 +30,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
           <p className={`break-words text-sm font-semibold leading-tight ${item.isPfandRetoure ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-slate-100'}`}>
             {item.isPfandRetoure && <Recycle className="mr-1 inline h-3.5 w-3.5" />}
             {item.product.name}
+            {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} /></span>}
             {!item.isPfandRetoure && item.shot && item.shot.id !== 'none' && (
               <span className="text-blue-600 dark:text-blue-400"> + {item.shot.name}</span>
             )}

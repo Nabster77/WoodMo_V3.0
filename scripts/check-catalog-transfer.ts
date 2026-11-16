@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildImportPlan, exportWorkbook, exportSimpleWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
+import { buildImportPlan, spiritType, exportWorkbook, exportSimpleWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
 import { seedCategories, seedProducts } from '../src/lib/seed';
 import { DEFAULT_SHOTS, normalizeCategories } from '../src/lib/shotCatalog';
 import { taxRateForProduct } from '../src/lib/tax';
@@ -164,4 +164,31 @@ try {
   console.log('V3-EXCEL+BILDER-RÜCKIMPORT: Paket, Dateiname, ZIP, Vorschau und Fehlerfall bestanden.');
 } finally {
   globalThis.fetch = realFetch;
+}
+
+// Kennzeichnung Likör / Schnaps (Spalte „Kennzeichnung“), z. B. für die Warengruppe „Kurze“.
+{
+  const H=['Produktname App','VK 2026','Warengruppe','Preis durch Mitarbeiter oder fix','Steuer DE in %','Steuer AT in %'];
+  const p=buildImportPlan({T:[[...H,'Kennzeichnung'],['Kaffee',4.5,'Kurze','fix',19,20,'Likör'],['Zirbe',4.5,'Kurze','fix',19,20,'Schnaps'],['Zirbenlikör',4.5,'Kurze','fix',19,20,'likoer'],['Cola',3,'Kurze','fix',19,20,'']]},base);
+  assert.deepEqual(p.errors,[]);
+  const by=(n:string)=>p.next.products.find(x=>x.name===n)!;
+  assert.equal(by('Kaffee').spiritType,'likoer'); assert.equal(by('Zirbe').spiritType,'schnaps');
+  assert.equal(by('Zirbenlikör').spiritType,'likoer'); assert.equal('spiritType' in by('Cola'),false);
+  const cur:LocalCatalog={...base,products:p.next.products,categories:p.next.categories};
+  const kid=by('Kaffee').id;
+  const keep=buildImportPlan({T:[[...H,'ID'],['Kaffee',4.5,'Kurze','fix',19,20,kid]]},cur);
+  assert.deepEqual(keep.errors,[]); assert.equal(keep.next.products.find(x=>x.id===kid)!.spiritType,'likoer','alte Excel ohne Spalte behält die Kennzeichnung');
+  const clear=buildImportPlan({T:[[...H,'ID','Kennzeichnung'],['Kaffee',4.5,'Kurze','fix',19,20,kid,'']]},cur);
+  assert.equal('spiritType' in clear.next.products.find(x=>x.id===kid)!,false);
+  assert(clear.rows.find(r=>r.id===kid)!.changes.includes('Kennzeichnung: Likör → —'),'Entfernen steht in der Vorschau');
+  assert(buildImportPlan({T:[[...H,'Kennzeichnung'],['X',4.5,'Kurze','fix',19,20,'Rum']]},base).errors.some(e=>e.includes('Kennzeichnung')));
+  assert.equal(spiritType(' LIKÖR '),'likoer'); assert.equal(spiritType('-'),undefined);
+  assert(buildImportPlan({T:[[...H,'Kennzeichnung'],['Zirbe',4.5,'Kurze','fix',19,20,'Likör'],['Zirbe',4.5,'Kurze','fix',19,20,'Schnaps']]},base).errors.some(e=>e.includes('Doppelter Name')),'gleicher Name in einer Warengruppe bleibt verboten');
+  // Voll-Export -> Import ohne Änderung: Kennzeichnung bleibt erhalten, nichts wird als geändert gemeldet.
+  const bytes = await exportWorkbook(cur);
+  const again = buildImportPlan(await readWorkbook(bytes), cur);
+  assert.deepEqual(again.errors,[]);
+  assert.equal(again.next.products.find(x=>x.id===kid)!.spiritType,'likoer');
+  assert.equal(again.rows.filter(r=>r.kind==='Artikel' && r.status!=='unverändert').length,0,'Rundreise ohne Änderung');
+  console.log('KENNZEICHNUNG: Likör/Schnaps importieren, behalten, entfernen, Rundreise Export/Import bestanden.');
 }

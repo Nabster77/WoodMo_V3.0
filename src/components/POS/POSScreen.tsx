@@ -17,13 +17,15 @@ import { DynamicIcon } from '@/components/DynamicIcon';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
+import { formatCurrency } from '@/lib/format';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen,
 } from 'lucide-react';
 
 // Ansicht der Artikel-Kacheln, nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
+const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
 
 type HeaderAction = 'deposit' | 'withdrawal' | 'pfand' | 'correction' | 'close' | null;
 
@@ -125,6 +127,9 @@ export function POSScreen({
   const [dragMode, setDragMode] = useState(false);
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
   const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, true) !== false);
+  // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
+  const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
+  const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
   const toggleImages = () => setShowImages((value) => { const next = !value; saveJSON(TILE_IMAGES_KEY, next); return next; });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -192,10 +197,12 @@ export function POSScreen({
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
+    // A–Z / Z–A keeps marked articles together: first Schnaps, then Likör, then the rest.
+    const kindRank = (p: Product) => p.spiritType === 'schnaps' ? 0 : p.spiritType === 'likoer' ? 1 : 2;
     return [...list].sort(sortMode === 'asc'
-      ? (a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+      ? (a, b) => kindRank(a) - kindRank(b) || a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
       : sortMode === 'desc'
-        ? (a, b) => b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
+        ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
   }, [products, activeCat, search, sortMode]);
 
@@ -270,6 +277,7 @@ export function POSScreen({
   }
 
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
+  const cartTotal = Math.round(cart.reduce((sum, c) => sum + (c.isPfandRetoure ? c.unitPrice : c.unitPrice + c.unitPfand) * c.quantity, 0) * 100) / 100;
 
     async function handleCheckoutComplete(transactions: Transaction[]): Promise<'queued-online' | 'queued-offline' | 'test'> {
     const result = await onCheckout(transactions);
@@ -306,7 +314,9 @@ export function POSScreen({
     <div className="flex h-full flex-col gap-2 sm:gap-3">
       {/* Portrait tablet: roughly 65% product area / 35% persistent cart.
           Small phones stack because a 200px-wide cart would be unusable. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] sm:overflow-hidden lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)] lg:gap-3">
+      <div className={`grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:overflow-hidden lg:gap-3 ${cartCollapsed
+        ? 'sm:grid-cols-[minmax(0,1fr)_9.5rem] lg:grid-cols-[minmax(0,1fr)_11rem]'
+        : 'sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)]'}`}>
         {/* Left: products area */}
         <div className="flex min-h-0 min-w-0 flex-col sm:overflow-hidden">
           {/* Categories always visible as readable labeled touch targets. */}
@@ -436,22 +446,29 @@ export function POSScreen({
         </div>
 
         {/* Right: cart */}
-        <div className="flex min-h-56 min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0">
+        <div className={`flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <ShoppingCart className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-                <h2 className="font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>
+                {!cartCollapsed && <h2 className="font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>}
                 {cartCount > 0 && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{cartCount}</span>}
               </div>
-              {cart.length > 0 && (
+              <button type="button" onClick={toggleCart} aria-pressed={cartCollapsed}
+                aria-label={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'}
+                title={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen – mehr Platz für Artikel'}
+                className="flex min-h-10 shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700">
+                {cartCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+                {cartCollapsed ? 'Auf' : 'Zu'}
+              </button>
+              {cart.length > 0 && !cartCollapsed && (
                 <button type="button" onClick={clearCart}
                   className="flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30">
                   <Trash2 className="h-3.5 w-3.5" /> Leeren
                 </button>
               )}
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className={`mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}`}>
               <button type="button"
                 onClick={() => setShowPfandRetoure(true)}
                 disabled={!activeSession || !currentStaff}
@@ -473,6 +490,13 @@ export function POSScreen({
             </div>
           </div>
 
+          {cartCollapsed ? (
+            <button type="button" onClick={toggleCart} aria-label="Warenkorb aufklappen"
+              className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center hover:bg-gray-50 dark:hover:bg-gray-700/40">
+              <PanelRightOpen className="h-5 w-5 text-slate-400" />
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Aufklappen</span>
+            </button>
+          ) : (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1 sm:px-3">
             {cart.length === 0 && (
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
@@ -481,9 +505,16 @@ export function POSScreen({
               <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
+          )}
 
           <div className="shrink-0 border-t border-gray-200 p-2 dark:border-gray-700 sm:p-3">
-            {cart.length > 0 && <div className="max-h-[min(25dvh,11rem)] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
+            {cartCollapsed && (
+              <div className="rounded-lg bg-slate-100 px-2 py-1.5 text-center dark:bg-slate-900/60">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{cartCount === 0 ? 'Keine Artikel' : `${cartCount} Artikel`}</div>
+                <div className={`text-lg font-extrabold leading-tight ${cartTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cartTotal)}</div>
+              </div>
+            )}
+            {cart.length > 0 && !cartCollapsed && <div className="max-h-[min(25dvh,11rem)] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
             {cart.length > 0 && (
               <button
                 onClick={() => activeSession && currentStaff && setShowCheckout(true)}
