@@ -68,3 +68,4 @@ assert.match(pos, /if \(!drag \|\| cartPinned \|\| cartCollapsed\) return;/);
 assert.match(pos, /sm:grid-cols-\[minmax\(0,1fr\)_var\(--cart-w\)\]/);
 assert.doesNotMatch(pos + readFileSync('src/components/POS/CartItemRow.tsx', 'utf8'), /teal-/);
 console.log('WARENKORB: Breite ziehen/fixieren, Pfand einheitlich grün.');
+assert.match(pos, /'✓ Fertig verschieben' : 'Kacheln verschieben'/);

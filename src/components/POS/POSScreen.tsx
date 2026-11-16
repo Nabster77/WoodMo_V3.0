@@ -420,17 +420,6 @@ export function POSScreen({
                   <option value="desc">Absteigend (Z–A)</option>
                 </select>
               </label>
-              {visibleProducts.length > 1 && !search.trim() && (
-                <button type="button" aria-pressed={dragMode}
-                  onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    dragMode
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                  }`}>
-                  <Move className="h-3.5 w-3.5" /> {dragMode ? '✓ Verschieben aktiv' : 'Kacheln verschieben'}
-                </button>
-              )}
             </div>
           </div>
 
@@ -473,6 +462,18 @@ export function POSScreen({
                     isDragging={dragSource === product.id}
                   />
                 ))}
+                {/* „Kacheln verschieben“ als letzte Kachel im Artikelfeld (nur bei eigener Reihenfolge sinnvoll; schaltet sie ein). */}
+                {visibleProducts.length > 1 && !search.trim() && (
+                  <button type="button" aria-pressed={dragMode}
+                    onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
+                    className={`flex min-h-[6.25rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-2 py-2 text-center text-xs font-bold transition active:scale-[0.97] ${
+                      dragMode
+                        ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                        : 'border-slate-400 text-slate-500 hover:bg-slate-100 dark:border-slate-500 dark:text-slate-400 dark:hover:bg-slate-800'
+                    }`}>
+                    <Move className="h-5 w-5" /> {dragMode ? '✓ Fertig verschieben' : 'Kacheln verschieben'}
+                  </button>
+                )}
               </div>
             )}
             {(!activeSession || !currentStaff) && visibleProducts.length > 0 && (
