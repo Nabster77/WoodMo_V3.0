@@ -354,9 +354,6 @@ export function POSScreen({
                       <DynamicIcon name={cat.icon} className="h-4 w-4" />
                     </span>
                     <span className="woodmo-cat-pulse-text">{cat.name}</span>
-                    <span className="text-sm font-normal text-gray-400">
-                      ({visibleProducts.length} {visibleProducts.length === 1 ? 'Artikel' : 'Artikel'})
-                    </span>
                   </h2>
                 );
               }
