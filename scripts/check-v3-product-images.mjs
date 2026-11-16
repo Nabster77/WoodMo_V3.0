@@ -58,3 +58,5 @@ console.log('WARENGRUPPE: Überschrift und Rahmen pulsieren in der Gruppenfarbe.
 assert.match(pos, /aria-label=\{`Schuss für Position \$\{index \+ 1\} wählen`\}/);
 assert.match(pos, /!item\.isPfandRetoure && item\.product\.hasShot && \(/);
 console.log('WARENKORB ZU: Positionen mit Schuss-Auswahl.');
+assert.match(pos, /aria-label=\{cartCollapsed \? 'Warenkorb aufklappen \(Pfeil\)' : 'Warenkorb zuklappen \(Pfeil\)'\}/);
+console.log('WARENKORB: Griff mit Pfeil am linken Rand.');
