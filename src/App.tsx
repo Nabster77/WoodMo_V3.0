@@ -1,5 +1,5 @@
 import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBalanceCarry';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useStore } from '@/hooks/useStore';
 import { useCloudSync } from '@/hooks/useCloudSync';
@@ -93,6 +93,13 @@ export default function App() {
   const [deviceSetupOpen, setDeviceSetupOpen] = useState(() => readDeviceSetup() === null);
   const [pdfArchiveWarning, setPdfArchiveWarning] = useState<string | null>(null);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  // Jedes Betreten der Verwaltung (egal mit welcher Anmeldung) öffnet zuerst das Verwaltungsmenü.
+  const adminOpenRef = useRef(false);
+  useEffect(() => {
+    const inAdmin = tab === 'admin' && adminUnlocked && !homeVisible;
+    if (inAdmin && !adminOpenRef.current) setMenuOpen(true);
+    adminOpenRef.current = inAdmin;
+  }, [tab, adminUnlocked, homeVisible]);
   const [headerAction, setHeaderAction] = useState<HeaderAction>(null);
   const [cashierLoginRequest, setCashierLoginRequest] = useState(0);
   const [testMode] = useState<boolean>(isTestMode());

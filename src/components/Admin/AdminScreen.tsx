@@ -116,8 +116,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     onShotDraftDirtyChange?.(false);
     return true;
   };
+  // Beim Betreten der Verwaltung ist noch kein Menüpunkt gewählt → nichts blau markieren.
+  const [menuItemChosen, setMenuItemChosen] = useState(false);
   const changeTab = (next: typeof tab) => {
     if (tab !== next && !canLeaveShots()) return;
+    setMenuItemChosen(true);
     setTab(next);
     onCloseMenu();
   };
@@ -176,19 +179,19 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             <section aria-labelledby="woodmo-admin-navigation" className="mb-5">
               <h3 id="woodmo-admin-navigation" className={adminMenuHeading}>Verwaltungsbereiche</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button type="button" aria-current={tab === 'sessions' ? 'page' : undefined} className={`${adminMenuItem} ${tab === 'sessions' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('sessions')}>
+                <button type="button" aria-current={menuItemChosen && tab === 'sessions' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'sessions' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('sessions')}>
                   <MonitorDot className="h-5 w-5 shrink-0 text-blue-300" /> Kassen-Übersicht
                 </button>
-                <button type="button" aria-current={tab === 'categories' ? 'page' : undefined} className={`${adminMenuItem} ${tab === 'categories' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('categories')}>
+                <button type="button" aria-current={menuItemChosen && tab === 'categories' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'categories' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('categories')}>
                   <Tag className="h-5 w-5 shrink-0 text-blue-300" /> Warengruppen
                 </button>
-                <button type="button" aria-current={tab === 'products' ? 'page' : undefined} className={`${adminMenuItem} ${tab === 'products' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('products')}>
+                <button type="button" aria-current={menuItemChosen && tab === 'products' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'products' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('products')}>
                   <Package className="h-5 w-5 shrink-0 text-blue-300" /> Artikel
                 </button>
-                <button type="button" aria-current={tab === 'shots' ? 'page' : undefined} className={`${adminMenuItem} ${tab === 'shots' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('shots')}>
+                <button type="button" aria-current={menuItemChosen && tab === 'shots' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'shots' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('shots')}>
                   <Wine className="h-5 w-5 shrink-0 text-blue-300" /> SCHUSS
                 </button>
-                <button type="button" aria-current={tab === 'staff' ? 'page' : undefined} className={`${adminMenuItem} ${tab === 'staff' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('staff')}>
+                <button type="button" aria-current={menuItemChosen && tab === 'staff' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'staff' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('staff')}>
                   <ShieldCheck className="h-5 w-5 shrink-0 text-blue-300" /> Benutzer
                 </button>
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onOpenJournal)}>
