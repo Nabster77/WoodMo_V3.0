@@ -18,8 +18,6 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
-import { categoryAccentStyle } from '@/lib/categoryAccent';
-import { isBottleGroup } from '@/lib/spiritColors';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight,
 } from 'lucide-react';
@@ -333,7 +331,7 @@ export function POSScreen({
             <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Wechseln</span>
           </div>
           {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
-          <div className="mb-2 grid max-h-[min(27dvh,13.5rem)] shrink-0 gap-1.5 overflow-y-auto overscroll-contain pr-1 text-sm font-bold sm:text-base"
+          <div className="mb-2 grid max-h-[min(30dvh,15rem)] shrink-0 gap-2 overflow-y-auto overscroll-contain p-2 text-sm font-bold sm:text-base"
             style={{ gridTemplateColumns: `repeat(auto-fill, min(100%, calc(${longestCategoryName * 1.1}ch + 3.75rem)))` }}>
             {shownCategories.map((cat) => (
               <button
@@ -341,8 +339,9 @@ export function POSScreen({
                 type="button"
                 aria-pressed={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
-                style={{ ...categoryAccentStyle(cat.color), ...(cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : {}) }}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-base bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'woodmo-cat-pulse-ring border-transparent' : 'border-transparent opacity-80'}`}
+                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search
+                  ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                  : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}
               >
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 truncate text-center">{cat.name}</span>
@@ -359,11 +358,11 @@ export function POSScreen({
               }
               if (cat) {
                 return (
-                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl" style={categoryAccentStyle(cat.color)}>
-                    <span style={cat.color.startsWith("linear-gradient(") ? { background: cat.color } : cat.color.startsWith("#") ? { backgroundColor: cat.color } : undefined} className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${cat.color.startsWith("linear-gradient(") || cat.color.startsWith("#") ? "" : cat.color} text-white`}>
+                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">
                       <DynamicIcon name={cat.icon} className="h-4 w-4" />
                     </span>
-                    <span className="woodmo-cat-pulse-text">{cat.name}</span>
+                    <span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">{cat.name}</span>
                   </h2>
                 );
               }
@@ -416,12 +415,11 @@ export function POSScreen({
             ) : (
               <div className={showImages
                 ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
-                : 'grid grid-cols-2 gap-1.5 min-[480px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1240px]:grid-cols-5 min-[1600px]:grid-cols-6'}>
+                : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
                   <ProductTile
                     key={product.id}
                     compact={!showImages}
-                    bottle={isBottleGroup(categories.find((c) => c.id === product.categoryId)?.name)}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}
@@ -525,7 +523,7 @@ export function POSScreen({
                     {!item.isPfandRetoure && item.product.hasShot && (
                       <button type="button" onClick={() => { setShotCartIndex(index); setShotProduct(item.product); }}
                         aria-label={`Schuss für Position ${index + 1} wählen`}
-                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] ${item.shot && item.shot.id !== 'none' ? 'bg-blue-600 text-white' : 'border border-blue-400/70 text-blue-700 dark:text-blue-300'}`}>
+                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] bg-blue-600 text-white hover:bg-blue-700`}>
                         {item.shot && item.shot.id !== 'none' ? `+ ${item.shot.name}` : '+ Schuss'}
                       </button>
                     )}
@@ -539,7 +537,7 @@ export function POSScreen({
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
             )}
             {cart.map((item, index) => (
-              <CartItemRow key={index} item={item} location={currentLocation} bottle={isBottleGroup(categories.find((c) => c.id === item.product.categoryId)?.name)} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
+              <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
           )}

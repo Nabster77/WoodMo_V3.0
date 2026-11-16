@@ -11,15 +11,13 @@ interface Props {
   onDec: () => void;
   onRemove: () => void;
   onEditShot?: () => void;
-  /** Artikel aus einer Flaschen-Gruppe (andere Kennzeichnungsfarben). */
-  bottle?: boolean;
 }
 
 /**
  * Two-row cart entry stays usable in a narrow right-hand tablet column.
  * All quantity, shot and deposit operations remain wired to the original handlers.
  */
-export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot, bottle = false }: Props) {
+export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot }: Props) {
   const unitTotal = item.unitPrice + item.unitPfand;
   const shotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
   const basePrice = item.unitPrice - shotPrice;
@@ -32,7 +30,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
         <p className={`break-words text-sm font-semibold leading-tight ${item.isPfandRetoure ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-slate-100'}`}>
           {item.isPfandRetoure && <Recycle className="mr-1 inline h-3.5 w-3.5" />}
           {item.product.name}
-          {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} bottle={bottle} /></span>}
+          {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} /></span>}
           {!item.isPfandRetoure && item.shot && item.shot.id !== 'none' && (
             <span className="text-blue-600 dark:text-blue-400"> + {item.shot.name}</span>
           )}
@@ -48,12 +46,12 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
             ) : (
               <span>Stückpreis {formatCurrency(unitTotal)} · MwSt. {rate}%</span>
             )}
-            {item.unitPfand > 0 && <span className="block text-amber-600 dark:text-amber-400">+ {formatCurrency(item.unitPfand)} Pfand</span>}
+            {item.unitPfand > 0 && <span className="mt-0.5 inline-flex rounded bg-green-400 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-950">PFAND + {formatCurrency(item.unitPfand)}</span>}
           </div>
         )}
         {onEditShot && !item.isPfandRetoure && (
           <button type="button" onClick={onEditShot}
-            className="mt-1 min-h-8 rounded-lg border border-violet-300 bg-violet-50 px-2 text-xs font-bold text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200">
+            className="mt-1 block min-h-8 rounded-lg bg-blue-600 px-2 text-xs font-bold text-white hover:bg-blue-700 active:scale-[0.97]">
             {item.shot ? 'SCHUSS ändern' : '+ SCHUSS'}
           </button>
         )}

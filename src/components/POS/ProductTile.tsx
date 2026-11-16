@@ -19,19 +19,17 @@ interface Props {
   isDragging?: boolean;
   /** Kompakt-Ansicht ohne Bild (Umschalter "Bilder an/aus" in der Kasse). */
   compact?: boolean;
-  /** Artikel liegt in einer Flaschen-Gruppe (andere Kennzeichnungsfarben). */
-  bottle?: boolean;
 }
 
 /**
  * Kennzeichnung Likör / Schnaps (Excel-Spalte „Kennzeichnung“), damit man sich
  * bei den Kurzen nicht vertippt. Farben siehe spiritColors.ts.
  */
-export function SpiritBadge({ kind, bottle = false }: { kind?: Product['spiritType']; bottle?: boolean }) {
-  const color = spiritColor(kind, bottle);
+export function SpiritBadge({ kind, className = 'rounded px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide' }: { kind?: Product['spiritType']; className?: string }) {
+  const color = spiritColor(kind);
   if (!color) return null;
   return (
-    <span style={{ backgroundColor: color }} className="rounded px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-white">
+    <span style={{ backgroundColor: color }} className={`${className} text-white`}>
       {kind === 'likoer' ? 'LIKÖR' : 'SCHNAPS'}
     </span>
   );
@@ -40,55 +38,39 @@ export function SpiritBadge({ kind, bottle = false }: { kind?: Product['spiritTy
 export function ProductTile({
   product, location, onAdd, disabled,
   dragMode, onDragStart, onDragOver, onDrop,
-  isDraggedOver, isDragging, compact, bottle = false,
+  isDraggedOver, isDragging, compact,
 }: Props) {
   const isDisabled = !product.available || disabled;
   const price = product.prices[location];
   const pfand = product.pfand[location];
-  // Gekennzeichnete Artikel: nur der Rahmen in der Kennzeichnungsfarbe.
-  const markColor = isDraggedOver ? undefined : spiritColor(product.spiritType, bottle);
-  const markStyle = markColor ? { borderColor: markColor } : undefined;
   const stateClasses = `${isDragging ? 'opacity-40' : ''} ${dragMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer active:scale-[0.97]'} ${isDisabled && !dragMode ? 'cursor-not-allowed opacity-40' : ''}`;
 
   if (compact) {
-    // Niedrige Kachel ohne Bild: Name groß, Preis, Pfand, kleine Hinweise.
-    // Liköre bekommen eine violette Kachel mit Band "LIKÖR".
-    const compactClasses = `group relative flex min-h-[5.25rem] min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-xl border-2 px-2.5 py-2 text-left shadow-sm transition-all ${
+    // Kompakte Kachel ohne Bild, Schwarz-Weiß: dunkler Hintergrund, weißer Rahmen
+    // (Hellmodus umgekehrt). Alles mittig: Name, gleich große Hinweise (Kennzeichnung,
+    // Schuss, Pfand), MwSt rutscht nach, darunter der Preis. Farbe tragen nur die Hinweise.
+    const compactClasses = `group relative flex min-h-[6.25rem] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 bg-white px-1.5 py-2 text-center shadow-sm transition-all dark:bg-slate-900 ${
       isDraggedOver
         ? 'border-blue-500 ring-2 ring-blue-400/50'
-        : markColor
-          ? 'bg-slate-800 hover:brightness-110'
-          : 'border-slate-600/70 bg-slate-800 hover:border-emerald-400/80'
+        : 'border-slate-800 hover:bg-slate-100 dark:border-white/85 dark:hover:bg-slate-800'
     } ${stateClasses}`;
+    const chip = 'inline-flex w-[3.9rem] justify-center rounded px-1 py-0.5 text-[10px] font-extrabold tracking-wide';
     const compactInner = (
       <>
-        <div className="flex min-w-0 items-start justify-between gap-1">
-          <span className="line-clamp-2 min-w-0 break-words text-base font-bold leading-tight text-white">
-            {product.name}
-          </span>
-          <span className="shrink-0 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            {taxRateForProduct(product, location)}%
-          </span>
+        <span className="line-clamp-2 w-full break-words text-base font-bold leading-tight text-slate-900 dark:text-white">
+          {product.name}
+        </span>
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          <SpiritBadge kind={product.spiritType} className={chip} />
+          {product.hasShot && <span className={`${chip} bg-blue-600 text-white`}>SCHUSS</span>}
+          {(product.isPfandArticle || pfand > 0) && <span className={`${chip} bg-green-400 text-slate-950`}>PFAND</span>}
+          <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-800 dark:bg-white/15 dark:text-white">{taxRateForProduct(product, location)}%</span>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <SpiritBadge kind={product.spiritType} bottle={bottle} />
-          {product.hasShot && (
-            <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Schuss</span>
-          )}
-          {product.isPfandArticle && (
-            <span className="rounded bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Pfand</span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-          {product.hasIndividualPrice ? (
-            <span className="text-sm font-extrabold text-amber-300"><Euro className="inline h-3 w-3" /> Preis individuell</span>
-          ) : (
-            <span className="text-lg font-extrabold leading-none text-blue-300">{formatCurrency(price)}</span>
-          )}
-          {pfand > 0 && (
-            <span className="text-xs font-medium leading-tight text-slate-200">+ {formatCurrency(pfand)} Pfand</span>
-          )}
-        </div>
+        {product.hasIndividualPrice ? (
+          <span className="text-sm font-extrabold text-amber-600 dark:text-amber-300"><Euro className="inline h-3 w-3" /> Preis individuell</span>
+        ) : (
+          <span className="text-lg font-extrabold leading-none text-slate-900 dark:text-white">{formatCurrency(price)}</span>
+        )}
         {dragMode && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
             <GripVertical className="h-6 w-6 text-white" />
@@ -96,7 +78,7 @@ export function ProductTile({
         )}
       </>
     );
-    return renderTile(compactClasses, compactInner, markStyle);
+    return renderTile(compactClasses, compactInner);
   }
 
   // Square, full-bleed picture like the approved visual reference.
@@ -105,9 +87,7 @@ export function ProductTile({
   const tileClasses = `group relative isolate aspect-square min-w-0 overflow-hidden rounded-xl border bg-slate-800 text-left shadow-sm transition-all ${
     isDraggedOver
       ? 'border-blue-500 ring-2 ring-blue-400/50'
-      : markColor
-        ? 'border-2 hover:shadow-lg'
-        : 'border-slate-600/70 hover:border-emerald-400/80 hover:shadow-lg'
+      : 'border-slate-800 hover:shadow-lg dark:border-white/85'
   } ${stateClasses}`;
 
   const inner = (
@@ -148,7 +128,7 @@ export function ProductTile({
       {/* Translucent caption sits ON the square image, not below it.
           Keep the price and deposit together; no light-gray gutters. */}
       <div className="absolute inset-x-0 bottom-0 z-10 flex min-h-[29%] flex-col items-center justify-center gap-1 border-t border-white/10 bg-slate-950/85 px-2 py-2 text-center text-white backdrop-blur-[2px]">
-        <SpiritBadge kind={product.spiritType} bottle={bottle} />
+        <SpiritBadge kind={product.spiritType} />
         <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-white sm:text-base">
           {product.name}
         </span>
@@ -169,7 +149,7 @@ export function ProductTile({
     </>
   );
 
-  return renderTile(tileClasses, inner, markStyle);
+  return renderTile(tileClasses, inner);
 
   function renderTile(classes: string, content: ReactNode, style?: CSSProperties) {
     if (dragMode) {
