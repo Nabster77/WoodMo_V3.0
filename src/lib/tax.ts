@@ -23,8 +23,16 @@ export function isReducedRate(rate: number): boolean {
   return classifyRate(rate) === 'reduced';
 }
 
+/**
+ * Umsatzsteuer je Satz eines Bons: Ware (taxByRate) PLUS Pfand
+ * (pfandTaxByRate, ab 17.11.2026). Alle Berichte nutzen diese Funktion.
+ */
 export function getTaxByRate(tx: Transaction): Map<number, number> {
   const map = new Map<number, number>();
+  for (const [k, v] of Object.entries(tx.pfandTaxByRate ?? {})) {
+    const rate = Number(k);
+    if (v) map.set(rate, (map.get(rate) ?? 0) + v);
+  }
   if (tx.taxByRate) {
     for (const [k, v] of Object.entries(tx.taxByRate)) {
       const rate = Number(k);
@@ -64,4 +72,41 @@ export function sortedRateKeys(map: Map<number, number>): number[] {
 
 export function taxRateForProduct(product: Product, location: Location): number {
   return product.taxRates?.[location] ?? taxRateForClass(product.taxClass, location);
+}
+
+/** Nur die Umsatzsteuer auf Pfand je Satz (ab 17.11.2026; ältere Bons: leer). */
+export function getPfandTaxByRate(tx: Transaction): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const [k, v] of Object.entries(tx.pfandTaxByRate ?? {})) {
+    const rate = Number(k);
+    if (v) map.set(rate, (map.get(rate) ?? 0) + v);
+  }
+  return map;
+}
+
+/** Netto eines Bons: Ware + Pfand-Saldo (Pfand-Netto erst ab 17.11.2026 gespeichert). */
+export function transactionNet(tx: Transaction): number {
+  return tx.totalNet + (tx.pfandNet ?? 0);
+}
+
+/** Umsatzsteuer eines Bons gesamt: Ware + Pfand. */
+export function transactionTax(tx: Transaction): number {
+  let sum = 0;
+  for (const value of getTaxByRate(tx).values()) sum += value;
+  return sum;
+}
+
+/** Umsatzsteuer nur auf Pfand eines Bons. */
+export function transactionPfandTax(tx: Transaction): number {
+  let sum = 0;
+  for (const value of Object.values(tx.pfandTaxByRate ?? {})) sum += value;
+  return sum;
+}
+
+/**
+ * Steuersatz für eine Pfand-Rückgabe ohne Artikelbezug: Normalsatz des
+ * Standorts (Getränke im Ausschank: DE 19 %, AT 20 %). Wird im Bon gespeichert.
+ */
+export function pfandReturnTaxRate(location: Location): number {
+  return taxRateForClass('standard', location);
 }

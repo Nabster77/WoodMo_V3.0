@@ -1,6 +1,6 @@
 import type { CartItem, Location } from '@/types';
-import { calcNet, calcTax, formatCurrency } from '@/lib/format';
-import { taxRateForProduct } from '@/lib/tax';
+import { formatCurrency } from '@/lib/format';
+import { checkoutTotals } from '@/lib/checkoutTransactions';
 import { ShoppingCart, Recycle } from 'lucide-react';
 
 interface Props {
@@ -9,28 +9,12 @@ interface Props {
 }
 
 export function CartSummary({ items, location }: Props) {
-  const grossByRate = new Map<number, number>();
-  let totalPfand = 0, pfandRetoure = 0;
-
-  for (const item of items) {
-    if (item.isPfandRetoure) {
-      pfandRetoure += item.unitPrice * item.quantity;
-      continue;
-    }
-    const rate = taxRateForProduct(item.product, location);
-    const gross = item.unitPrice * item.quantity;
-    grossByRate.set(rate, (grossByRate.get(rate) ?? 0) + gross);
-    totalPfand += item.unitPfand * item.quantity;
-  }
-
-  let totalNet = 0, totalTax = 0;
-  const rateEntries = [...grossByRate.entries()].sort((a, b) => a[0] - b[0]);
-  for (const [rate, gross] of rateEntries) {
-    totalNet += calcNet(gross, rate);
-    totalTax += calcTax(gross, rate);
-  }
-  const subtotal = [...grossByRate.values()].reduce((s, v) => s + v, 0);
-  const total = subtotal + totalPfand + pfandRetoure;
+  // Gleiche Rechnung wie beim Buchen: USt auf Ware UND Pfand (ab 17.11.2026).
+  const totals = checkoutTotals(items, location);
+  const { totalPfand, pfandRetoure, total } = totals;
+  const totalNet = totals.totalNet + totals.pfandNet;
+  const totalTax = totals.totalTax + totals.pfandTax;
+  const rateEntries = totals.taxLines;
 
   if (items.length === 0) {
     return (
@@ -48,10 +32,10 @@ export function CartSummary({ items, location }: Props) {
         <span>Zwischensumme (netto)</span>
         <span className="font-medium">{formatCurrency(totalNet)}</span>
       </div>
-      {rateEntries.map(([rate, gross]) => (
+      {rateEntries.map(({ rate, tax }) => (
         <div key={rate} className="flex justify-between text-gray-600 dark:text-gray-400">
           <span>MwSt {rate}%</span>
-          <span className="font-medium">{formatCurrency(calcTax(gross, rate))}</span>
+          <span className="font-medium">{formatCurrency(tax)}</span>
         </div>
       ))}
       <div className="flex justify-between border-t border-gray-200 pt-1.5 text-gray-600 dark:border-gray-700 dark:text-gray-400">

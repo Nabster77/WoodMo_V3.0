@@ -4,7 +4,7 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateGermanFromISO, formatDateISO, formatTime, parseGermanDate } from '@/lib/format';
-import { mergeTaxByRate, sortedRateKeys, isReducedRate } from '@/lib/tax';
+import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
 import { buildDailyReport } from '@/lib/dailyReport';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
@@ -962,7 +962,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
       for (const t of txToday) {
         total += t.subtotal;
         count++;
-        totalNet += t.totalNet;
+        totalNet += transactionNet(t);
         totalPfand += t.totalPfand;
       }
       const totalTax = [...taxByRateMap.values()].reduce((s, v) => s + v, 0);
@@ -1174,11 +1174,11 @@ function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, t
               <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(total)}</p>
             </div>
             <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">Netto</p>
+              <p className="text-xs text-green-700/70 dark:text-green-400/70">Netto inkl. Pfand</p>
               <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalNet)}</p>
             </div>
             <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">MwSt</p>
+              <p className="text-xs text-green-700/70 dark:text-green-400/70">MwSt inkl. Pfand</p>
               <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalTax)}</p>
             </div>
           </div>
@@ -1285,7 +1285,7 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
   const taxByRateMap = mergeTaxByRate(transactions);
   const rateKeys = sortedRateKeys(taxByRateMap);
   const total = transactions.reduce((s, t) => s + t.subtotal, 0);
-  const totalNet = transactions.reduce((s, t) => s + t.totalNet, 0);
+  const totalNet = transactions.reduce((s, t) => s + transactionNet(t), 0);
   const totalTax = [...taxByRateMap.values()].reduce((s, v) => s + v, 0);
   const totalPfand = transactions.reduce((s, t) => s + t.totalPfand, 0);
   const cashCount = transactions.filter((t) => t.paymentMethod === 'cash').length;
@@ -1302,8 +1302,9 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
         const existing = map.get(item.productId) ?? { name: item.name, categoryId: item.categoryId, qty: 0, gross: 0, net: 0, tax: 0, pfand: 0, taxRate: item.taxRate };
         existing.qty += item.quantity;
         existing.gross += item.price * item.quantity;
-        existing.net += item.netPrice * item.quantity;
-        existing.tax += item.taxAmount * item.quantity;
+        // netPrice/taxAmount sind Zeilensummen (Preis × Menge), nicht Stückwerte.
+        existing.net += item.netPrice;
+        existing.tax += item.taxAmount;
         existing.pfand += item.pfand;
         map.set(item.productId, existing);
       }
@@ -1359,11 +1360,11 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
                   <p className="text-base font-bold text-green-700 dark:text-green-400">{formatCurrency(total)}</p>
                 </div>
                 <div className="rounded-xl bg-blue-50 px-3 py-2.5 dark:bg-blue-900/20">
-                  <p className="text-xs text-blue-700/70 dark:text-blue-400/70">Netto</p>
+                  <p className="text-xs text-blue-700/70 dark:text-blue-400/70">Netto inkl. Pfand</p>
                   <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(totalNet)}</p>
                 </div>
                 <div className="rounded-xl bg-rose-50 px-3 py-2.5 dark:bg-rose-900/20">
-                  <p className="text-xs text-rose-700/70 dark:text-rose-400/70">MwSt</p>
+                  <p className="text-xs text-rose-700/70 dark:text-rose-400/70">MwSt inkl. Pfand</p>
                   <p className="text-base font-bold text-rose-700 dark:text-rose-300">{formatCurrency(totalTax)}</p>
                 </div>
                 <div className="rounded-xl bg-teal-50 px-3 py-2.5 dark:bg-teal-900/20">

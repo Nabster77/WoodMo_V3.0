@@ -3,7 +3,7 @@ import type { Category, Transaction, Location } from '@/types';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { StornoJournalTransaction } from '@/lib/stornoReportProjection';
 import { formatCurrency, formatDate, formatTime } from '@/lib/format';
-import { isTaxFreeItem, getTaxByRate } from '@/lib/tax';
+import { isTaxFreeItem, getTaxByRate, transactionNet, transactionPfandTax } from '@/lib/tax';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { formatCashSessionTimestamp } from '@/lib/cashSessionTimes';
 
@@ -81,6 +81,8 @@ interface LocationStats {
   total: number;
   totalNet: number;
   totalTax: number;
+  /** davon Umsatzsteuer auf Pfand (ab 17.11.2026) */
+  pfandTax: number;
   pfandCollected: number;
   pfandReturned: number;
   pfandSaldo: number;
@@ -95,11 +97,12 @@ const LOCATION_META: Record<Location, { sub: string; color: string; bar: string 
 };
 
 function computeStats(txs: Transaction[]): LocationStats {
-  let total = 0, totalNet = 0, pfandCollected = 0, pfandReturned = 0, count = 0, stornoCount = 0;
+  let total = 0, totalNet = 0, pfandTax = 0, pfandCollected = 0, pfandReturned = 0, count = 0, stornoCount = 0;
   const taxByRate: Record<number, number> = {};
   for (const t of txs) {
     total += t.subtotal;
-    totalNet += t.totalNet;
+    totalNet += transactionNet(t);
+    pfandTax += transactionPfandTax(t);
     const reversing = (t as Partial<StornoJournalTransaction>).isStornoProjection === true;
     if (reversing) stornoCount++;
     else count++;
@@ -116,7 +119,7 @@ function computeStats(txs: Transaction[]): LocationStats {
     }
   }
   const totalTax = Object.values(taxByRate).reduce((s, v) => s + v, 0);
-  return { total, totalNet, totalTax, pfandCollected, pfandReturned, pfandSaldo: pfandCollected - pfandReturned, count, stornoCount, taxByRate };
+  return { total, totalNet, totalTax, pfandTax, pfandCollected, pfandReturned, pfandSaldo: pfandCollected - pfandReturned, count, stornoCount, taxByRate };
 }
 
 /**
@@ -207,13 +210,20 @@ function articleRows(txs: Transaction[]): { rows: string; bestRows: string; artM
 }
 
 function taxCards(txs: Transaction[]): { cards: string; columns: number } {
-  const taxData = new Map<number, { gross: number; net: number; tax: number; count: number }>();
+  const empty = () => ({ gross: 0, net: 0, tax: 0, count: 0, pfandGross: 0, pfandNet: 0, pfandTax: 0 });
+  const taxData = new Map<number, ReturnType<typeof empty>>();
   for (const tx of txs) {
     for (const item of tx.items) {
+      // Pfand-USt (ab 17.11.2026) zuerst, auch fuer steuerfreie Retoure-Zeilen.
+      if (item.pfandTaxRate !== undefined && item.pfandTax !== undefined) {
+        const p = taxData.get(item.pfandTaxRate) ?? empty();
+        p.pfandGross += item.pfand; p.pfandNet += item.pfandNet ?? 0; p.pfandTax += item.pfandTax;
+        taxData.set(item.pfandTaxRate, p);
+      }
       if (isTaxFreeItem(item)) continue;
       const rate = item.taxRate;
       const gross = item.price * item.quantity;
-      const g = taxData.get(rate) ?? { gross: 0, net: 0, tax: 0, count: 0 };
+      const g = taxData.get(rate) ?? empty();
       g.gross += gross; g.net += item.netPrice; g.tax += item.taxAmount; g.count += item.quantity;
       taxData.set(rate, g);
     }
@@ -225,7 +235,12 @@ function taxCards(txs: Transaction[]): { cards: string; columns: number } {
       <div class="row"><span>Bruttoumsatz</span><span>${formatCurrency(d.gross)}</span></div>
       <div class="row"><span>Nettoumsatz</span><span>${formatCurrency(d.net)}</span></div>
       <div class="row bold"><span>MwSt-Anteil</span><span>${formatCurrency(d.tax)}</span></div>
-      <div class="row"><span>Verkaufte Menge</span><span>${d.count}</span></div></div>`;
+      <div class="row"><span>Verkaufte Menge</span><span>${d.count}</span></div>${
+      Math.abs(d.pfandGross) >= 0.005 || Math.abs(d.pfandTax) >= 0.005 ? `
+      <div class="row"><span>Pfand-Saldo brutto</span><span>${formatCurrency(d.pfandGross)}</span></div>
+      <div class="row"><span>Pfand-Saldo netto</span><span>${formatCurrency(d.pfandNet)}</span></div>
+      <div class="row"><span>MwSt auf Pfand</span><span>${formatCurrency(d.pfandTax)}</span></div>
+      <div class="row bold"><span>MwSt ${rate}% gesamt</span><span>${formatCurrency(d.tax + d.pfandTax)}</span></div>` : ''}</div>`;
   }).join('');
   return { cards, columns: sortedRates.length > 0 ? sortedRates.length : 2 };
 }
@@ -330,14 +345,20 @@ function pfandSaldoCell(saldo: number): string {
   return formatCurrency(0);
 }
 
+function pfandTaxNote(s: LocationStats): string {
+  return Math.abs(s.pfandTax) >= 0.005
+    ? `<div class="label" style="margin-top:3px">davon auf Pfand: ${formatCurrency(s.pfandTax)}</div>`
+    : '';
+}
+
 function summaryCards(s: LocationStats, accentColor: string): string {
   const taxSummaryLine = Object.keys(s.taxByRate).length > 0
     ? Object.entries(s.taxByRate).map(([r, v]) => `MwSt ${r}%: ${formatCurrency(v)}`).join(' · ')
     : '—';
   return `<div class="summary-grid">
     <div class="summary-card accent"><div class="label">Umsatz (ohne Pfand)</div><div class="value" style="color:${accentColor}">${formatCurrency(s.total)}</div></div>
-    <div class="summary-card"><div class="label">Netto</div><div class="value">${formatCurrency(s.totalNet)}</div></div>
-    <div class="summary-card"><div class="label">MwSt gesamt</div><div class="value">${formatCurrency(s.totalTax)}</div></div>
+    <div class="summary-card"><div class="label">Netto (inkl. Pfand)</div><div class="value">${formatCurrency(s.totalNet)}</div></div>
+    <div class="summary-card"><div class="label">MwSt gesamt (inkl. Pfand)</div><div class="value">${formatCurrency(s.totalTax)}</div>${pfandTaxNote(s)}</div>
     <div class="summary-card pfand"><div class="label">Pfand eingenommen</div><div class="value">${formatCurrency(s.pfandCollected)}</div></div>
     <div class="summary-card pfand"><div class="label">Pfand retourniert</div><div class="value">${formatCurrency(s.pfandReturned)}</div></div>
     <div class="summary-card pfand"><div class="label">${pfandSaldoLabel(s.pfandSaldo)}</div><div class="value">${pfandSaldoDisplay(s.pfandSaldo)}</div></div>
@@ -470,8 +491,8 @@ function combinedSection(transactions: Transaction[], categories: Category[], st
     <div class="loc-body">
       <div class="summary-grid">
         <div class="summary-card accent"><div class="label">Umsatz (ohne Pfand)</div><div class="value">${formatCurrency(stats.total)}</div></div>
-        <div class="summary-card"><div class="label">Netto</div><div class="value">${formatCurrency(stats.totalNet)}</div></div>
-        <div class="summary-card"><div class="label">MwSt gesamt</div><div class="value">${formatCurrency(stats.totalTax)}</div></div>
+        <div class="summary-card"><div class="label">Netto (inkl. Pfand)</div><div class="value">${formatCurrency(stats.totalNet)}</div></div>
+        <div class="summary-card"><div class="label">MwSt gesamt (inkl. Pfand)</div><div class="value">${formatCurrency(stats.totalTax)}</div>${pfandTaxNote(stats)}</div>
         <div class="summary-card pfand"><div class="label">Pfand eingenommen</div><div class="value">${formatCurrency(stats.pfandCollected)}</div></div>
         <div class="summary-card pfand"><div class="label">Pfand retourniert</div><div class="value">${formatCurrency(stats.pfandReturned)}</div></div>
         <div class="summary-card pfand"><div class="label">${pfandSaldoLabel(stats.pfandSaldo)}</div><div class="value">${pfandSaldoDisplay(stats.pfandSaldo)}</div></div>
@@ -519,8 +540,9 @@ export function buildJournalHTML(data: JournalReportData): string {
         <tbody>
           ${compareRow('Verkäufe', String(fhStats.count), String(bgStats.count), String(totalStats.count))}
           ${compareRow('Brutto-Umsatz', formatCurrency(fhStats.total), formatCurrency(bgStats.total), formatCurrency(totalStats.total))}
-          ${compareRow('Netto-Umsatz', formatCurrency(fhStats.totalNet), formatCurrency(bgStats.totalNet), formatCurrency(totalStats.totalNet))}
-          ${compareRow('MwSt gesamt', formatCurrency(fhStats.totalTax), formatCurrency(bgStats.totalTax), formatCurrency(totalStats.totalTax))}
+          ${compareRow('Netto-Umsatz (inkl. Pfand)', formatCurrency(fhStats.totalNet), formatCurrency(bgStats.totalNet), formatCurrency(totalStats.totalNet))}
+          ${compareRow('MwSt gesamt (inkl. Pfand)', formatCurrency(fhStats.totalTax), formatCurrency(bgStats.totalTax), formatCurrency(totalStats.totalTax))}
+          ${compareRow('davon MwSt auf Pfand', formatCurrency(fhStats.pfandTax), formatCurrency(bgStats.pfandTax), formatCurrency(totalStats.pfandTax))}
           ${compareRow('Pfand eingenommen', formatCurrency(fhStats.pfandCollected), formatCurrency(bgStats.pfandCollected), formatCurrency(totalStats.pfandCollected))}
           ${compareRow('Pfand retourniert', formatCurrency(fhStats.pfandReturned), formatCurrency(bgStats.pfandReturned), formatCurrency(totalStats.pfandReturned))}
           ${compareRow('Pfand-Saldo', pfandSaldoCell(fhStats.pfandSaldo), pfandSaldoCell(bgStats.pfandSaldo), pfandSaldoCell(totalStats.pfandSaldo))}

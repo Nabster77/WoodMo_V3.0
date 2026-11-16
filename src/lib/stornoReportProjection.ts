@@ -34,7 +34,13 @@ export function stornoAsNegativeTransaction(storno: StornoRecord): StornoJournal
     // already inverted, but taxAmount is not consistently per-unit in legacy data.
     taxAmount: -item.taxAmount,
     netPrice: -item.netPrice,
+    // Pfand-USt (ab 17.11.2026) ebenfalls exakt umkehren.
+    ...(item.pfandNet !== undefined ? { pfandNet: -item.pfandNet } : {}),
+    ...(item.pfandTax !== undefined ? { pfandTax: -item.pfandTax } : {}),
   }));
+  const pfandTaxes = src.pfandTaxByRate
+    ? Object.fromEntries(Object.entries(src.pfandTaxByRate).map(([rate, money]) => [rate, -money])) as Record<number, number>
+    : undefined;
   return {
     ...src,
     id: `storno:${storno.id}`,
@@ -47,6 +53,8 @@ export function stornoAsNegativeTransaction(storno: StornoRecord): StornoJournal
     totalPfand: -src.totalPfand,
     total: -src.total,
     taxByRate: taxes,
+    ...(pfandTaxes ? { pfandTaxByRate: pfandTaxes } : {}),
+    ...(src.pfandNet !== undefined ? { pfandNet: -src.pfandNet } : {}),
     amountPaid: undefined,
     change: undefined,
     employeeId: storno.employeeId,
