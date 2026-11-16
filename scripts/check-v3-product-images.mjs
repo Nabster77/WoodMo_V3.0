@@ -27,8 +27,7 @@ const pos = readFileSync('src/components/POS/POSScreen.tsx', 'utf8');
 assert.match(tile, /compact\?: boolean/);
 assert.match(tile, /export function SpiritBadge/);
 assert.match(tile, /kind === 'likoer' \? 'LIKÖR' : 'SCHNAPS'/);
-assert.match(tile, /spiritColor\(product\.spiritType\)/);
-assert.match(tile, /alpha\(groupColor, 0\.22\)/);
+assert.match(tile, /const color = spiritColor\(kind\);/);
 assert.match(tile, /bg-green-400 text-slate-950`\}>PFAND</);
 const spirit = readFileSync('src/lib/spiritColors.ts', 'utf8');
 assert.match(spirit, /SPIRIT_COLORS = \{ likoer: '#8b5cf6', schnaps: '#ef4444' \}/);
@@ -49,12 +48,13 @@ assert.match(pos, /onClick=\{\(\) => activeSession && currentStaff && setShowChe
 console.log('WARENKORB: zuklappbar, Summe sichtbar, Pfand-Retoure/Bonliste/Bezahlen bleiben.');
 // Aktive Warengruppe: Überschrift größer und in Gruppenfarbe, Rahmen + Überschrift pulsieren gleich.
 const css = readFileSync('src/index.css', 'utf8');
-assert.match(css, /@keyframes woodmo-cat-ring/);
-assert.match(css, /\.woodmo-cat-pulse-text \{ color: var\(--cat-accent\)/);
-assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.woodmo-cat-pulse-ring/);
-assert.match(pos, /woodmo-cat-pulse-ring/);
-assert.match(pos, /<span className="woodmo-cat-pulse-text">\{cat\.name\}<\/span>/);
-console.log('WARENGRUPPE: Überschrift und Rahmen pulsieren in der Gruppenfarbe.');
+assert.match(css, /@keyframes woodmo-cat-glow-dark/);
+assert.match(css, /\.dark \.woodmo-cat-pulse-text \{ animation-name: woodmo-cat-text-dark; \}/);
+assert.match(pos, /'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'/);
+assert.match(pos, /<span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">\{cat\.name\}<\/span>/);
+assert.doesNotMatch(pos, /categoryAccent/);
+assert.match(tile, /dark:border-white\/85/);
+console.log('WARENGRUPPE: Schwarz-Weiß, aktive Gruppe und Überschrift pulsieren weiß, Kacheln weiß umrandet.');
 // Zugeklappter Warenkorb: Positionsliste mit Schuss-Auswahl.
 assert.match(pos, /aria-label=\{`Schuss für Position \$\{index \+ 1\} wählen`\}/);
 assert.match(pos, /!item\.isPfandRetoure && item\.product\.hasShot && \(/);

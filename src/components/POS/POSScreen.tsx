@@ -18,7 +18,6 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
-import { categoryAccent, categoryAccentStyle } from '@/lib/categoryAccent';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight,
 } from 'lucide-react';
@@ -339,8 +338,9 @@ export function POSScreen({
                 type="button"
                 aria-pressed={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
-                style={{ ...categoryAccentStyle(cat.color), ...(cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : {}) }}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-base bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'woodmo-cat-pulse-ring border-transparent' : 'border-transparent opacity-80'}`}
+                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search
+                  ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                  : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}
               >
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 truncate text-center">{cat.name}</span>
@@ -357,11 +357,11 @@ export function POSScreen({
               }
               if (cat) {
                 return (
-                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl" style={categoryAccentStyle(cat.color)}>
-                    <span style={cat.color.startsWith("linear-gradient(") ? { background: cat.color } : cat.color.startsWith("#") ? { backgroundColor: cat.color } : undefined} className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${cat.color.startsWith("linear-gradient(") || cat.color.startsWith("#") ? "" : cat.color} text-white`}>
+                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">
                       <DynamicIcon name={cat.icon} className="h-4 w-4" />
                     </span>
-                    <span className="woodmo-cat-pulse-text">{cat.name}</span>
+                    <span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">{cat.name}</span>
                   </h2>
                 );
               }
@@ -419,7 +419,6 @@ export function POSScreen({
                   <ProductTile
                     key={product.id}
                     compact={!showImages}
-                    groupColor={categoryAccent(categories.find((c) => c.id === product.categoryId)?.color)}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}
@@ -523,7 +522,7 @@ export function POSScreen({
                     {!item.isPfandRetoure && item.product.hasShot && (
                       <button type="button" onClick={() => { setShotCartIndex(index); setShotProduct(item.product); }}
                         aria-label={`Schuss für Position ${index + 1} wählen`}
-                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] ${item.shot && item.shot.id !== 'none' ? 'bg-blue-600 text-white' : 'border border-blue-400/70 text-blue-700 dark:text-blue-300'}`}>
+                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] bg-blue-600 text-white hover:bg-blue-700`}>
                         {item.shot && item.shot.id !== 'none' ? `+ ${item.shot.name}` : '+ Schuss'}
                       </button>
                     )}

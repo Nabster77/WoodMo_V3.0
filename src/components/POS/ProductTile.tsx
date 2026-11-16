@@ -5,7 +5,6 @@ import { taxRateForProduct } from '@/lib/tax';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
 import { Package, GripVertical, Euro } from 'lucide-react';
 import { spiritColor } from '@/lib/spiritColors';
-import { alpha } from '@/lib/categoryAccent';
 
 interface Props {
   product: Product;
@@ -20,8 +19,6 @@ interface Props {
   isDragging?: boolean;
   /** Kompakt-Ansicht ohne Bild (Umschalter "Bilder an/aus" in der Kasse). */
   compact?: boolean;
-  /** Leitfarbe der Warengruppe (#rrggbb) für den getönten Hintergrund gekennzeichneter Artikel. */
-  groupColor?: string;
 }
 
 /**
@@ -41,45 +38,38 @@ export function SpiritBadge({ kind, className = 'rounded px-1.5 py-0.5 text-[10p
 export function ProductTile({
   product, location, onAdd, disabled,
   dragMode, onDragStart, onDragOver, onDrop,
-  isDraggedOver, isDragging, compact, groupColor,
+  isDraggedOver, isDragging, compact,
 }: Props) {
   const isDisabled = !product.available || disabled;
   const price = product.prices[location];
   const pfand = product.pfand[location];
-  // Gekennzeichnete Artikel: nur der Rahmen in der Kennzeichnungsfarbe.
-  const markColor = isDraggedOver ? undefined : spiritColor(product.spiritType);
-  const markStyle = markColor ? { borderColor: markColor } : undefined;
   const stateClasses = `${isDragging ? 'opacity-40' : ''} ${dragMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer active:scale-[0.97]'} ${isDisabled && !dragMode ? 'cursor-not-allowed opacity-40' : ''}`;
 
   if (compact) {
-    // Kompakte Kachel ohne Bild, alles mittig: Name, gleich große Hinweise (Kennzeichnung,
-    // Schuss, Pfand), MwSt rutscht nach, darunter der Preis. Gekennzeichnete Artikel
-    // (Kurze, Flaschen) bekommen Rahmen in Kennzeichnungsfarbe und leicht getönten Hintergrund
-    // in der Farbe ihrer Warengruppe.
-    const tint = markColor && groupColor ? { backgroundColor: alpha(groupColor, 0.22) } : undefined;
-    const compactClasses = `group relative flex min-h-[6.25rem] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 bg-slate-800 px-1.5 py-2 text-center shadow-sm transition-all ${
+    // Kompakte Kachel ohne Bild, Schwarz-Weiß: dunkler Hintergrund, weißer Rahmen
+    // (Hellmodus umgekehrt). Alles mittig: Name, gleich große Hinweise (Kennzeichnung,
+    // Schuss, Pfand), MwSt rutscht nach, darunter der Preis. Farbe tragen nur die Hinweise.
+    const compactClasses = `group relative flex min-h-[6.25rem] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 bg-white px-1.5 py-2 text-center shadow-sm transition-all dark:bg-slate-900 ${
       isDraggedOver
         ? 'border-blue-500 ring-2 ring-blue-400/50'
-        : markColor
-          ? 'hover:brightness-110'
-          : 'border-slate-600/70 hover:border-emerald-400/80'
+        : 'border-slate-800 hover:bg-slate-100 dark:border-white/85 dark:hover:bg-slate-800'
     } ${stateClasses}`;
     const chip = 'inline-flex w-[3.9rem] justify-center rounded px-1 py-0.5 text-[10px] font-extrabold tracking-wide';
     const compactInner = (
       <>
-        <span className="line-clamp-2 w-full break-words text-base font-bold leading-tight text-white">
+        <span className="line-clamp-2 w-full break-words text-base font-bold leading-tight text-slate-900 dark:text-white">
           {product.name}
         </span>
         <div className="flex flex-wrap items-center justify-center gap-1">
           <SpiritBadge kind={product.spiritType} className={chip} />
           {product.hasShot && <span className={`${chip} bg-blue-600 text-white`}>SCHUSS</span>}
           {(product.isPfandArticle || pfand > 0) && <span className={`${chip} bg-green-400 text-slate-950`}>PFAND</span>}
-          <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">{taxRateForProduct(product, location)}%</span>
+          <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-800 dark:bg-white/15 dark:text-white">{taxRateForProduct(product, location)}%</span>
         </div>
         {product.hasIndividualPrice ? (
-          <span className="text-sm font-extrabold text-amber-300"><Euro className="inline h-3 w-3" /> Preis individuell</span>
+          <span className="text-sm font-extrabold text-amber-600 dark:text-amber-300"><Euro className="inline h-3 w-3" /> Preis individuell</span>
         ) : (
-          <span className="text-lg font-extrabold leading-none text-blue-300">{formatCurrency(price)}</span>
+          <span className="text-lg font-extrabold leading-none text-slate-900 dark:text-white">{formatCurrency(price)}</span>
         )}
         {dragMode && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -88,7 +78,7 @@ export function ProductTile({
         )}
       </>
     );
-    return renderTile(compactClasses, compactInner, { ...markStyle, ...tint });
+    return renderTile(compactClasses, compactInner);
   }
 
   // Square, full-bleed picture like the approved visual reference.
@@ -97,9 +87,7 @@ export function ProductTile({
   const tileClasses = `group relative isolate aspect-square min-w-0 overflow-hidden rounded-xl border bg-slate-800 text-left shadow-sm transition-all ${
     isDraggedOver
       ? 'border-blue-500 ring-2 ring-blue-400/50'
-      : markColor
-        ? 'border-2 hover:shadow-lg'
-        : 'border-slate-600/70 hover:border-emerald-400/80 hover:shadow-lg'
+      : 'border-slate-800 hover:shadow-lg dark:border-white/85'
   } ${stateClasses}`;
 
   const inner = (
@@ -161,7 +149,7 @@ export function ProductTile({
     </>
   );
 
-  return renderTile(tileClasses, inner, markStyle);
+  return renderTile(tileClasses, inner);
 
   function renderTile(classes: string, content: ReactNode, style?: CSSProperties) {
     if (dragMode) {

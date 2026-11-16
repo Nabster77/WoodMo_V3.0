@@ -46,12 +46,12 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
             ) : (
               <span>Stückpreis {formatCurrency(unitTotal)} · MwSt. {rate}%</span>
             )}
-            {item.unitPfand > 0 && <span className="block text-amber-600 dark:text-amber-400">+ {formatCurrency(item.unitPfand)} Pfand</span>}
+            {item.unitPfand > 0 && <span className="mt-0.5 inline-flex rounded bg-green-400 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-950">PFAND + {formatCurrency(item.unitPfand)}</span>}
           </div>
         )}
         {onEditShot && !item.isPfandRetoure && (
           <button type="button" onClick={onEditShot}
-            className="mt-1 min-h-8 rounded-lg border border-violet-300 bg-violet-50 px-2 text-xs font-bold text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200">
+            className="mt-1 block min-h-8 rounded-lg bg-blue-600 px-2 text-xs font-bold text-white hover:bg-blue-700 active:scale-[0.97]">
             {item.shot ? 'SCHUSS ändern' : '+ SCHUSS'}
           </button>
         )}
