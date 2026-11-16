@@ -20,9 +20,14 @@ interface Props {
   compact?: boolean;
 }
 
-/** Liköre sollen sich in der Kasse sichtbar von Schnäpsen abheben. */
-export function isLiqueurName(name: string): boolean {
-  return /lik[öo]r/i.test(name);
+/**
+ * Kennzeichnung Likör / Schnaps (Excel-Spalte „Kennzeichnung“), damit man sich
+ * bei den Kurzen nicht vertippt. Liköre pink, Schnäpse bernsteinfarben.
+ */
+export function SpiritBadge({ kind }: { kind?: Product['spiritType'] }) {
+  if (kind === 'likoer') return <span className="rounded bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-white">LIKÖR</span>;
+  if (kind === 'schnaps') return <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-slate-950">SCHNAPS</span>;
+  return null;
 }
 
 export function ProductTile({
@@ -33,7 +38,7 @@ export function ProductTile({
   const isDisabled = !product.available || disabled;
   const price = product.prices[location];
   const pfand = product.pfand[location];
-  const liqueur = isLiqueurName(product.name);
+  const liqueur = product.spiritType === 'likoer';
   const stateClasses = `${isDragging ? 'opacity-40' : ''} ${dragMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer active:scale-[0.97]'} ${isDisabled && !dragMode ? 'cursor-not-allowed opacity-40' : ''}`;
 
   if (compact) {
@@ -57,9 +62,7 @@ export function ProductTile({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1">
-          {liqueur && (
-            <span className="rounded bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-white">LIKÖR</span>
-          )}
+          <SpiritBadge kind={product.spiritType} />
           {product.hasShot && (
             <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Schuss</span>
           )}
@@ -136,9 +139,7 @@ export function ProductTile({
       {/* Translucent caption sits ON the square image, not below it.
           Keep the price and deposit together; no light-gray gutters. */}
       <div className="absolute inset-x-0 bottom-0 z-10 flex min-h-[29%] flex-col items-center justify-center gap-1 border-t border-white/10 bg-slate-950/85 px-2 py-2 text-center text-white backdrop-blur-[2px]">
-        {liqueur && (
-          <span className="rounded bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-white">LIKÖR</span>
-        )}
+        <SpiritBadge kind={product.spiritType} />
         <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-white sm:text-base">
           {product.name}
         </span>

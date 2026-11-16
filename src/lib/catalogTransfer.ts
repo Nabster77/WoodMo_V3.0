@@ -110,6 +110,15 @@ function flag(v: unknown, label: string): boolean {
   throw new Error(`${label}: Bitte „x“ für aktiv oder eine leere Zelle für inaktiv verwenden.`);
 }
 const empty = (v: unknown) => v === undefined || v === null || v === '';
+/** Excel-Spalte „Kennzeichnung“: leer, „Likör“ oder „Schnaps“. */
+export function spiritType(v: unknown): 'likoer' | 'schnaps' | undefined {
+  const value = text(v).toLocaleLowerCase('de-DE');
+  if (!value || value === '-') return undefined;
+  if (['likör', 'likoer', 'likor', 'l'].includes(value)) return 'likoer';
+  if (['schnaps', 's'].includes(value)) return 'schnaps';
+  throw new Error(`Kennzeichnung: Bitte „Likör“, „Schnaps“ oder eine leere Zelle verwenden (gefunden „${text(v)}“).`);
+}
+const spiritLabel = (v: Product['spiritType']) => v === 'likoer' ? 'Likör' : v === 'schnaps' ? 'Schnaps' : '';
 const id = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 function number(v: unknown, label: string, fallback?: number): number {
   if (empty(v) && fallback !== undefined) return fallback;
@@ -154,15 +163,17 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
   const names = new Set<string>();
   const uniqueName = (key: string) => { if (names.has(key)) throw new Error('Doppelter Name innerhalb derselben Warengruppe.'); names.add(key); };
   const catName = (id: unknown) => [...next.categories, ...base.categories].find(c => c.id === id)?.name ?? String(id ?? '—');
-  const label: Record<string, string> = { name: 'Name', categoryId: 'Warengruppe', prices: 'Preis', taxRates: 'Steuer', taxClass: 'Steuerklasse', available: 'Verfügbar', sortOrder: 'Sortierung', hasShot: 'Schuss', pfand: 'Pfand', isPfandArticle: 'Pfandartikel', hasIndividualPrice: 'Preisart', shotPrices: 'Schusspreise', imageUrl: 'Bild', price: 'Preis' };
+  const label: Record<string, string> = { name: 'Name', categoryId: 'Warengruppe', prices: 'Preis', taxRates: 'Steuer', taxClass: 'Steuerklasse', available: 'Verfügbar', sortOrder: 'Sortierung', hasShot: 'Schuss', pfand: 'Pfand', isPfandArticle: 'Pfandartikel', hasIndividualPrice: 'Preisart', shotPrices: 'Schusspreise', imageUrl: 'Bild', price: 'Preis', spiritType: 'Kennzeichnung' };
   const tagOf: Record<string, string> = { name: 'Name', categoryId: 'Gruppe', prices: 'Preis', price: 'Preis' };
-  const show = (k: string, v: unknown) => v === undefined ? '—' : k === 'categoryId' ? catName(v) : k === 'prices' && v && typeof v === 'object' ? Object.values(v as Record<string, number>).join(' / ') : stableStringify(v).replace(/^"|"$/g, '');
+  const show = (k: string, v: unknown) => v === undefined ? '—' : k === 'spiritType' ? spiritLabel(v as Product['spiritType']) : k === 'categoryId' ? catName(v) : k === 'prices' && v && typeof v === 'object' ? Object.values(v as Record<string, number>).join(' / ') : stableStringify(v).replace(/^"|"$/g, '');
   function record(kind: string, value: {id: string; name?: string}, before: unknown, image?: string) {
     const key = `${kind}:${value.id}`;
     if (seen.has(key)) throw new Error(`Doppelter Eintrag „${value.name ?? value.id}“.`);
     seen.add(key);
     const old = before as Record<string, unknown> | undefined;
     const diff = Object.entries(value).filter(([k, v]) => stableStringify(v) !== stableStringify(old?.[k]));
+    // A removed Kennzeichnung must also appear in the preview.
+    if (old?.spiritType !== undefined && !('spiritType' in value)) diff.push(['spiritType', undefined]);
     const changes = diff.map(([k, v]) => `${label[k] ?? k}: ${show(k, old?.[k])} → ${show(k, v)}`);
     const tags = [...new Set(diff.map(([k]) => tagOf[k]).filter(Boolean))];
     plan.rows.push({id: value.id, kind, name: value.name ?? value.id, status: !before ? 'neu' : changes.length || image ? 'geändert' : 'unverändert', changes, image, tags: !before ? ['neu'] : tags});
@@ -277,6 +288,11 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         if (old?.hasIndividualPrice === undefined && !p.hasIndividualPrice) delete p.hasIndividualPrice;
         if (old?.isPfandArticle === undefined && !p.isPfandArticle) delete p.isPfandArticle;
         if (old?.shotPrices === undefined && p.shotPrices && !Object.keys(p.shotPrices).length) delete p.shotPrices;
+        // Kennzeichnung only changes when the column exists (older Excel files keep the current value).
+        if (hasField(r, 'Kennzeichnung')) {
+          const kind = spiritType(r.Kennzeichnung);
+          if (kind) p.spiritType = kind; else delete p.spiritType;
+        }
         const imageUrl = text(r.Bild);
         // The exported Bild column only fills gaps. An existing real image is never reverted by an
         // older address in the Excel (the file may be older than the last import); ZIP images decide instead.
@@ -457,7 +473,7 @@ export async function exportWorkbook(catalog: LocalCatalog): Promise<ArrayBuffer
   const headers = ['Produktname App', 'VK', 'Warengruppe', 'Preis fix / individuell',
     'Steuer DE in %', 'Steuer AT in %', 'Schuss', 'Pfand',
     'ID', 'VK DE', 'VK AT', 'Pfand DE', 'Pfand AT', 'Verfügbar',
-    'Sortierung', 'Bild', 'Steuerklasse', 'Schusspreise'];
+    'Sortierung', 'Bild', 'Steuerklasse', 'Schusspreise', 'Kennzeichnung'];
   const rows: unknown[][] = [
     ['Artikel_Verkaufspreise_2026'],
     ['', 'Pfand'],
@@ -473,7 +489,7 @@ export async function exportWorkbook(catalog: LocalCatalog): Promise<ArrayBuffer
       p.hasShot ? 'x' : '', p.isPfandArticle ? 'x' : '',
       p.id, p.prices.Friedrichshafen, p.prices.Bregenz,
       p.pfand.Friedrichshafen, p.pfand.Bregenz, p.available,
-      p.sortOrder, p.imageUrl, p.taxClass, JSON.stringify(p.shotPrices ?? {})
+      p.sortOrder, p.imageUrl, p.taxClass, JSON.stringify(p.shotPrices ?? {}), spiritLabel(p.spiritType)
     ])
   ];
   const sheet = add('Preisliste', rows);

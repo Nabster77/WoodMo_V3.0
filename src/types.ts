@@ -81,6 +81,8 @@ export interface Product {
   isPfandArticle?: boolean;
   hasIndividualPrice?: boolean;
   pfand: Record<Location, number>;
+  /** Kennzeichnung auf der Kachel (Excel-Spalte „Kennzeichnung“): Likör oder Schnaps. */
+  spiritType?: 'likoer' | 'schnaps';
 }
 
 export interface CartItem {
