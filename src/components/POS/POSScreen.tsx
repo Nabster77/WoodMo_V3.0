@@ -498,35 +498,33 @@ export function POSScreen({
             {cartCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
           </button>
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
-            {/* Zeile 1: Titel + Anzahl (+ Leeren). Zeile 2: Zu/Auf und Fixieren. Nichts überlappt bei schmalem Warenkorb. */}
+            {/* Kopf: Titel + Anzahl, Fixieren, Leeren. Zu-/Aufklappen über den Griff an der Kante;
+                der Knopf „Zu/Auf“ erscheint nur auf schmalen Handy-Bildschirmen (dort gibt es keinen Griff). */}
             <div className="flex min-w-0 items-center gap-2">
               <ShoppingCart className="h-5 w-5 shrink-0 text-slate-700 dark:text-slate-200" />
               {!cartCollapsed && <h2 className="min-w-0 truncate font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>}
               {cartCount > 0 && <span className="shrink-0 rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold text-white dark:bg-white dark:text-slate-900">{cartCount}</span>}
-              {cart.length > 0 && !cartCollapsed && (
-                <button type="button" onClick={clearCart}
-                  className="ml-auto flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30">
-                  <Trash2 className="h-3.5 w-3.5" /> Leeren
-                </button>
-              )}
-            </div>
-            <div className="mt-2 flex gap-2">
-              <button type="button" onClick={toggleCart} aria-pressed={cartCollapsed}
-                aria-label={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'}
-                title={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen – mehr Platz für Artikel'}
-                className="flex min-h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border-2 border-slate-400 px-3 py-2 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-100 active:scale-[0.98] dark:border-white/60 dark:text-white dark:hover:bg-white/10">
-                {cartCollapsed ? <PanelRightOpen className="h-5 w-5 shrink-0" /> : <PanelRightClose className="h-5 w-5 shrink-0" />}
-                {cartCollapsed ? 'Auf' : 'Zu'}
-              </button>
               {!cartCollapsed && (
                 <button type="button" onClick={togglePinned} aria-pressed={cartPinned}
                   aria-label={cartPinned ? 'Warenkorb-Breite lösen' : 'Warenkorb-Breite fixieren'}
                   title={cartPinned ? 'Breite ist fixiert – antippen zum Lösen' : 'Breite fixieren'}
-                  className={`flex min-h-12 shrink-0 items-center justify-center rounded-xl border-2 px-3 transition active:scale-[0.98] ${cartPinned ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'}`}>
+                  className={`ml-auto hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition active:scale-[0.98] sm:flex ${cartPinned ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'}`}>
                   {cartPinned ? <Pin className="h-5 w-5" /> : <PinOff className="h-5 w-5" />}
                 </button>
               )}
+              {cart.length > 0 && !cartCollapsed && (
+                <button type="button" onClick={clearCart}
+                  className="ml-auto flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 sm:ml-0 dark:hover:bg-red-900/30">
+                  <Trash2 className="h-3.5 w-3.5" /> Leeren
+                </button>
+              )}
             </div>
+            <button type="button" onClick={toggleCart} aria-pressed={cartCollapsed}
+              aria-label={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'}
+              className="mt-2 flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl border-2 border-slate-400 px-3 py-2 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-100 active:scale-[0.98] dark:border-white/60 dark:text-white dark:hover:bg-white/10 sm:hidden">
+              {cartCollapsed ? <PanelRightOpen className="h-5 w-5 shrink-0" /> : <PanelRightClose className="h-5 w-5 shrink-0" />}
+              {cartCollapsed ? 'Auf' : 'Zu'}
+            </button>
             <div className={`mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}`}>
               <button type="button"
                 onClick={() => setShowPfandRetoure(true)}
