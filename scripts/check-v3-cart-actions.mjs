@@ -12,7 +12,8 @@ assert(cart.indexOf('Warenkorb</h2>')<cart.indexOf('setShowPfandRetoure(true)'))
 assert(cart.indexOf('setShowPfandRetoure(true)')<cart.indexOf('setShowBonliste(true)'));
 assert(cart.includes('Pfand-Retoure'));
 assert(cart.includes('Bonliste / Storno'));
-assert(cart.includes('grid grid-cols-2 gap-2'),'Always display both touch actions side by side');
+// Aufgeklappt nebeneinander; zugeklappt (schmale Spalte) untereinander, immer sichtbar.
+assert(cart.includes("mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}"),'Both touch actions always displayed');
 assert((cart.match(/min-h-12 min-w-0/g)||[]).length>=2,'Both buttons need generous touch targets');
 assert((cart.match(/disabled=\{!activeSession \|\| !currentStaff\}/g)||[]).length>=2);
 assert(pos.includes('<PfandRetoureDialog'));

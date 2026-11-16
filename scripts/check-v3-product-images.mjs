@@ -36,3 +36,10 @@ assert.match(readFileSync('src/components/POS/CartItemRow.tsx', 'utf8'), /<Spiri
 console.log('KOMPAKT-ANSICHT: Umschalter Bilder an/aus pro Gerät, Likör-Kennzeichnung geprüft.');
 console.log('ARTIKELBILDER: quadratisches Vollbild, randlos, kontrastreiche Preis/Pfand-Texte und Touch-/Drag-Funktionen geprüft.');
 assert.match(pos, /const kindRank = \(p: Product\) => p\.spiritType === 'schnaps' \? 0 : p\.spiritType === 'likoer' \? 1 : 2;/);
+// Warenkorb zuklappbar (pro Gerät), Pfand-Retoure, Bonliste und Bezahlen bleiben erreichbar.
+assert.match(pos, /const CART_COLLAPSED_KEY = 'pos_cart_collapsed'/);
+assert.match(pos, /aria-label=\{cartCollapsed \? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'\}/);
+assert.match(pos, /cart\.length > 0 && !cartCollapsed && <div/);
+assert.match(pos, /onClick=\{\(\) => setShowPfandRetoure\(true\)\}/);
+assert.match(pos, /onClick=\{\(\) => activeSession && currentStaff && setShowCheckout\(true\)\}/);
+console.log('WARENKORB: zuklappbar, Summe sichtbar, Pfand-Retoure/Bonliste/Bezahlen bleiben.');
