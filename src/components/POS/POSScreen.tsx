@@ -16,9 +16,14 @@ import type { StornoCloudState } from '@/hooks/useStornoLedger';
 import { DynamicIcon } from '@/components/DynamicIcon';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
+import { loadJSON, saveJSON } from '@/lib/storage';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff,
 } from 'lucide-react';
+
+// Ansicht der Artikel-Kacheln, nur auf diesem Gerät gespeichert (keine Cloud,
+// kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
+const TILE_IMAGES_KEY = 'pos_tile_images';
 
 type HeaderAction = 'deposit' | 'withdrawal' | 'pfand' | 'correction' | 'close' | null;
 
@@ -119,6 +124,8 @@ export function POSScreen({
   const [priceEntryProduct, setPriceEntryProduct] = useState<Product | null>(null);
   const [dragMode, setDragMode] = useState(false);
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
+  const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, true) !== false);
+  const toggleImages = () => setShowImages((value) => { const next = !value; saveJSON(TILE_IMAGES_KEY, next); return next; });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -346,6 +353,12 @@ export function POSScreen({
               return null;
             })()}
             <div className="flex flex-wrap items-center gap-2">
+              <button type="button" aria-pressed={!showImages} onClick={toggleImages}
+                title={showImages ? 'Kompakte Kacheln ohne Bilder anzeigen' : 'Kacheln mit Bildern anzeigen'}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                {showImages ? <ImageOff className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                {showImages ? 'Bilder aus' : 'Bilder an'}
+              </button>
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
                 Sortierung:
                 <select aria-label="Kassenartikel sortieren" value={sortMode}
@@ -384,10 +397,13 @@ export function POSScreen({
                 <p className="text-sm">Keine Artikel gefunden</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5">
+              <div className={showImages
+                ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
+                : 'grid grid-cols-2 gap-1.5 min-[480px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1240px]:grid-cols-5 min-[1600px]:grid-cols-6'}>
                 {visibleProducts.map((product) => (
                   <ProductTile
                     key={product.id}
+                    compact={!showImages}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}

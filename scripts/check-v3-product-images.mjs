@@ -22,4 +22,19 @@ assert.match(tile, /alt=\{product.name\}/);
 assert.match(tile, /formatCurrency\(price\)/);
 assert.match(tile, /disabled=\{isDisabled\}/);
 assert.match(tile, /dragMode/);
+// Kompakt-Ansicht (Bilder aus) und Likör-Hervorhebung.
+const pos = readFileSync('src/components/POS/POSScreen.tsx', 'utf8');
+assert.match(tile, /compact\?: boolean/);
+assert.match(tile, /export function isLiqueurName/);
+assert.match(tile, /\/lik\[öo\]r\/i/);
+assert.match(tile, />LIKÖR</);
+assert.match(pos, /const TILE_IMAGES_KEY = 'pos_tile_images'/);
+assert.match(pos, /compact=\{!showImages\}/);
+assert.match(pos, /'Bilder aus' : 'Bilder an'/);
+{
+  const re = /lik[öo]r/i;
+  for (const name of ['Likör Kaffee', 'Eierlikör', 'Zirbenlikör Kurze', 'LIKÖR']) assert.ok(re.test(name), name);
+  for (const name of ['Obstler', 'Zirbe', 'Williams', 'Glühwein']) assert.ok(!re.test(name), name);
+}
+console.log('KOMPAKT-ANSICHT: Umschalter Bilder an/aus pro Gerät, Likör-Kennzeichnung geprüft.');
 console.log('ARTIKELBILDER: quadratisches Vollbild, randlos, kontrastreiche Preis/Pfand-Texte und Touch-/Drag-Funktionen geprüft.');
