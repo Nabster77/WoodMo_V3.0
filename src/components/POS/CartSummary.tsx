@@ -43,13 +43,13 @@ export function CartSummary({ items, location }: Props) {
         <span className="font-medium">{formatCurrency(totalTax)}</span>
       </div>
       {totalPfand > 0 && (
-        <div className="flex justify-between text-gray-600 dark:text-gray-400">
+        <div className="flex justify-between text-green-600 dark:text-green-400">
           <span>Pfand</span>
           <span className="font-medium">{formatCurrency(totalPfand)}</span>
         </div>
       )}
       {pfandRetoure !== 0 && (
-        <div className="flex items-center justify-between text-teal-600 dark:text-teal-400">
+        <div className="flex items-center justify-between text-green-600 dark:text-green-400">
           <span className="flex items-center gap-1.5">
             <Recycle className="h-3.5 w-3.5" />
             Pfand-Retoure
