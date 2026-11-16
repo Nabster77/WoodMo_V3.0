@@ -492,10 +492,7 @@ export function POSScreen({
           {cartCollapsed ? (
             <button type="button" onClick={toggleCart} aria-label="Warenkorb aufklappen"
               className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center hover:bg-gray-50 dark:hover:bg-gray-700/40">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{cartCount === 0 ? 'Leer' : `${cartCount} Artikel`}</span>
-              {cart.length > 0 && (
-                <span className={`text-xl font-extrabold ${cartTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cartTotal)}</span>
-              )}
+              <PanelRightOpen className="h-5 w-5 text-slate-400" />
               <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Aufklappen</span>
             </button>
           ) : (
@@ -510,6 +507,12 @@ export function POSScreen({
           )}
 
           <div className="shrink-0 border-t border-gray-200 p-2 dark:border-gray-700 sm:p-3">
+            {cartCollapsed && (
+              <div className="rounded-lg bg-slate-100 px-2 py-1.5 text-center dark:bg-slate-900/60">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{cartCount === 0 ? 'Keine Artikel' : `${cartCount} Artikel`}</div>
+                <div className={`text-lg font-extrabold leading-tight ${cartTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cartTotal)}</div>
+              </div>
+            )}
             {cart.length > 0 && !cartCollapsed && <div className="max-h-[min(25dvh,11rem)] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
             {cart.length > 0 && (
               <button
