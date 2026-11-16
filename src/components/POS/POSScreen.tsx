@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CartItem, Category, CashSession, Product, Transaction, ShotOption, Location, PfandSettings, StaffSecurityQuestion, StaffUser } from '@/types';
 import { ProductTile } from './ProductTile';
 import { CartItemRow } from './CartItemRow';
@@ -19,13 +19,15 @@ import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff,
 } from 'lucide-react';
 
 // Ansicht der Artikel-Kacheln, nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
+const CART_WIDTH_KEY = 'pos_cart_width';
+const CART_PINNED_KEY = 'pos_cart_pinned';
 
 type HeaderAction = 'deposit' | 'withdrawal' | 'pfand' | 'correction' | 'close' | null;
 
@@ -129,6 +131,36 @@ export function POSScreen({
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
   const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
   const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
+  // Warenkorb-Breite per Griff am linken Rand ziehen; „Fixieren“ sperrt die Breite. Pro Gerät gespeichert.
+  const [cartWidth, setCartWidth] = useState<number | null>(() => {
+    const value = loadJSON<number | null>(CART_WIDTH_KEY, null);
+    return typeof value === 'number' && value >= 200 && value <= 1600 ? value : null;
+  });
+  const [cartPinned, setCartPinned] = useState<boolean>(() => loadJSON<boolean>(CART_PINNED_KEY, false) === true);
+  const togglePinned = () => setCartPinned((value) => { const next = !value; saveJSON(CART_PINNED_KEY, next); return next; });
+  const cartPanelRef = useRef<HTMLDivElement | null>(null);
+  const cartDrag = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
+  const onHandleDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const width = cartPanelRef.current?.getBoundingClientRect().width ?? 300;
+    cartDrag.current = { startX: event.clientX, startWidth: width, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onHandleMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = cartDrag.current;
+    if (!drag || cartPinned || cartCollapsed) return;
+    const delta = drag.startX - event.clientX;
+    if (!drag.moved && Math.abs(delta) < 6) return;
+    drag.moved = true;
+    const max = Math.max(260, Math.round(window.innerWidth * 0.6));
+    setCartWidth(Math.min(max, Math.max(200, Math.round(drag.startWidth + delta))));
+  };
+  const onHandleUp = () => {
+    const drag = cartDrag.current;
+    cartDrag.current = null;
+    if (!drag) return;
+    if (drag.moved) { setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; }); return; }
+    toggleCart();
+  };
   const toggleImages = () => setShowImages((value) => { const next = !value; saveJSON(TILE_IMAGES_KEY, next); return next; });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -319,9 +351,12 @@ export function POSScreen({
     <div className="flex h-full flex-col gap-2 sm:gap-3">
       {/* Portrait tablet: roughly 65% product area / 35% persistent cart.
           Small phones stack because a 200px-wide cart would be unusable. */}
-      <div className={`grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:overflow-hidden lg:gap-3 ${cartCollapsed
+      <div style={cartWidth && !cartCollapsed ? { ['--cart-w' as string]: `${cartWidth}px` } : undefined}
+        className={`grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:overflow-hidden lg:gap-3 ${cartCollapsed
         ? 'sm:grid-cols-[minmax(0,1fr)_9.5rem] lg:grid-cols-[minmax(0,1fr)_11rem]'
-        : 'sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)]'}`}>
+        : cartWidth
+          ? 'sm:grid-cols-[minmax(0,1fr)_var(--cart-w)]'
+          : 'sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)]'}`}>
         {/* Left: products area */}
         <div className="flex min-h-0 min-w-0 flex-col sm:overflow-hidden">
           {/* Categories always visible as readable labeled touch targets. */}
@@ -451,11 +486,13 @@ export function POSScreen({
         </div>
 
         {/* Right: cart */}
-        <div className={`relative flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
-          {/* Griff am linken Rand (Hoch- und Querformat): Pfeil zum Zu- bzw. Aufklappen. */}
-          <button type="button" onClick={toggleCart}
+        <div ref={cartPanelRef} className={`relative flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
+          {/* Griff am linken Rand (Hoch- und Querformat): antippen = zu-/aufklappen,
+              seitlich ziehen = Warenkorb breiter/schmaler (nicht, wenn fixiert). */}
+          <button type="button" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={() => { cartDrag.current = null; }}
             aria-label={cartCollapsed ? 'Warenkorb aufklappen (Pfeil)' : 'Warenkorb zuklappen (Pfeil)'}
-            className="absolute left-0 top-1/2 z-10 hidden h-16 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-blue-500/70 bg-white text-blue-700 shadow-lg transition hover:bg-blue-50 active:scale-95 dark:bg-slate-900 dark:text-blue-200 sm:flex">
+            title={cartCollapsed ? 'Antippen: aufklappen' : cartPinned ? 'Antippen: zuklappen (Breite fixiert)' : 'Antippen: zuklappen · Ziehen: Breite ändern'}
+            className={`absolute left-0 top-1/2 z-10 hidden h-16 w-8 -translate-x-1/2 -translate-y-1/2 touch-none select-none items-center justify-center rounded-full border-2 border-slate-400 bg-white text-slate-800 shadow-lg transition hover:bg-slate-100 dark:border-white/70 dark:bg-slate-900 dark:text-white sm:flex ${!cartCollapsed && !cartPinned ? 'cursor-ew-resize' : ''}`}>
             {cartCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
           </button>
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
@@ -472,6 +509,14 @@ export function POSScreen({
                 {cartCollapsed ? <PanelRightOpen className="h-5 w-5" /> : <PanelRightClose className="h-5 w-5" />}
                 {cartCollapsed ? 'Auf' : 'Zu'}
               </button>
+              {!cartCollapsed && (
+                <button type="button" onClick={togglePinned} aria-pressed={cartPinned}
+                  aria-label={cartPinned ? 'Warenkorb-Breite lösen' : 'Warenkorb-Breite fixieren'}
+                  title={cartPinned ? 'Breite ist fixiert – antippen zum Lösen' : 'Breite fixieren'}
+                  className={`flex min-h-12 shrink-0 items-center justify-center rounded-xl border-2 px-2.5 transition active:scale-[0.98] ${cartPinned ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'}`}>
+                  {cartPinned ? <Pin className="h-5 w-5" /> : <PinOff className="h-5 w-5" />}
+                </button>
+              )}
               {cart.length > 0 && !cartCollapsed && (
                 <button type="button" onClick={clearCart}
                   className="flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30">
@@ -485,7 +530,7 @@ export function POSScreen({
                 disabled={!activeSession || !currentStaff}
                 aria-label="Pfand-Retoure erfassen"
                 title="Pfand-Retoure direkt während des Verkaufs erfassen"
-                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-teal-400/70 bg-teal-700 px-2 py-2 text-center text-xs font-bold leading-tight text-white shadow-sm transition hover:bg-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-green-500 bg-green-400 px-2 py-2 text-center text-xs font-bold leading-tight text-slate-950 shadow-sm transition hover:bg-green-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Recycle className="h-4 w-4 shrink-0" />
                 <span>Pfand-Retoure</span>
               </button>
@@ -515,7 +560,7 @@ export function POSScreen({
                   <li key={index} className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs dark:border-slate-700">
                     <div className="flex min-w-0 items-baseline gap-1">
                       <span className="shrink-0 font-bold text-slate-400">{index + 1}.</span>
-                      <span className={`min-w-0 truncate font-semibold ${item.isPfandRetoure ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-slate-100'}`}>
+                      <span className={`min-w-0 truncate font-semibold ${item.isPfandRetoure ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-slate-100'}`}>
                         {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.isPfandRetoure ? 'Pfand-Retoure' : item.product.name}
                       </span>
                     </div>
@@ -553,7 +598,7 @@ export function POSScreen({
               <button
                 onClick={() => activeSession && currentStaff && setShowCheckout(true)}
                 disabled={!activeSession || !currentStaff}
-                className={`mt-2 min-h-11 w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white shadow-lg transition active:scale-95 ${activeSession && currentStaff ? 'bg-green-600 hover:bg-green-700' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-600'}`}
+                className={`mt-2 min-h-11 w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white shadow-lg transition active:scale-95 ${activeSession && currentStaff ? 'bg-emerald-800 ring-1 ring-emerald-500/60 hover:bg-emerald-900' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-600'}`}
               >
                 {activeSession && currentStaff ? 'Bezahlen' : 'Bezahlen (Anmeldung erforderlich)'}
               </button>
