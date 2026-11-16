@@ -498,11 +498,34 @@ export function POSScreen({
           </div>
 
           {cartCollapsed ? (
-            <button type="button" onClick={toggleCart} aria-label="Warenkorb aufklappen"
-              className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center hover:bg-gray-50 dark:hover:bg-gray-700/40">
-              <PanelRightOpen className="h-5 w-5 text-slate-400" />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Aufklappen</span>
-            </button>
+            cart.length === 0 ? (
+              <button type="button" onClick={toggleCart} aria-label="Warenkorb aufklappen"
+                className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                <PanelRightOpen className="h-5 w-5 text-slate-400" />
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Aufklappen</span>
+              </button>
+            ) : (
+              // Kurzliste der Positionen; Schuss lässt sich auch zugeklappt wählen.
+              <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-1.5 py-1.5">
+                {cart.map((item, index) => (
+                  <li key={index} className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs dark:border-slate-700">
+                    <div className="flex min-w-0 items-baseline gap-1">
+                      <span className="shrink-0 font-bold text-slate-400">{index + 1}.</span>
+                      <span className={`min-w-0 truncate font-semibold ${item.isPfandRetoure ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-slate-100'}`}>
+                        {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.isPfandRetoure ? 'Pfand-Retoure' : item.product.name}
+                      </span>
+                    </div>
+                    {!item.isPfandRetoure && item.product.hasShot && (
+                      <button type="button" onClick={() => { setShotCartIndex(index); setShotProduct(item.product); }}
+                        aria-label={`Schuss für Position ${index + 1} wählen`}
+                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] ${item.shot && item.shot.id !== 'none' ? 'bg-blue-600 text-white' : 'border border-blue-400/70 text-blue-700 dark:text-blue-300'}`}>
+                        {item.shot && item.shot.id !== 'none' ? `+ ${item.shot.name}` : '+ Schuss'}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )
           ) : (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1 sm:px-3">
             {cart.length === 0 && (

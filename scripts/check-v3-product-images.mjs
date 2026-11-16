@@ -54,3 +54,7 @@ assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.woodmo-cat-pulse-ring
 assert.match(pos, /woodmo-cat-pulse-ring/);
 assert.match(pos, /<span className="woodmo-cat-pulse-text">\{cat\.name\}<\/span>/);
 console.log('WARENGRUPPE: Überschrift und Rahmen pulsieren in der Gruppenfarbe.');
+// Zugeklappter Warenkorb: Positionsliste mit Schuss-Auswahl.
+assert.match(pos, /aria-label=\{`Schuss für Position \$\{index \+ 1\} wählen`\}/);
+assert.match(pos, /!item\.isPfandRetoure && item\.product\.hasShot && \(/);
+console.log('WARENKORB ZU: Positionen mit Schuss-Auswahl.');
