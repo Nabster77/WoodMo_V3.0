@@ -196,7 +196,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
   });
   let found = false;
   for (const [sheet, rows] of Object.entries(sheets)) {
-    if (sheet === 'Warengruppen' || sheet === 'Einstellungen') continue;
+    if (sheet === 'Warengruppen' || sheet === 'Einstellungen' || sheet === 'Pfand') continue;
     protect(sheet, () => {
       const t = table(rows, 'Produktname App'); if (!t) return; found = true;
       // Original 2026 layout: the two global deposits precede the header.
@@ -319,8 +319,10 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
     });
   }
   if (!found) plan.errors.push('Keine Tabelle mit der Kopfzeile „Produktname App“ gefunden.');
-  if (sheets.Einstellungen) protect('Einstellungen', () => {
-    const t = table(sheets.Einstellungen, 'Standort'); if (!t) throw new Error('Kopfzeile fehlt.');
+  // Pfand je Standort: Blatt „Pfand“ (neu) oder „Einstellungen“ (ältere Exporte).
+  const pfandSheet = sheets.Pfand ?? sheets.Einstellungen;
+  if (pfandSheet) protect(sheets.Pfand ? 'Pfand' : 'Einstellungen', () => {
+    const t = table(pfandSheet, 'Standort'); if (!t) throw new Error('Kopfzeile fehlt.');
     const used = new Set<string>();
     for (const r of t.records) {
       const loc = text(r.Standort) as Location;
@@ -507,7 +509,7 @@ export async function exportWorkbook(catalog: LocalCatalog): Promise<ArrayBuffer
     ['ID', 'Warengruppe', 'Icon', 'Farbe', 'Sortierung'],
     ...catalog.categories.map(c => [c.id, c.name, c.icon, c.color, c.sortOrder])
   ]);
-  add('Einstellungen', [
+  add('Pfand', [
     ['Standort', 'Pfand'],
     ...locations.map(loc => [loc, catalog.pfandSettings[loc]])
   ]);
