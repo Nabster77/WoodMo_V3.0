@@ -19,6 +19,7 @@ import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
 import { categoryAccentStyle } from '@/lib/categoryAccent';
+import { isBottleGroup } from '@/lib/spiritColors';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen,
 } from 'lucide-react';
@@ -191,6 +192,12 @@ export function POSScreen({
 
   const currentLocation: Location = activeSession?.location ?? (selectedLocation ?? 'Friedrichshafen');
 
+  const shownCategories = useMemo(
+    () => [...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder),
+    [categories],
+  );
+  const longestCategoryName = Math.max(6, ...shownCategories.map((c) => c.name.length));
+
   const visibleProducts = useMemo(() => {
     let list = products.filter((p) => p.available);
     if (search.trim()) {
@@ -325,18 +332,20 @@ export function POSScreen({
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Warengruppen</h2>
             <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Wechseln</span>
           </div>
-          <div className="mb-2 grid max-h-[min(27dvh,13.5rem)] shrink-0 grid-cols-2 gap-1.5 overflow-y-auto overscroll-contain pr-1 lg:grid-cols-3 2xl:grid-cols-4">
-            {[...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
+          {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
+          <div className="mb-2 grid max-h-[min(27dvh,13.5rem)] shrink-0 gap-1.5 overflow-y-auto overscroll-contain pr-1 text-sm font-bold sm:text-base"
+            style={{ gridTemplateColumns: `repeat(auto-fill, min(100%, calc(${longestCategoryName * 1.1}ch + 3.75rem)))` }}>
+            {shownCategories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
                 aria-pressed={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
                 style={{ ...categoryAccentStyle(cat.color), ...(cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : {}) }}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-sm bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'woodmo-cat-pulse-ring border-transparent' : 'border-transparent opacity-80'}`}
+                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-base bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'woodmo-cat-pulse-ring border-transparent' : 'border-transparent opacity-80'}`}
               >
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 break-words text-center">{cat.name}</span>
+                <span className="min-w-0 truncate text-center">{cat.name}</span>
               </button>
             ))}
           </div>
@@ -412,6 +421,7 @@ export function POSScreen({
                   <ProductTile
                     key={product.id}
                     compact={!showImages}
+                    bottle={isBottleGroup(categories.find((c) => c.id === product.categoryId)?.name)}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}
@@ -500,7 +510,7 @@ export function POSScreen({
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
             )}
             {cart.map((item, index) => (
-              <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
+              <CartItemRow key={index} item={item} location={currentLocation} bottle={isBottleGroup(categories.find((c) => c.id === item.product.categoryId)?.name)} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
           )}
