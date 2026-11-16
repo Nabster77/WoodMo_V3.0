@@ -192,3 +192,16 @@ try {
   assert.equal(again.rows.filter(r=>r.kind==='Artikel' && r.status!=='unverändert').length,0,'Rundreise ohne Änderung');
   console.log('KENNZEICHNUNG: Likör/Schnaps importieren, behalten, entfernen, Rundreise Export/Import bestanden.');
 }
+
+// Blatt „Pfand“ (neu) und „Einstellungen“ (alt) setzen beide den Pfand je Standort.
+{
+  const H=['Produktname App','VK 2026','Warengruppe','Preis durch Mitarbeiter oder fix','Steuer DE in %','Steuer AT in %'];
+  const row=['Neu',4,'Neue Gruppe','fix',19,20];
+  for (const name of ['Pfand','Einstellungen']) {
+    const p=buildImportPlan({T:[H,row],[name]:[['Standort','Pfand'],['Friedrichshafen',3],['Bregenz',2.5]]},base);
+    assert.deepEqual(p.errors,[]); assert.equal(p.next.pfandSettings.Friedrichshafen,3); assert.equal(p.next.pfandSettings.Bregenz,2.5);
+  }
+  const wb = await readWorkbook(await exportWorkbook(base));
+  assert(wb.Pfand && !wb.Einstellungen,'Voll-Export nennt das Blatt „Pfand“');
+  console.log('PFAND-BLATT: „Pfand“ und alte „Einstellungen“ werden gelesen.');
+}
