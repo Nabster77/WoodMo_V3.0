@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Category, CashSession, StaffUser, Transaction } from '@/types';
+import type { Category, CashSession, Product, StaffUser, Transaction } from '@/types';
+import { withCurrentCategories } from '@/lib/reportCategory';
 import type { StornoRecord } from '@/lib/stornoRules';
 import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoJournalTransaction } from '@/lib/stornoReportProjection';
@@ -31,6 +32,8 @@ type DailyCloseStatus = 'all' | 'numbered' | 'pending';
 type JournalSort = 'newest' | 'oldest' | 'nameAsc' | 'nameDesc' | 'amountHigh' | 'amountLow' | 'quantityHigh' | 'quantityLow' | 'receiptAsc' | 'receiptDesc';
 
 
+const NO_PRODUCTS: Product[] = [];
+
 interface Props {
   transactions: Transaction[];
   stornos: StornoRecord[];
@@ -38,9 +41,12 @@ interface Props {
   cashSessions: CashSession[];
   defaultLocation?: Exclude<LocationFilter, 'all'>;
   currentStaff?: StaffUser | null;
+  /** Aktueller Katalog: ordnet Bons zusammengelegter Warengruppen der heutigen Gruppe zu (nur Anzeige). */
+  products?: Product[];
 }
 
-export function JournalScreen({ transactions, stornos, categories, cashSessions, defaultLocation = 'Friedrichshafen', currentStaff }: Props) {
+export function JournalScreen({ transactions: storedTransactions, stornos, categories, cashSessions, defaultLocation = 'Friedrichshafen', currentStaff, products = NO_PRODUCTS }: Props) {
+  const transactions = useMemo(() => withCurrentCategories(storedTransactions, categories, products), [storedTransactions, categories, products]);
   const [period, setPeriod] = useState<Period>('daily');
   const [groupMode, setGroupMode] = useState<GroupMode>('category');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>(defaultLocation);

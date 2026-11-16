@@ -1197,6 +1197,7 @@ export default function App() {
         {!homeVisible && tab === 'journal' && (
           adminUnlocked ? (
             <JournalScreen
+              products={store.products}
               transactions={store.transactions}
               stornos={stornoLedger.records}
               categories={store.categories}

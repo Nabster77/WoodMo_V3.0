@@ -362,7 +362,6 @@ export function POSScreen({
           {/* Categories always visible as readable labeled touch targets. */}
           <div className="mb-1 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Warengruppen</h2>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Wechseln</span>
           </div>
           {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
           <div className="mb-2 grid max-h-[min(30dvh,15rem)] shrink-0 gap-2 overflow-y-auto overscroll-contain p-2 text-sm font-bold sm:text-base"
