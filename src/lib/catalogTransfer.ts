@@ -163,7 +163,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
   const names = new Set<string>();
   const uniqueName = (key: string) => { if (names.has(key)) throw new Error('Doppelter Name innerhalb derselben Warengruppe.'); names.add(key); };
   const catName = (id: unknown) => [...next.categories, ...base.categories].find(c => c.id === id)?.name ?? String(id ?? '—');
-  const label: Record<string, string> = { name: 'Name', categoryId: 'Warengruppe', prices: 'Preis', taxRates: 'Steuer', taxClass: 'Steuerklasse', available: 'Verfügbar', sortOrder: 'Sortierung', hasShot: 'Schuss', pfand: 'Pfand', isPfandArticle: 'Pfandartikel', hasIndividualPrice: 'Preisart', shotPrices: 'Schusspreise', imageUrl: 'Bild', price: 'Preis', spiritType: 'Kennzeichnung' };
+  const label: Record<string, string> = { name: 'Name', categoryId: 'Warengruppe', prices: 'Preis', taxRates: 'Steuer', taxClass: 'Steuerklasse', available: 'Verfügbar', sortOrder: 'Sortierung', hasShot: 'Schuss', pfand: 'Pfand', isPfandArticle: 'Pfandartikel', hasIndividualPrice: 'Preisart', shotPrices: 'Schusspreise', imageUrl: 'Bild', price: 'Preis', spiritType: 'Kennzeichnung', color: 'Farbe', icon: 'Symbol' };
   const tagOf: Record<string, string> = { name: 'Name', categoryId: 'Gruppe', prices: 'Preis', price: 'Preis' };
   const show = (k: string, v: unknown) => v === undefined ? '—' : k === 'spiritType' ? spiritLabel(v as Product['spiritType']) : k === 'categoryId' ? catName(v) : k === 'prices' && v && typeof v === 'object' ? Object.values(v as Record<string, number>).join(' / ') : stableStringify(v).replace(/^"|"$/g, '');
   function record(kind: string, value: {id: string; name?: string}, before: unknown, image?: string) {
