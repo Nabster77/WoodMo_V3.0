@@ -488,7 +488,7 @@ export function POSScreen({
         </div>
 
         {/* Right: cart */}
-        <div ref={cartPanelRef} className={`relative flex min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
+        <div ref={cartPanelRef} className={`relative flex min-w-0 flex-col rounded-2xl [container-type:inline-size] border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
           {/* Griff am linken Rand (Hoch- und Querformat): antippen = zu-/aufklappen,
               seitlich ziehen = Warenkorb breiter/schmaler (nicht, wenn fixiert). */}
           <button type="button" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={() => { cartDrag.current = null; }}
