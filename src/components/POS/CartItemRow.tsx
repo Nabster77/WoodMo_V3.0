@@ -27,7 +27,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
     <div className="flex min-w-0 items-start gap-1.5 border-b border-slate-200 py-2 dark:border-slate-700">
       {/* Kompakt: Angaben links, Menge in derselben Höhe, rechts Entfernen + Zeilensumme. */}
       <div className="min-w-0 flex-1">
-        <p className={`break-words text-sm font-semibold leading-tight ${item.isPfandRetoure ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-slate-100'}`}>
+        <p className={`break-words text-base font-bold leading-tight ${item.isPfandRetoure ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-slate-100'}`}>
           {item.isPfandRetoure && <Recycle className="mr-1 inline h-3.5 w-3.5" />}
           {item.product.name}
           {!item.isPfandRetoure && item.product.spiritType && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={item.product.spiritType} /></span>}
