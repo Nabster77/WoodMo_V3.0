@@ -13,7 +13,8 @@ Rechenweg (siehe Projektdoc claude/auftrag-korrekturblatt-pfand-mwst.md):
   (Annahme, im Blatt ausgewiesen).
 - Werte laut App = eingefrorene Bon-Werte (taxByRate/totalNet), unverändert.
 
-Aufruf: python3 pfand_korrekturblatt.py BACKUP.json AUSGABEORDNER
+Aufruf: python3 pfand-korrekturblatt.py BACKUP.json AUSGABEORDNER [JJJJ-MM-TT ...]
+Ohne Datum: alle abgeschlossenen Tage im Backup, die noch im alten Format gebucht sind.
 """
 import hashlib
 import json
@@ -72,8 +73,21 @@ def analyse_session(session, txs, stornos):
 
     def add_tx(t, sign: int):
         nonlocal returned, pfand_cash_in, pfand_card_in
+        new_format = 'pfandTaxByRate' in t
         for it in t['items']:
             rate = dec(it.get('taxRate'))
+            if new_format:
+                # Bon nach der Umstellung: Pfand-USt ist schon gebucht und steht
+                # im Bericht -> zu den Werten "laut Tagesabschluss", keine Korrektur.
+                if it.get('pfandTaxRate') is not None:
+                    pr_ = dec(it.get('pfandTaxRate'))
+                    app[pr_]['gross'] += sign * dec(it.get('pfand'))
+                    app[pr_]['tax'] += sign * dec(it.get('pfandTax'))
+                if it.get('isPfandRetoure'):
+                    continue
+                app[rate]['gross'] += sign * dec(it.get('price')) * dec(it.get('quantity'))
+                app[rate]['tax'] += sign * dec(it.get('taxAmount'))
+                continue
             if it.get('isPfandRetoure'):
                 returned += sign * -dec(it.get('pfand'))
                 continue
@@ -251,11 +265,23 @@ def main():
     txs = data.get('transactions', [])
     stornos = data.get('stornos', [])
     created = datetime.now(TZ).strftime('%d.%m.%Y, %H:%M Uhr')
+    only = set(sys.argv[3:])  # optional: nur bestimmte Tage JJJJ-MM-TT
     for s in data.get('cashSessions', []):
         if not s.get('closed') or not s.get('closedAt'):
             continue
-        res = analyse_session(s, txs, stornos)
         day = datetime.fromtimestamp(s['closedAt'] / 1000, TZ).strftime('%Y-%m-%d')
+        if only and day not in only:
+            continue
+        # Nur Tage mit Bons im ALTEN Format brauchen ein Blatt. Bons ab der
+        # App-Umstellung tragen pfandTaxByRate und sind im Bericht schon richtig.
+        stx = [t for t in txs if t.get('cashSessionId') == s['id']]
+        old_fmt = [t for t in stx if 'pfandTaxByRate' not in t and any(i.get('pfand') for i in t.get('items', []))]
+        if not old_fmt:
+            print(json.dumps({'tag': day, 'standort': s.get('location'), 'hinweis': 'bereits richtig gebucht, kein Korrekturblatt noetig'}, ensure_ascii=False))
+            continue
+        if len(old_fmt) != len([t for t in stx if any(i.get('pfand') for i in t.get('items', []))]):
+            print(json.dumps({'tag': day, 'standort': s.get('location'), 'WARNUNG': 'Tag mit altem UND neuem Bon-Format - nur alte Bons korrigieren, bitte pruefen'}, ensure_ascii=False))
+        res = analyse_session(s, txs, stornos)
         name = f'{s["location"]}_Korrekturblatt_Pfand-MwSt_{day}.pdf'
         build_pdf(out / name, s, res, backup.name, sha, created)
         rows = {f'{r["rate"]:f}': {k: str(r2(v)) for k, v in r.items() if k != 'rate'} for r in res['rows']}
