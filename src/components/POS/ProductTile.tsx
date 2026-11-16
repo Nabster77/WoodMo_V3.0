@@ -59,7 +59,7 @@ export function ProductTile({
       <>
         {/* Feste Zeilen für alle Kacheln: Name (Hauptmerkmal, 2 Zeilen Platz), Hinweise, Preis + MwSt. */}
         <div className="flex h-[2.6rem] w-full items-center justify-center">
-          <span className="line-clamp-2 break-words text-[1.05rem] font-extrabold leading-tight text-slate-900 dark:text-white">
+          <span lang="de" className="line-clamp-2 hyphens-auto break-words text-[1.05rem] font-extrabold leading-tight text-slate-900 dark:text-white">
             {product.name}
           </span>
         </div>

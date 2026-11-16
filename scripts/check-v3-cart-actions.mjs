@@ -7,7 +7,7 @@ const cart = pos.slice(pos.indexOf('{/* Right: cart */}'),pos.indexOf('{/* Dialo
 assert(search.includes('Artikel suchen...'));
 assert(!search.includes('setShowPfandRetoure(true)') && !search.includes('setShowBonliste(true)'),
   'Pfand and Storno actions must not take space away from product search');
-assert(cart.includes('<h2 className="font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>'));
+assert(cart.includes('<h2 className="min-w-0 truncate font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>'));
 assert(cart.indexOf('Warenkorb</h2>')<cart.indexOf('setShowPfandRetoure(true)'));
 assert(cart.indexOf('setShowPfandRetoure(true)')<cart.indexOf('setShowBonliste(true)'));
 assert(cart.includes('Pfand-Retoure'));
