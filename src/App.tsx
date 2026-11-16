@@ -594,9 +594,9 @@ export default function App() {
       {/* Compact toolbar: Home never closes the register or clears its cart. */}
       {!homeVisible && (
         <>
-          <header className="relative z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-emerald-900/50 bg-[#0d1628] px-2 py-1.5 text-white shadow-sm sm:px-3">
+          <header className="relative z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-white/10 bg-[#0b0f19] px-2 py-1.5 text-white shadow-sm sm:px-3">
             <WoodmoBrand status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'} />
-            <h1 className={`min-w-0 shrink-0 truncate text-base font-bold sm:text-lg ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
+            <h1 className={`min-w-0 shrink-0 truncate text-2xl font-extrabold leading-none sm:text-[1.7rem] ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
               aria-live="polite">
               {tab === 'pos' ? 'Kasse' : tab === 'admin' ? 'Verwaltung' : 'Journal'}
             </h1>
@@ -608,7 +608,7 @@ export default function App() {
               </span>
             )}
             <button type="button" aria-label="Zur Startseite" title="Zur Startseite" onClick={goHome}
-              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl border border-sky-600/80 bg-sky-900/35 px-2.5 text-sky-100 shadow-[0_0_10px_rgba(56,189,248,.12)] transition hover:border-sky-400 hover:bg-sky-700/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
+              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl border border-white/50 bg-transparent px-2.5 text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
               <Home className="h-5 w-5" />
               <span className="hidden min-[1040px]:inline text-xs font-semibold">Home</span>
             </button>
@@ -616,7 +616,7 @@ export default function App() {
               <button type="button" aria-label={tab === 'admin' ? 'Verwaltungsmenü öffnen' : tab === 'journal' ? 'Journalmenü öffnen' : 'Kassenmenü öffnen'}
                 title="Menü" aria-expanded={menuOpen} aria-haspopup="dialog"
                 onClick={() => setMenuOpen((wasOpen) => !wasOpen)}
-                className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${menuOpen ? 'border-emerald-400 bg-emerald-900/40' : 'border-slate-600 bg-slate-800/65'}`}>
+                className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${menuOpen ? 'border-white bg-white !text-slate-900' : 'border-white/50 bg-transparent'}`}>
                 <LayoutGrid className="h-5 w-5" />
                 <span className="hidden min-[740px]:inline text-xs">Menü</span>
               </button>

@@ -593,7 +593,7 @@ export function POSScreen({
                 <div className={`text-lg font-extrabold leading-tight ${cartTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cartTotal)}</div>
               </div>
             )}
-            {cart.length > 0 && !cartCollapsed && <div className="max-h-[min(25dvh,11rem)] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
+            {cart.length > 0 && !cartCollapsed && <div className="max-h-[45dvh] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
             {cart.length > 0 && (
               <button
                 onClick={() => activeSession && currentStaff && setShowCheckout(true)}
