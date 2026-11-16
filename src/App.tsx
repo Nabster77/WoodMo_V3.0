@@ -466,6 +466,8 @@ export default function App() {
       setAdminUnlocked(true);
       setOpeningManagementAccess(null);
       setTab('admin');
+      // Angemeldeter Administrator: direkt das Verwaltungsmenü öffnen statt der Kassen-Übersicht.
+      setMenuOpen(true);
       return;
     }
     setAdminUnlocked(false);
