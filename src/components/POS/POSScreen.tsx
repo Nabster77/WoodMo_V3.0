@@ -90,7 +90,8 @@ export function POSScreen({
   useEffect(() => {
     if (!checkoutNotice) return;
     setCheckoutNoticeFading(false);
-    const visibleMs = checkoutNotice.tone === 'success' ? (checkoutNotice.detail ? 2600 : 1600) : 3600;
+    // Lang genug zum Lesen am Tablet (Wunsch 16.11.2026); mit Betrag etwas länger.
+    const visibleMs = checkoutNotice.tone === 'success' ? (checkoutNotice.detail ? 3500 : 2200) : 4500;
     const fade = window.setTimeout(() => setCheckoutNoticeFading(true), visibleMs);
     const hide = window.setTimeout(() => setCheckoutNotice(null), visibleMs + 700);
     return () => { window.clearTimeout(fade); window.clearTimeout(hide); };
@@ -544,13 +545,13 @@ export function POSScreen({
       )}
       {checkoutNotice && (
         <div key={checkoutNotice.id} role="status" aria-live="polite"
-          className={`pointer-events-none fixed bottom-6 left-1/2 z-40 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-2xl border px-4 py-3 text-center shadow-xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
+          className={`pointer-events-none fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(calc(100vw-2rem),36rem)] -translate-x-1/2 rounded-2xl border-2 px-5 py-4 text-center shadow-2xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
             checkoutNotice.tone === 'success'
               ? 'border-green-400/70 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
               : 'border-amber-400/70 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100'
           }`}>
-          <p className="text-base font-bold">{checkoutNotice.title}</p>
-          {checkoutNotice.detail && <p className="mt-0.5 text-lg font-extrabold">{checkoutNotice.detail}</p>}
+          <p className="text-lg font-bold leading-snug sm:text-xl">{checkoutNotice.title}</p>
+          {checkoutNotice.detail && <p className="mt-1 text-2xl font-extrabold leading-tight sm:text-3xl">{checkoutNotice.detail}</p>}
         </div>
       )}
     </div>

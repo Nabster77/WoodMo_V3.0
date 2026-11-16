@@ -84,6 +84,6 @@ check('14 Bezahlen: kein Extra-Fenster, Warenkorb wird sofort geleert, keine Dop
   assert.match(modal,/Bezahlen abschließen & buchen/);
   assert.match(modal,/onClick=\{\(\) => void handleConfirm\(\)\}/,'green button books directly');
   assert.match(pos,/Zahlung erfolgreich/);
-  assert.match(pos,/pointer-events-none fixed bottom-6/,'success hint never blocks the next tap');
+  assert.match(pos,/pointer-events-none fixed bottom-/,'success hint never blocks the next tap');
 });
 console.log('WOODMO V3 OFFLINE-RESET-QUARANTÄNE: '+passed+'/'+passed+' VERHALTENSTESTS BESTANDEN.');
