@@ -7,7 +7,7 @@ import type { Category, Product, TaxClass, Location, Transaction, CashSession, P
 import { formatCurrency, formatDateGermanFromISO, formatDateISO, formatTime, parseGermanDate } from '@/lib/format';
 import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
 import { buildDailyReport } from '@/lib/dailyReport';
-import { sessionTransactions } from '@/lib/sessionTransactions';
+import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
 import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
@@ -959,13 +959,11 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
 
   const locationData = useMemo(() => {
     return LOCATIONS.map((loc) => {
-      const session = cashSessions
-        .filter((s) => s.date === selectedDate && s.location === loc && !s.discarded)
-        .sort((a, b) => b.openedAt - a.openedAt)[0] ?? null;
-      // The overview represents the latest till session, not the sum of all
-      // sessions that happened to take place on the same calendar day.
-      const txToday = session ? sessionTransactions(transactions, session)
-        .sort((a, b) => b.timestamp - a.timestamp) : [];
+      // Ganzer Tag: Umsatz aller Kassensitzungen dieses Tages zusammen.
+      // Status und Kassenbestand kommen von der neuesten Sitzung.
+      const day = buildDayOverview(cashSessions, transactions, selectedDate, loc);
+      const session = day.latest?.session ?? null;
+      const txToday = day.transactions;
       const taxByRateMap = mergeTaxByRate(txToday);
       let total = 0, count = 0, totalNet = 0, totalPfand = 0;
       for (const t of txToday) {
@@ -977,14 +975,9 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
       const totalTax = [...taxByRateMap.values()].reduce((s, v) => s + v, 0);
       const taxByRate: Record<number, number> = {};
       for (const [k, v] of taxByRateMap) taxByRate[k] = v;
+      const cashBalance = day.latest?.cashBalance ?? 0;
 
-      const cashBalance = session
-        ? Math.round((session.openingBalance +
-          session.entries.reduce((s, e) => s + (e.type === 'deposit' ? e.amount : -e.amount), 0) +
-          txToday.filter((t) => t.paymentMethod === 'cash').reduce((s, t) => s + t.total, 0)) * 100) / 100
-        : 0;
-
-      return { loc, session, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance };
+      return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance };
     });
   }, [transactions, cashSessions, selectedDate]);
 
@@ -994,9 +987,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
       selectedDate,
       txToday,
       categories,
-      locationData.find((data) => data.loc === loc)?.session
-        ? [locationData.find((data) => data.loc === loc)!.session!]
-        : [],
+      locationData.find((data) => data.loc === loc)?.day.parts.map((part) => part.session) ?? [],
       exportedByName,
       transactions,
     );
@@ -1058,6 +1049,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
             key={data.loc}
             loc={data.loc}
             session={data.session}
+            sessionCount={data.day.parts.length}
             total={data.total}
             count={data.count}
             totalNet={data.totalNet}
@@ -1089,7 +1081,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
           date={selectedDate}
           categories={categories}
           transactions={locationData.find((d) => d.loc === infoLocation)?.txToday ?? []}
-          session={locationData.find((d) => d.loc === infoLocation)?.session ?? null}
+          parts={locationData.find((d) => d.loc === infoLocation)?.day.parts ?? []}
           onClose={() => setInfoLocation(null)}
         />
       )}
@@ -1097,9 +1089,10 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
   );
 }
 
-function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
+function LocationSessionCard({ loc, session, sessionCount, total, count, totalNet, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
   loc: Location;
   session: CashSession | null;
+  sessionCount: number;
   total: number;
   count: number;
   totalNet: number;
@@ -1161,11 +1154,11 @@ function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, t
         {session && (
           <div className="mb-3 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
-              <p className="text-xs text-gray-400">Anfangsbestand</p>
+              <p className="text-xs text-gray-400">{sessionCount > 1 ? 'Anfangsbestand (letzte Kasse)' : 'Anfangsbestand'}</p>
               <p className="text-base font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p>
             </div>
             <div className="rounded-xl bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-              <p className="text-xs text-blue-400">Kassenbestand</p>
+              <p className="text-xs text-blue-400">{sessionCount > 1 ? 'Kassenbestand (letzte Kasse)' : 'Kassenbestand'}</p>
               <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(cashBalance)}</p>
             </div>
           </div>
@@ -1175,8 +1168,11 @@ function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, t
         <div className="mb-3 rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-emerald-50 p-3 dark:border-green-800 dark:from-green-900/20 dark:to-emerald-900/10">
           <div className="mb-2 flex items-center gap-1.5">
             <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Umsatz dieser Kassensitzung (ohne Pfand)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Umsatz des Tages (ohne Pfand)</p>
           </div>
+          {sessionCount > 1 && (
+            <p className="mb-2 text-xs font-medium text-green-800/80 dark:text-green-300/80">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
+          )}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <p className="text-xs text-green-700/70 dark:text-green-400/70">Brutto</p>
@@ -1282,12 +1278,12 @@ function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, t
 
 // ---- Day Info Dialog ----
 
-function DayInfoDialog({ location, date, categories, transactions, session, onClose }: {
+function DayInfoDialog({ location, date, categories, transactions, parts, onClose }: {
   location: Location;
   date: string;
   categories: Category[];
   transactions: Transaction[];
-  session: CashSession | null;
+  parts: DaySessionPart[];
   onClose: () => void;
 }) {
   const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
@@ -1358,7 +1354,7 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
         </div>
 
         <div className="space-y-4 p-5">
-          {transactions.length === 0 && !session ? (
+          {transactions.length === 0 && parts.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-400">Für diesen Tag liegen keine Daten vor.</p>
           ) : (
             <>
@@ -1418,43 +1414,54 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
                 </div>
               )}
 
-              {/* Cash session info */}
-              {session && (
-                <div className="rounded-2xl border border-gray-200 p-3 dark:border-gray-700">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Kassensitzung</p>
-                  <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                    <div><p className="text-xs text-gray-400">{session.corrections.length ? 'Anfangsbestand (korrigiert)' : 'Anfangsbestand'}</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p></div>
-                    <div><p className="text-xs text-gray-400">Einzahlungen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0))}</p></div>
-                    <div><p className="text-xs text-gray-400">Entnahmen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0))}</p></div>
-                    {session.closed ? (
-                      <>
-                        <div><p className="text-xs text-gray-400">Endbestand</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.closingBalance ?? 0)}</p></div>
-                        <div><p className="text-xs text-gray-400">Erwartet</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.expectedBalance ?? 0)}</p></div>
-                        <div className="col-span-2"><p className="text-xs text-gray-400">Differenz</p><p className={`font-bold ${(session.difference ?? 0) === 0 ? 'text-green-600' : (session.difference ?? 0) > 0 ? 'text-amber-600' : 'text-red-600'}`}>{formatCurrency(session.difference ?? 0)}</p></div>
-                      </>
-                    ) : (
-                      <div><p className="text-xs text-gray-400">Bestand</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance + session.entries.reduce((s, e) => s + (e.type === 'deposit' ? e.amount : -e.amount), 0) + transactions.filter((t) => t.paymentMethod === 'cash').reduce((s, t) => s + t.total, 0))}</p></div>
-                    )}
-                  </div>
-                </div>
+              {parts.length > 1 && (
+                <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-900/20 dark:text-blue-200">{parts.length} Kassensitzungen an diesem Tag. Umsatz und Warengruppen sind zusammengerechnet, Bestände stehen je Sitzung.</p>
               )}
 
-              {session && session.corrections.length > 0 && (
-                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/10">
-                  <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">Anfangsbestandskorrekturen</h3>
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Bereits im angezeigten Anfangsbestand enthalten; wird nicht erneut abgezogen oder addiert.</p>
-                  <div className="mt-2 space-y-2">
-                    {[...session.corrections].sort((a, b) => a.timestamp - b.timestamp).map((correction) => {
-                      const difference = Math.round((correction.newAmount - correction.oldAmount) * 100) / 100;
-                      return <div key={correction.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm dark:border-amber-800 dark:bg-gray-900/40">
-                        <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(correction.oldAmount)} → {formatCurrency(correction.newAmount)} <span className={difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>({difference > 0 ? '+' : ''}{formatCurrency(difference)})</span></p>
-                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{new Date(correction.timestamp).toLocaleDateString('de-DE')} · {formatTime(correction.timestamp)} · Mitarbeiter: {correction.employeeName ?? 'Nicht hinterlegt'}</p>
-                        <p className="mt-1 text-gray-700 dark:text-gray-200">Grund: {correction.reason || 'Nicht hinterlegt'}</p>
-                      </div>;
-                    })}
+              {/* Cash session info (je Sitzung) */}
+              {parts.map(({ session, transactions: sessionTx, cashBalance }, index) => (
+                <div key={session.id} className="space-y-3">
+                  <div className="rounded-2xl border border-gray-200 p-3 dark:border-gray-700">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      {parts.length > 1 ? `Kassensitzung ${index + 1} von ${parts.length}` : 'Kassensitzung'}
+                      {session.dailyCloseReceiptNumber ? ` · ${session.dailyCloseReceiptNumber}` : ''}
+                      {` · geöffnet ${formatTime(session.openedAt)}`}
+                      {parts.length > 1 ? ` · ${sessionTx.length} Verkäufe` : ''}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                      <div><p className="text-xs text-gray-400">{session.corrections.length ? 'Anfangsbestand (korrigiert)' : 'Anfangsbestand'}</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p></div>
+                      <div><p className="text-xs text-gray-400">Einzahlungen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0))}</p></div>
+                      <div><p className="text-xs text-gray-400">Entnahmen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0))}</p></div>
+                      {session.closed ? (
+                        <>
+                          <div><p className="text-xs text-gray-400">Endbestand</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.closingBalance ?? 0)}</p></div>
+                          <div><p className="text-xs text-gray-400">Erwartet</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.expectedBalance ?? 0)}</p></div>
+                          <div className="col-span-2"><p className="text-xs text-gray-400">Differenz</p><p className={`font-bold ${(session.difference ?? 0) === 0 ? 'text-green-600' : (session.difference ?? 0) > 0 ? 'text-amber-600' : 'text-red-600'}`}>{formatCurrency(session.difference ?? 0)}</p></div>
+                        </>
+                      ) : (
+                        <div><p className="text-xs text-gray-400">Bestand</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(cashBalance)}</p></div>
+                      )}
+                    </div>
                   </div>
-                </section>
-              )}
+
+                  {session.corrections.length > 0 && (
+                    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/10">
+                      <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">Anfangsbestandskorrekturen</h3>
+                      <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Bereits im angezeigten Anfangsbestand enthalten; wird nicht erneut abgezogen oder addiert.</p>
+                      <div className="mt-2 space-y-2">
+                        {[...session.corrections].sort((a, b) => a.timestamp - b.timestamp).map((correction) => {
+                          const difference = Math.round((correction.newAmount - correction.oldAmount) * 100) / 100;
+                          return <div key={correction.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm dark:border-amber-800 dark:bg-gray-900/40">
+                            <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(correction.oldAmount)} → {formatCurrency(correction.newAmount)} <span className={difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>({difference > 0 ? '+' : ''}{formatCurrency(difference)})</span></p>
+                            <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{new Date(correction.timestamp).toLocaleDateString('de-DE')} · {formatTime(correction.timestamp)} · Mitarbeiter: {correction.employeeName ?? 'Nicht hinterlegt'}</p>
+                            <p className="mt-1 text-gray-700 dark:text-gray-200">Grund: {correction.reason || 'Nicht hinterlegt'}</p>
+                          </div>;
+                        })}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              ))}
 
               {/* Category breakdown */}
               {categoryAgg.length > 0 && (
