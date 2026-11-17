@@ -1,6 +1,6 @@
 # WOODMO V3 – Supabase wachhalten
 # Supabase pausiert Gratis-Projekte nach 7 Tagen ohne Datenbank-Aktivität.
-# Dieser Ablauf stellt einmal am Tag eine kleine LESE-Abfrage an die V3-Datenbank.
+# Dieser Ablauf liest einmal am Tag ein öffentliches Artikelbild und stellt eine kleine Abfrage an V3.
 # Er schreibt nichts, löscht nichts und ändert keine Tabelle (Backups bleiben einspielbar).
 # Nur V3 (tulndunkpsynkbbebenf). V2 wird nie angesprochen.
 name: Supabase wachhalten (V3)
@@ -31,21 +31,35 @@ jobs:
             echo "STOPP: Die hinterlegte Adresse ist nicht die V3-Datenbank."; exit 1
           fi
           case "$V3_URL" in *fsztsmnxbffanyfbytnr*) echo "STOPP: V2"; exit 1;; esac
-      - name: Kleine Lese-Abfrage (1 Bon-ID, Inhalt wird nicht ausgegeben)
+      - name: 1) Öffentliches Artikelbild lesen (Speicher schaut dafür in der Datenbank nach)
+        run: |
+          # Ein Artikelbild ist ohnehin öffentlich. Der Zeitstempel umgeht den Zwischenspeicher,
+          # damit die Anfrage wirklich bis zu Supabase und seiner Datenbank geht. Nur 1 Byte wird geladen.
+          img="$V3_URL/storage/v1/object/public/article-images/b25d59e5-2d00-4240-a6b7-3e05fd1cd083.png?wach=$(date +%s)"
+          for try in 1 2 3; do
+            code=$(curl -sS -o /tmp/bild -w '%{http_code}' --max-time 30 -r 0-0 "$img") || code=000
+            echo "Bild, Versuch $try: HTTP $code"
+            case "$code" in 200|206) echo "Speicher + Datenbank haben geantwortet."; exit 0;; esac
+            # 400/404 mit Meldung vom Speicher = Bild wurde umbenannt, Datenbank hat trotzdem gesucht.
+            if grep -q '"statusCode"' /tmp/bild 2>/dev/null; then echo "Speicher hat geantwortet (Bild nicht mehr vorhanden)."; exit 0; fi
+            sleep 20
+          done
+          echo "Supabase V3 hat nicht geantwortet (pausiert oder gestört). Bitte im Supabase-Dashboard prüfen."
+          exit 1
+      - name: 2) Kleine Abfrage an die Kassen-Tabelle (ohne Anmeldung gesperrt, Inhalt wird nicht ausgegeben)
         run: |
           for try in 1 2 3; do
             # Neues Schlüsselformat (sb_publishable_…): nur als apikey senden, nicht als Bearer.
             code=$(curl -sS -o /tmp/antwort -w '%{http_code}' --max-time 30 \
               "$V3_URL/rest/v1/pos_transactions?select=id&limit=1" \
               -H "apikey: $ANON_KEY") || code=000
-            echo "Versuch $try: HTTP $code"
+            echo "Datenbank, Versuch $try: HTTP $code"
             case "$code" in 200|206) echo "Supabase V3 ist wach."; exit 0;; esac
             # 401 mit Datenbank-Code 42501: Die Datenbank selbst hat die Abfrage geprüft und
             # ohne Anmeldung abgelehnt (so gewollt). Sie ist also wach und hat gearbeitet.
             if [ "$code" = 401 ] && grep -q '"42501"' /tmp/antwort; then
               echo "Supabase V3 ist wach (Datenbank hat geantwortet, Kassendaten ohne Anmeldung korrekt gesperrt)."; exit 0
             fi
-            # Fehlertext zeigen (enthält keine Kassendaten), gekürzt.
             head -c 300 /tmp/antwort; echo
             sleep 20
           done
