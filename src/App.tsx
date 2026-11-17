@@ -647,21 +647,24 @@ export default function App() {
               >
                 <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
                 <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)}
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)} · {headerTime(headerNow)}
                 </span>
                 <span className="hidden min-[1100px]:inline min-[1500px]:hidden min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)}
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)} · {headerTime(headerNow)}
                 </span>
                 <span className="min-w-0 truncate whitespace-nowrap font-semibold min-[1100px]:hidden">
-                  {headerDateShort(headerNow)}
+                  {headerDateShort(headerNow)} · {headerTime(headerNow)}
                 </span>
               </div>
             )}
-            <span className="order-2 ml-auto shrink-0 rounded-lg border border-white/30 px-2 py-1 text-sm font-bold tabular-nums text-white min-[700px]:order-none"
-              role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`} title="Uhrzeit (Gerät)">
-              {headerTime(headerNow)}
-            </span>
-            <div className="order-2 flex shrink-0 items-center gap-1.5">
+            {/* Kasse: Uhrzeit steht hinter dem Datum. Verwaltung/Journal: nur die Uhrzeit (Gerätezeit, auch offline). */}
+            {tab !== 'pos' && (
+              <span className="order-2 ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-200 min-[700px]:order-none"
+                role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
+                {headerDateShort(headerNow)} · {headerTime(headerNow)}
+              </span>
+            )}
+            <div className={`order-2 flex shrink-0 items-center gap-1.5 ${tab === 'pos' ? 'ml-auto' : ''}`}>
               {tab === 'pos' && (
                 <button type="button"
                   aria-label={currentStaff ? 'Mitarbeiter abmelden' : 'Mitarbeiter anmelden'}
