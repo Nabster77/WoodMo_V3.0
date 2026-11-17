@@ -8,10 +8,12 @@ interface Props {
   location: Location;
   status: 'ok' | 'pending' | 'error';
   testMode: boolean;
+  /** Kleiner, unauffälliger Zugang zur Update-Zentrale (nur Administratoren). */
+  onUpdateCenter?: () => void;
 }
 
 /** WOODMO home: two existing routes, no invented features or register mutations. */
-export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, testMode }: Props) {
+export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, testMode, onUpdateCenter }: Props) {
   const symbol = `${import.meta.env.BASE_URL}woodmo-cashmark-no-text.svg`;
   const watermark = 'pointer-events-none absolute grayscale brightness-150 -right-5 top-1/2 h-40 w-40 -translate-y-1/2 rotate-[-12deg] opacity-[0.085] sm:-right-8 sm:h-52 sm:w-52';
   return (
@@ -51,6 +53,12 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
           {sessionOpen && <span>{location} · Kasse geöffnet</span>}
           {testMode && <span className="font-semibold text-amber-300">TESTMODUS</span>}
         </div>
+        {onUpdateCenter && (
+          <button type="button" onClick={onUpdateCenter} aria-label="Update-Zentrale (nur Administrator)"
+            className="self-end rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-white/5 hover:text-slate-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-slate-400">
+            Update
+          </button>
+        )}
       </div>
     </section>
   );

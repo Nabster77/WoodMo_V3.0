@@ -8,3 +8,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface WoodmoBuildInfo {
+  commit: string;
+  builtAt: string;
+  title: string;
+  notes: string[];
+}
+declare const __WOODMO_BUILD__: WoodmoBuildInfo;

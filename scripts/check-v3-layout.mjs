@@ -3,8 +3,11 @@ import { readFileSync } from 'node:fs';
 // The application uses Vite's automatic JSX runtime. Inspect source directly
 // instead of mounting JSX under Node's different default loader.
 const home = readFileSync('src/components/WoodmoHome.tsx','utf8');
-assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 2,
+assert.equal((home.match(/<button type="button" onClick=\{on(Cash|Admin)\}/g) ?? []).length, 2,
   'Home has exactly two main tiles.');
+assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 3,
+  'Besides the two tiles only the small Update-Zentrale link exists.');
+assert.match(home, /text-\[11px\] font-semibold text-slate-500/, 'Update-Zentrale link stays small and unobtrusive.');
 for (const label of ['Kasse eröffnen', 'Kasse fortsetzen', 'Verwaltung',
   'Administrator', 'Cloud / Abgleich prüfen']) {
   assert.ok(home.includes(label), `Home text missing: ${label}`);
