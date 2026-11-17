@@ -2,18 +2,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const pos = readFileSync('src/components/POS/POSScreen.tsx','utf8');
-const search = pos.slice(pos.indexOf('{/* Search bar:'), pos.indexOf('{/* Product grid */}'));
+const search = pos.slice(pos.indexOf('{/* Werkzeuge in einer Reihe:'), pos.indexOf('{/* Product grid */}'));
 const cart = pos.slice(pos.indexOf('{/* Right: cart */}'),pos.indexOf('{/* Dialogs */}'));
 assert(search.includes('Artikel suchen...'));
 assert(!search.includes('setShowPfandRetoure(true)') && !search.includes('setShowBonliste(true)'),
   'Pfand and Storno actions must not take space away from product search');
-assert(cart.includes('<h2 className="font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>'));
+assert(cart.includes('<h2 className="min-w-0 truncate font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>'));
 assert(cart.indexOf('Warenkorb</h2>')<cart.indexOf('setShowPfandRetoure(true)'));
 assert(cart.indexOf('setShowPfandRetoure(true)')<cart.indexOf('setShowBonliste(true)'));
 assert(cart.includes('Pfand-Retoure'));
 assert(cart.includes('Bonliste / Storno'));
-assert(cart.includes('grid grid-cols-2 gap-2'),'Always display both touch actions side by side');
-assert((cart.match(/min-h-12 min-w-0/g)||[]).length>=2,'Both buttons need generous touch targets');
+// Aufgeklappt nebeneinander; zugeklappt (schmale Spalte) untereinander, immer sichtbar.
+assert(cart.includes("mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}"),'Both touch actions always displayed');
+assert((cart.match(/min-h-9 min-w-0/g)||[]).length>=2,'Pfand-Retoure und Bonliste: kompakt (Nutzerwunsch 17.11.), aber mindestens 36 px hoch');
 assert((cart.match(/disabled=\{!activeSession \|\| !currentStaff\}/g)||[]).length>=2);
 assert(pos.includes('<PfandRetoureDialog'));
 assert(pos.includes('<BonlisteDialog'));

@@ -2,14 +2,35 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const base = process.env.VITE_DEPLOY_BASE ?? '/';
+
+// Versionskennung für die Update-Zentrale: Commit + Bauzeit. Wird in die App
+// eingebaut und zusätzlich als version.json (nicht im Offline-Speicher) abgelegt,
+// damit die App online erkennen kann, ob eine neuere Version bereitliegt.
+function gitCommit(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
+  try { return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return 'lokal'; }
+}
+const releaseNotes = JSON.parse(readFileSync(new URL('./src/releaseNotes.json', import.meta.url), 'utf8'));
+const WOODMO_BUILD = { commit: gitCommit(), builtAt: new Date().toISOString(), title: releaseNotes.title, notes: releaseNotes.notes };
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base,
+  define: {
+    __WOODMO_BUILD__: JSON.stringify(WOODMO_BUILD),
+  },
   plugins: [
     react(),
+    {
+      name: 'woodmo-version-json',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(WOODMO_BUILD, null, 2) });
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['woodmo-v3-logo.png', 'woodmo-v3-logo.svg', 'apple-touch-icon.png'],
@@ -37,6 +58,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // Lädt eine offene ältere App nach dem Update einmal selbst neu (siehe public/sw-reload.js).
+        importScripts: ['sw-reload.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/storage/v1/object/public/article-images/'),

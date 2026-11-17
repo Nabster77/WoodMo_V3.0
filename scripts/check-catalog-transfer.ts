@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildImportPlan, exportWorkbook, exportSimpleWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
+import { buildImportPlan, spiritType, exportWorkbook, exportSimpleWorkbook, readWorkbook, readImageZip, normalizeName } from '../src/lib/catalogTransfer';
 import { seedCategories, seedProducts } from '../src/lib/seed';
 import { DEFAULT_SHOTS, normalizeCategories } from '../src/lib/shotCatalog';
 import { taxRateForProduct } from '../src/lib/tax';
@@ -164,4 +164,61 @@ try {
   console.log('V3-EXCEL+BILDER-RÜCKIMPORT: Paket, Dateiname, ZIP, Vorschau und Fehlerfall bestanden.');
 } finally {
   globalThis.fetch = realFetch;
+}
+
+// Kennzeichnung Likör / Schnaps (Spalte „Kennzeichnung“), z. B. für die Warengruppe „Kurze“.
+{
+  const H=['Produktname App','VK 2026','Warengruppe','Preis durch Mitarbeiter oder fix','Steuer DE in %','Steuer AT in %'];
+  const p=buildImportPlan({T:[[...H,'Kennzeichnung'],['Kaffee',4.5,'Kurze','fix',19,20,'Likör'],['Zirbe',4.5,'Kurze','fix',19,20,'Schnaps'],['Zirbenlikör',4.5,'Kurze','fix',19,20,'likoer'],['Cola',3,'Kurze','fix',19,20,'']]},base);
+  assert.deepEqual(p.errors,[]);
+  const by=(n:string)=>p.next.products.find(x=>x.name===n)!;
+  assert.equal(by('Kaffee').spiritType,'likoer'); assert.equal(by('Zirbe').spiritType,'schnaps');
+  assert.equal(by('Zirbenlikör').spiritType,'likoer'); assert.equal('spiritType' in by('Cola'),false);
+  const cur:LocalCatalog={...base,products:p.next.products,categories:p.next.categories};
+  const kid=by('Kaffee').id;
+  const keep=buildImportPlan({T:[[...H,'ID'],['Kaffee',4.5,'Kurze','fix',19,20,kid]]},cur);
+  assert.deepEqual(keep.errors,[]); assert.equal(keep.next.products.find(x=>x.id===kid)!.spiritType,'likoer','alte Excel ohne Spalte behält die Kennzeichnung');
+  const clear=buildImportPlan({T:[[...H,'ID','Kennzeichnung'],['Kaffee',4.5,'Kurze','fix',19,20,kid,'']]},cur);
+  assert.equal('spiritType' in clear.next.products.find(x=>x.id===kid)!,false);
+  assert(clear.rows.find(r=>r.id===kid)!.changes.includes('Kennzeichnung: Likör → —'),'Entfernen steht in der Vorschau');
+  assert(buildImportPlan({T:[[...H,'Kennzeichnung'],['X',4.5,'Kurze','fix',19,20,'Rum']]},base).errors.some(e=>e.includes('Kennzeichnung')));
+  assert.equal(spiritType(' LIKÖR '),'likoer'); assert.equal(spiritType('-'),undefined);
+  assert(buildImportPlan({T:[[...H,'Kennzeichnung'],['Zirbe',4.5,'Kurze','fix',19,20,'Likör'],['Zirbe',4.5,'Kurze','fix',19,20,'Schnaps']]},base).errors.some(e=>e.includes('Doppelter Name')),'gleicher Name in einer Warengruppe bleibt verboten');
+  // Voll-Export -> Import ohne Änderung: Kennzeichnung bleibt erhalten, nichts wird als geändert gemeldet.
+  const bytes = await exportWorkbook(cur);
+  const again = buildImportPlan(await readWorkbook(bytes), cur);
+  assert.deepEqual(again.errors,[]);
+  assert.equal(again.next.products.find(x=>x.id===kid)!.spiritType,'likoer');
+  assert.equal(again.rows.filter(r=>r.kind==='Artikel' && r.status!=='unverändert').length,0,'Rundreise ohne Änderung');
+  console.log('KENNZEICHNUNG: Likör/Schnaps importieren, behalten, entfernen, Rundreise Export/Import bestanden.');
+}
+
+// Blatt „Pfand“ (neu) und „Einstellungen“ (alt) setzen beide den Pfand je Standort.
+{
+  const H=['Produktname App','VK 2026','Warengruppe','Preis durch Mitarbeiter oder fix','Steuer DE in %','Steuer AT in %'];
+  const row=['Neu',4,'Neue Gruppe','fix',19,20];
+  for (const name of ['Pfand','Einstellungen']) {
+    const p=buildImportPlan({T:[H,row],[name]:[['Standort','Pfand'],['Friedrichshafen',3],['Bregenz',2.5]]},base);
+    assert.deepEqual(p.errors,[]); assert.equal(p.next.pfandSettings.Friedrichshafen,3); assert.equal(p.next.pfandSettings.Bregenz,2.5);
+  }
+  const wb = await readWorkbook(await exportWorkbook(base));
+  assert(wb.Pfand && !wb.Einstellungen,'Voll-Export nennt das Blatt „Pfand“');
+  console.log('PFAND-BLATT: „Pfand“ und alte „Einstellungen“ werden gelesen.');
+}
+
+// Berichte: Bons einer zusammengelegten (gelöschten) Warengruppe zählen zur heutigen Gruppe des Artikels.
+{
+  const { withCurrentCategories } = await import('../src/lib/reportCategory');
+  const cats = [{ id: 'kurze', name: 'Kurze', icon: 'Package', color: '', sortOrder: 0 }];
+  const prods = [{ ...base.products[0], id: 'p-kaffee', categoryId: 'kurze' }];
+  const tx = { ...({} as Record<string, unknown>), id: 't1', items: [
+    { productId: 'p-kaffee', name: 'Kaffee (L)', categoryId: 'alt-likoer' },
+    { productId: 'p-weg', name: 'Gelöscht', categoryId: 'alt-x' },
+    { productId: 'p-kaffee', name: 'Kaffee', categoryId: 'kurze' },
+  ] } as never;
+  const out = withCurrentCategories([tx], cats as never, prods as never);
+  assert.deepEqual((out[0] as { items: { categoryId: string }[] }).items.map(i => i.categoryId), ['kurze', 'alt-x', 'kurze']);
+  assert.equal((tx as { items: { categoryId: string }[] }).items[0].categoryId, 'alt-likoer', 'gespeicherter Bon bleibt unverändert');
+  const same = [tx]; assert.equal(withCurrentCategories(same, [{ id: 'alt-likoer' }, { id: 'alt-x' }, { id: 'kurze' }] as never, prods as never), same);
+  console.log('BERICHTE: zusammengelegte Warengruppen werden der heutigen Gruppe zugeordnet (nur Anzeige).');
 }

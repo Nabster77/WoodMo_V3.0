@@ -290,7 +290,7 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <div><p className="font-bold">1. Excel und Bilder holen</p><p>Unter „Aktuellen Stand exportieren“ auf „Excel + Bilder exportieren“ klicken und die ZIP-Datei entpacken.</p></div>
             <div><p className="font-bold">2. Excel bearbeiten</p><p>Preise, Namen und Warengruppen ändern oder Zeilen ergänzen. <strong>Eine gelöschte Zeile löscht den Artikel.</strong> Die Zeilen mit dem Pfand oben und die Spaltenüberschriften nicht verändern.</p></div>
             <div><p className="font-bold">3. Bilder austauschen (optional)</p><p>Neues Bild mit dem Namen des Artikels in den Ordner der Warengruppe legen, z. B. „Handwerk/Duftvase.jpg“. Den Hauptordner wieder als ZIP packen. Groß-/Kleinschreibung, Umlaute und kleine Tippfehler sind egal. (S) oder S bedeutet Schnaps, (L) oder L bedeutet Likör.</p></div>
-            <div><p className="font-bold">4. Importieren</p><p>Excel und ZIP auswählen, „Vorschau erstellen“, Liste prüfen, bestätigen und „Jetzt importieren“. Vor dem Löschen vorher ein Backup machen.</p></div>
+            <div><p className="font-bold">4. Importieren</p><p>Unter „Neuen Stand importieren“ Excel und ZIP auswählen, „Vorschau erstellen“, Liste prüfen, bestätigen und „Jetzt importieren“. Vor dem Löschen vorher ein Backup machen.</p></div>
             <p className="rounded-lg border border-gray-400 p-2">Gut zu wissen: Die neue Excel gilt. Bilder aus dem ZIP ersetzen alte Bilder. Artikel ohne Bild bekommen ein Symbol, ein eigenes Bild geht später in der Artikelverwaltung. Buchungen bleiben immer unverändert. Eine Vorlage gibt es unter „Aktuellen Stand exportieren“.</p>
           </div>
           <button type="button" autoFocus onClick={() => setHelpOpen(false)} className={`${primary} mt-4 self-start`}>Zurück</button>
@@ -314,8 +314,9 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <button disabled={busy} onClick={downloadFull} className={button} title="Mit IDs und allen technischen Spalten (für Fachleute)">Excel vollständig (mit IDs)</button>
           </div>
         </details>
-        <section className={done ? 'hidden' : 'space-y-3'}>
-          <h3 className="font-semibold">2. Neue Dateien auswählen</h3>
+        <details className={done ? 'hidden' : 'rounded-xl border border-gray-400 p-2'} open={Boolean(excel || zip || plan)}>
+          <summary className="cursor-pointer font-semibold">2. Neuen Stand importieren (optional)</summary>
+          <div className="mt-2 space-y-3">
           <div className="grid grid-cols-[9rem_auto_1fr] items-center gap-x-3 gap-y-2 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
             {([['excel', 'Excel-Liste', '.xlsx', excel], ['zip', 'Bilder-ZIP', '.zip', zip]] as const).map(([kind, label, accept, file]) => (
               <Fragment key={kind}>
@@ -335,7 +336,8 @@ export function CatalogTransferDialog({ catalog, testMode, onPrepare, onCommit, 
             <button disabled={busy || !excel} onClick={preview} className={primary}>{busy ? 'Bitte warten …' : 'Vorschau erstellen'}</button>
             <button type="button" onClick={() => setHelpOpen(true)} className={button}>Hilfe</button>
           </div>
-        </section>
+          </div>
+        </details>
         {done && plan && <section className="space-y-2 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 p-4" role="status">
           <h3 className="text-xl font-extrabold text-emerald-300">✓ Import erfolgreich abgeschlossen</h3>
           <p className="text-base font-semibold text-emerald-100">{plan.rows.filter(r => r.status === 'neu').length} neu · {plan.rows.filter(r => r.status === 'geändert').length} geändert · {plan.removed.length} gelöscht. Alles ist in der Datenbank gespeichert.</p>

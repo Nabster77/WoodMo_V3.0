@@ -23,3 +23,10 @@ export function headerDateLong(timestamp: number): string {
 export function headerDateShort(timestamp: number): string {
   return SHORT_DATE.format(new Date(timestamp));
 }
+
+const TIME = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
+
+/** Uhrzeit in der Kopfzeile (Gerätezeit, funktioniert auch offline). */
+export function headerTime(timestamp: number): string {
+  return TIME.format(new Date(timestamp));
+}

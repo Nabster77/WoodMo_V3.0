@@ -4,7 +4,7 @@ import { X, Lock, FileDown, Check, TriangleAlert as AlertTriangle, Calculator, C
 import { formatCurrency, formatTime } from '@/lib/format';
 import { formatCashSessionTimestamp, verifiedCloseTimestamp } from '@/lib/cashSessionTimes';
 import { escapeHtml } from '@/lib/escapeHtml';
-import { mergeTaxByRate, sortedRateKeys } from '@/lib/tax';
+import { mergeTaxByRate, sortedRateKeys, transactionNet, transactionPfandTax } from '@/lib/tax';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { renderPdfHtml } from '@/lib/journalPdfFile';
 import { calculateYearlyPfandOverview, type YearlyPfandOverview } from '@/lib/journalPdf';
@@ -146,7 +146,9 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
     .reduce((sum, transaction) => sum + transaction.total, 0);
   const taxByRate = useMemo(() => mergeTaxByRate(sessionTx), [sessionTx]);
   const totalTax = [...taxByRate.values()].reduce((s, v) => s + v, 0);
-  const totalNet = sessionTx.reduce((s, t) => s + t.totalNet, 0);
+  // Netto/USt inkl. Pfand (ab 17.11.2026 im Bon gespeichert; aeltere Bons ohne Pfand-USt).
+  const totalNet = sessionTx.reduce((s, t) => s + transactionNet(t), 0);
+  const pfandTax = sessionTx.reduce((s, t) => s + transactionPfandTax(t), 0);
   const deposits = session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const withdrawals = session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
   const expected = Math.round((session.openingBalance + cashTillTransactionTotal + deposits - withdrawals) * 100) / 100;
@@ -287,30 +289,38 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
             {session.dailyCloseReceiptNumber && <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Belegnummer: {formatDailyCloseReceiptNumber(session.dailyCloseReceiptNumber, session.dailyCloseReceiptLocation ?? session.location, session.closedAt ?? session.openedAt, session.dailyCloseReceiptYear)}</p>}
           </div>
 
-          {/* Summary */}
-          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+          {/* Kassenbestand: nur Bargeld, von oben nach unten gerechnet */}
+          <div className="mb-3 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Kassenbestand (nur Bargeld)</p>
             <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
-            <Row label="Brutto-Umsatz (ohne Pfand)" value={<MoneyAmount value={txTotal} />} bold />
-            <Row label="davon Barumsatz (ohne Pfand)" value={<MoneyAmount value={cashTxTotal} />} />
-            <Row label="davon Kartenumsatz (ohne Pfand)" value={<MoneyAmount value={cardTxTotal} />} />
+            <Row label="Barumsatz (ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
             <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
-            <Row label="Pfandretouren" value={`- ${formatCurrency(cashPfandPayout)}`} />
+            <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
             <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
             <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
             {openingCorrectionTotal !== 0 && <Row label="Korrekturen am Anfangsbestand (bereits enthalten)" value={`${openingCorrectionTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(openingCorrectionTotal))}`} />}
             <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
-              <Row label="Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
+              <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
             </div>
+          </div>
+
+          {/* Umsatz zur Information: Karte fließt nicht in den Kassenbestand */}
+          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Umsatz des Tages (zur Information)</p>
+            <Row label="Umsatz gesamt (ohne Pfand)" value={<MoneyAmount value={txTotal} />} bold />
+            <Row label="davon bar" value={<MoneyAmount value={cashTxTotal} />} />
+            <Row label="davon Karte (nicht in der Kasse)" value={<MoneyAmount value={cardTxTotal} />} />
           </div>
 
           {/* Tax breakdown */}
           <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Mehrwertsteuer</p>
-            <Row label="Nettoumsatz" value={<MoneyAmount value={totalNet} />} />
+            <Row label="Nettoumsatz (inkl. Pfand)" value={<MoneyAmount value={totalNet} />} />
             {sortedRateKeys(taxByRate).map((rate) => (
               <Row key={rate} label={`MwSt ${rate}%`} value={formatCurrency(taxByRate.get(rate) ?? 0)} />
             ))}
-            <Row label="MwSt gesamt" value={<MoneyAmount value={totalTax} />} bold />
+            <Row label="MwSt gesamt (inkl. Pfand)" value={<MoneyAmount value={totalTax} />} bold />
+            {Math.abs(pfandTax) >= 0.005 && <Row label="davon MwSt auf Pfand" value={formatCurrency(pfandTax)} />}
           </div>
 
           {/* Collapsible transaction and cash movement groups */}
@@ -443,11 +453,11 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
                 <span className="font-medium"><MoneyAmount value={cardTxTotal} /></span>
               </div>
               <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>Netto-Umsatz</span>
+                <span>Netto-Umsatz (inkl. Pfand)</span>
                 <span className="font-medium"><MoneyAmount value={totalNet} /></span>
               </div>
               <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>Enthaltene Mehrwertsteuer aus Warenumsätzen</span>
+                <span>Enthaltene Mehrwertsteuer (Ware + Pfand)</span>
                 <span className="font-medium"><MoneyAmount value={totalTax} /></span>
               </div>
             </div>
@@ -470,7 +480,7 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
               <p className="font-bold text-red-900 dark:text-red-100">Entnahme zum Tagesabschluss</p>
               <p className="mt-1 text-red-800 dark:text-red-200">Möchten Sie Geld aus der Kasse entnehmen? Ein Grund ist nicht erforderlich. Der Rest wird als Anfangsbestand für die nächste Kassenöffnung an diesem Standort vorgeschlagen.</p>
               <label className="mt-3 block font-medium text-gray-700 dark:text-gray-200">Entnahmebetrag (€)
-                <input value={closingWithdrawalInput} onChange={(event) => { setClosingWithdrawalInput(event.target.value); setCloseError(null); }} placeholder="0,00 (keine Entnahme)" inputMode="decimal" autoFocus className="mt-1.5 w-full rounded-xl border border-red-300 bg-white px-3 py-2.5 text-base text-gray-900 dark:border-red-700 dark:bg-gray-900 dark:text-gray-100" />
+                <input value={closingWithdrawalInput} onChange={(event) => { setClosingWithdrawalInput(event.target.value); setCloseError(null); }} placeholder="0,00 (keine Entnahme)" inputMode="decimal" className="mt-1.5 w-full rounded-xl border border-red-300 bg-white px-3 py-2.5 text-base text-gray-900 dark:border-red-700 dark:bg-gray-900 dark:text-gray-100" />
               </label>
               <div className="mt-3 space-y-1 rounded-xl bg-white/70 p-3 dark:bg-gray-900/50">
                 <Row label="Kassenbestand vor Entnahme" value={<MoneyAmount value={expected} />} />
@@ -625,6 +635,7 @@ async function generatePDF(
 ) {
   const taxEntries = Object.entries(sums.taxByRate).map(([rate, amount]) => [Number(rate), amount] as const).sort((a, b) => a[0] - b[0]);
   const totalTax = taxEntries.reduce((sum, [, amount]) => sum + amount, 0);
+  const receiptPfandTax = txList.reduce((sum, transaction) => sum + transactionPfandTax(transaction), 0);
   // These are display values for the receipt only. They do not change the
   // sales, cash-balance, or tax calculations above.
   const pfandIncome = txList.reduce((sum, transaction) => sum + transaction.items
@@ -706,8 +717,10 @@ async function generatePDF(
       <div class="sum"><span>davon Kartenumsatz (ohne Pfand)</span><span>${formatCurrency(sums.cardTxTotal)}</span></div>
       <div class="sum"><span>Pfandeinnahmen</span><span>+ ${formatCurrency(pfandIncome)}</span></div>
       <div class="sum"><span>Pfand-Retouren</span><span>- ${formatCurrency(pfandPayout)}</span></div>${pfandResult}
-      <div class="sum"><span>Netto-Umsatz</span><span>${formatCurrency(sums.totalNet)}</span></div>
-      <div class="sum bold"><span>Enthaltene Mehrwertsteuer aus Warenumsätzen</span><span>${formatCurrency(totalTax)}</span></div>${taxLines}
+      <div class="sum bold"><span>Gesamt kassiert (inkl. Pfand) = Bar + Karte</span><span>${formatCurrency(Math.round((sums.txTotal + pfandBalance) * 100) / 100)}</span></div>
+      <div class="sum"><span>Netto-Umsatz (inkl. Pfand)</span><span>${formatCurrency(sums.totalNet)}</span></div>
+      <div class="sum bold"><span>Enthaltene Mehrwertsteuer (Ware + Pfand)</span><span>${formatCurrency(totalTax)}</span></div>${taxLines}${
+      Math.abs(receiptPfandTax) >= 0.005 ? `<div class="sum"><span>davon Mehrwertsteuer auf Pfand</span><span>${formatCurrency(receiptPfandTax)}</span></div>` : ''}
     </div>
     <h2>Kassenbestand</h2><div class="box">
       <div class="sum"><span>Anfangsbestand</span><span>${formatCurrency(session.openingBalance)}</span></div>

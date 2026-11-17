@@ -3,8 +3,11 @@ import { readFileSync } from 'node:fs';
 // The application uses Vite's automatic JSX runtime. Inspect source directly
 // instead of mounting JSX under Node's different default loader.
 const home = readFileSync('src/components/WoodmoHome.tsx','utf8');
-assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 2,
+assert.equal((home.match(/<button type="button" onClick=\{on(Cash|Admin)\}/g) ?? []).length, 2,
   'Home has exactly two main tiles.');
+assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 3,
+  'Besides the two tiles only the small Update-Zentrale link exists.');
+assert.match(home, /text-\[11px\] font-semibold text-slate-500/, 'Update-Zentrale link stays small and unobtrusive.');
 for (const label of ['Kasse eröffnen', 'Kasse fortsetzen', 'Verwaltung',
   'Administrator', 'Cloud / Abgleich prüfen']) {
   assert.ok(home.includes(label), `Home text missing: ${label}`);
@@ -34,8 +37,8 @@ assert.match(app, /await saveJournalPdfIfAllowed\(/,
   'Local close PDF retention remains enabled');
 assert.match(pos, /sm:grid-cols-\[minmax\(0,1\.85fr\)_minmax\(220px,1fr\)\]/,
   'Portrait tablet left/right split must be defined');
-assert.match(pos, /Warengruppen<\/h2>/);
-assert.match(pos, /aria-pressed=\{activeCat === cat.id && !search\}/,
+assert.match(pos, /aria-label="Warengruppen"/);
+assert.match(pos, /aria-selected=\{activeCat === cat.id && !search\}/,
   'Category selection must remain visible');
 assert.match(pos, /requestDailyClose\(\)/,
   'The original daily-close confirmation path must stay wired');
@@ -43,4 +46,14 @@ assert.match(cart, /onEditShot/);
 assert.match(cart, /onInc/);
 assert.match(cart, /onDec/);
 assert.match(cart, /onRemove/);
+const adminTagesinfo = readFileSync('src/components/Admin/AdminScreen.tsx','utf8');
+assert.match(adminTagesinfo, />Umsatz \(ohne Pfand\)</, 'Tagesinfo: Umsatz ohne Pfand klar benannt');
+assert.match(adminTagesinfo, />Pfand-Saldo</, 'Tagesinfo: Pfand als Saldo benannt');
+assert.match(adminTagesinfo, /Gesamt kassiert \(inkl\. Pfand\)[\s\S]{0,400}formatCurrency\(cashTotal \+ cardTotal\)/, 'Tagesinfo: Gesamt kassiert = Bar + Karte');
+const closeDialog = readFileSync('src/components/POS/DailyCloseDialog.tsx','utf8');
+assert.match(closeDialog, /Kassenbestand \(nur Bargeld\)[\s\S]{0,900}label="= Erwarteter Kassenbestand"/, 'Abschluss: Kassenbestand nur aus Bargeld, von oben nach unten');
+assert.match(closeDialog, /Umsatz des Tages \(zur Information\)[\s\S]{0,400}davon Karte \(nicht in der Kasse\)/, 'Abschluss: Umsatz getrennt, Karte klar ausgewiesen');
+const journalPdfSrc = readFileSync('src/lib/journalPdf.ts','utf8');
+assert.equal((journalPdfSrc.match(/Gesamt kassiert \(inkl\. Pfand\)/g) ?? []).length, 3, 'Journal-PDF: Gesamt kassiert je Standort, gesamt und im Vergleich');
+assert.match(closeDialog, /Gesamt kassiert \(inkl\. Pfand\) = Bar \+ Karte<\/span><span>\$\{formatCurrency\(Math\.round\(\(sums\.txTotal \+ pfandBalance\)/, 'Tagesabschluss-PDF: Gesamt kassiert');
 console.log('V3-LAYOUT: Home mit zwei Kacheln, Login/Home, Warenkorb-Erhalt bei Navigation, 65/35-Aufteilung und Kassenfunktionen geprüft.');

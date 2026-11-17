@@ -42,5 +42,5 @@ assert.doesNotMatch(watermark, /WOODMO|Version 3\.0/i, 'Watermark asset has no t
 assert.match(home, /woodmo-cashmark-no-text\.svg/);
 assert.doesNotMatch(home, /<WoodmoBrand/, 'No large logo above home tiles');
 assert.match(home, /Kassen-App · Version 3\.0/);
-assert.equal((home.match(/<button type="button" onClick=/g)||[]).length,2);
+assert.equal((home.match(/<button type="button" onClick=\{on(Cash|Admin)\}/g)||[]).length,2);
 console.log('PFAND V3: exakte Centwerte, Fehlerfaelle, beide Standorte, Cloud-Readback, Testmodus, Enter und WOODMO-Startseite bestanden.');

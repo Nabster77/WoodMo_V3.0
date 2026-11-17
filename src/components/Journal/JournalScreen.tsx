@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Category, CashSession, StaffUser, Transaction } from '@/types';
+import type { Category, CashSession, Product, StaffUser, Transaction } from '@/types';
+import { withCurrentCategories } from '@/lib/reportCategory';
 import type { StornoRecord } from '@/lib/stornoRules';
 import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoJournalTransaction } from '@/lib/stornoReportProjection';
@@ -16,7 +17,7 @@ import { cashAuditRecordsFromSessions, closedSessionReport } from '@/lib/dailyRe
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { JournalPreviewDialog } from '@/components/Journal/JournalPreviewDialog';
 import { calculateYearlyPfandOverview, type JournalReportData } from '@/lib/journalPdf';
-import { mergeTaxByRate, getTaxByRate, isTaxFreeItem, isReducedRate, sortedRateKeys } from '@/lib/tax';
+import { mergeTaxByRate, getTaxByRate, isTaxFreeItem, isReducedRate, sortedRateKeys, transactionNet, transactionTax, transactionPfandTax } from '@/lib/tax';
 import {
   TrendingUp, Clock, Receipt, ChevronDown, ChevronUp,
   Filter, Package, Tag, Euro, Trophy, MapPin,
@@ -31,6 +32,8 @@ type DailyCloseStatus = 'all' | 'numbered' | 'pending';
 type JournalSort = 'newest' | 'oldest' | 'nameAsc' | 'nameDesc' | 'amountHigh' | 'amountLow' | 'quantityHigh' | 'quantityLow' | 'receiptAsc' | 'receiptDesc';
 
 
+const NO_PRODUCTS: Product[] = [];
+
 interface Props {
   transactions: Transaction[];
   stornos: StornoRecord[];
@@ -38,9 +41,12 @@ interface Props {
   cashSessions: CashSession[];
   defaultLocation?: Exclude<LocationFilter, 'all'>;
   currentStaff?: StaffUser | null;
+  /** Aktueller Katalog: ordnet Bons zusammengelegter Warengruppen der heutigen Gruppe zu (nur Anzeige). */
+  products?: Product[];
 }
 
-export function JournalScreen({ transactions, stornos, categories, cashSessions, defaultLocation = 'Friedrichshafen', currentStaff }: Props) {
+export function JournalScreen({ transactions: storedTransactions, stornos, categories, cashSessions, defaultLocation = 'Friedrichshafen', currentStaff, products = NO_PRODUCTS }: Props) {
+  const transactions = useMemo(() => withCurrentCategories(storedTransactions, categories, products), [storedTransactions, categories, products]);
   const [period, setPeriod] = useState<Period>('daily');
   const [groupMode, setGroupMode] = useState<GroupMode>('category');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>(defaultLocation);
@@ -107,13 +113,14 @@ export function JournalScreen({ transactions, stornos, categories, cashSessions,
   const taxByRateMap = useMemo(() => mergeTaxByRate(financialTx), [financialTx]);
 
   const stats = useMemo(() => {
-    let total = 0, count = 0, totalNet = 0;
+    let total = 0, count = 0, totalNet = 0, pfandTax = 0;
     let pfandCollected = 0, pfandReturned = 0;
     for (const t of financialTx) {
       const reversing = (t as Partial<StornoJournalTransaction>).isStornoProjection === true;
       total += t.subtotal;
       if (!reversing) count++;
-      totalNet += t.totalNet;
+      totalNet += transactionNet(t);
+      pfandTax += transactionPfandTax(t);
       for (const item of t.items) {
         if (item.isPfandRetoure) {
           const amount = Math.abs(item.pfand || item.price * item.quantity);
@@ -126,7 +133,7 @@ export function JournalScreen({ transactions, stornos, categories, cashSessions,
     const totalTax = [...taxByRateMap.values()].reduce((s, v) => s + v, 0);
     const taxByRate: Record<number, number> = {};
     for (const [k, v] of taxByRateMap) taxByRate[k] = v;
-    return { total, taxByRate, count, totalNet, totalTax, pfandCollected, pfandReturned, pfandSaldo: pfandCollected - pfandReturned };
+    return { total, taxByRate, count, totalNet, totalTax, pfandTax, pfandCollected, pfandReturned, pfandSaldo: pfandCollected - pfandReturned };
   }, [financialTx, taxByRateMap]);
 
   const relevantSessions = useMemo(
@@ -299,11 +306,11 @@ export function JournalScreen({ transactions, stornos, categories, cashSessions,
             <span className="text-base font-bold text-green-700 dark:text-green-400">{formatCurrency(stats.total)}</span>
           </div>
           <div className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 dark:bg-gray-900/40">
-            <span className="text-xs text-green-700 dark:text-green-400">Netto-Umsatz</span>
+            <span className="text-xs text-green-700 dark:text-green-400">Netto-Umsatz (inkl. Pfand)</span>
             <span className="text-base font-bold text-green-700 dark:text-green-400">{formatCurrency(stats.totalNet)}</span>
           </div>
           <div className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 dark:bg-gray-900/40">
-            <span className="text-xs text-green-700 dark:text-green-400">Enthaltene MwSt</span>
+            <span className="text-xs text-green-700 dark:text-green-400">Enthaltene MwSt (inkl. Pfand)</span>
             <span className="text-base font-bold text-green-700 dark:text-green-400">{formatCurrency(stats.totalTax)}</span>
           </div>
         </div>
@@ -311,10 +318,13 @@ export function JournalScreen({ transactions, stornos, categories, cashSessions,
 
       <div className="mb-3 grid grid-cols-2 gap-2.5 lg:grid-cols-6">
         <StatCard label="Umsatz (ohne Pfand)" value={formatCurrency(stats.total)} icon={<TrendingUp className="h-4 w-4" />} color="text-blue-600 dark:text-blue-400" />
-        <StatCard label="Netto" value={formatCurrency(stats.totalNet)} icon={<Euro className="h-4 w-4" />} color="text-gray-600 dark:text-gray-400" />
+        <StatCard label="Netto (inkl. Pfand)" value={formatCurrency(stats.totalNet)} icon={<Euro className="h-4 w-4" />} color="text-gray-600 dark:text-gray-400" />
         {sortedRateKeys(taxByRateMap).map((rate) => (
           <StatCard key={rate} label={`MwSt ${rate}%`} value={formatCurrency(stats.taxByRate[rate] ?? 0)} icon={<Receipt className="h-4 w-4" />} color={isReducedRate(rate) ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'} />
         ))}
+        {Math.abs(stats.pfandTax) >= 0.005 && (
+          <StatCard label="davon MwSt auf Pfand" value={formatCurrency(stats.pfandTax)} icon={<Recycle className="h-4 w-4" />} color="text-teal-600 dark:text-teal-400" />
+        )}
         {stats.pfandCollected > 0 && (
           <StatCard label="Pfand eingenommen" value={formatCurrency(stats.pfandCollected)} icon={<Recycle className="h-4 w-4" />} color="text-teal-600 dark:text-teal-400" />
         )}
@@ -659,15 +669,22 @@ function ArticleGroupCard({ name, total, count, price, taxRate, pfand, instances
 
 function TaxClassView({ transactions, sort }: { transactions: Transaction[]; sort: JournalSort }) {
   const data = useMemo(() => {
-    const map = new Map<number, { gross: number; net: number; tax: number; count: number }>();
+    const empty = () => ({ gross: 0, net: 0, tax: 0, count: 0, pfandGross: 0, pfandNet: 0, pfandTax: 0 });
+    const map = new Map<number, ReturnType<typeof empty>>();
     for (const tx of transactions) {
       for (const item of tx.items) {
+        // Pfand-USt (ab 17.11.2026) zuerst, auch fuer steuerfreie Retoure-Zeilen.
+        if (item.pfandTaxRate !== undefined && item.pfandTax !== undefined) {
+          const p = map.get(item.pfandTaxRate) ?? empty();
+          p.pfandGross += item.pfand; p.pfandNet += item.pfandNet ?? 0; p.pfandTax += item.pfandTax;
+          map.set(item.pfandTaxRate, p);
+        }
         if (isTaxFreeItem(item)) continue;
         const rate = item.taxRate;
         const gross = item.price * item.quantity;
         const net = item.netPrice;
         const tax = item.taxAmount;
-        const g = map.get(rate) ?? { gross: 0, net: 0, tax: 0, count: 0 };
+        const g = map.get(rate) ?? empty();
         g.gross += gross; g.net += net; g.tax += tax; g.count += item.quantity;
         map.set(rate, g);
       }
@@ -691,13 +708,15 @@ function TaxClassView({ transactions, sort }: { transactions: Transaction[]; sor
   return (
     <div className="space-y-3">
       {data.map(([rate, d]) => (
-        <TaxClassCard key={rate} rate={rate} gross={d.gross} net={d.net} tax={d.tax} count={d.count} />
+        <TaxClassCard key={rate} rate={rate} gross={d.gross} net={d.net} tax={d.tax} count={d.count}
+          pfandGross={d.pfandGross} pfandNet={d.pfandNet} pfandTax={d.pfandTax} />
       ))}
     </div>
   );
 }
 
-function TaxClassCard({ rate, gross, net, tax, count }: { rate: number; gross: number; net: number; tax: number; count: number }) {
+function TaxClassCard({ rate, gross, net, tax, count, pfandGross = 0, pfandNet = 0, pfandTax = 0 }: { rate: number; gross: number; net: number; tax: number; count: number; pfandGross?: number; pfandNet?: number; pfandTax?: number }) {
+  const hasPfand = Math.abs(pfandGross) >= 0.005 || Math.abs(pfandTax) >= 0.005;
   const reduced = isReducedRate(rate);
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -712,6 +731,12 @@ function TaxClassCard({ rate, gross, net, tax, count }: { rate: number; gross: n
         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400"><span>Nettoumsatz</span><span className="font-medium">{formatCurrency(net)}</span></div>
         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400"><span>MwSt-Anteil ({rate}%)</span><span className="font-medium">{formatCurrency(tax)}</span></div>
         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400"><span>Verkaufte Menge</span><span className="font-medium">{count}</span></div>
+        {hasPfand && <>
+          <div className="mt-1 flex justify-between border-t border-gray-200 pt-1.5 text-sm text-teal-700 dark:border-gray-700 dark:text-teal-300"><span>Pfand-Saldo brutto</span><span className="font-medium">{formatCurrency(pfandGross)}</span></div>
+          <div className="flex justify-between text-sm text-teal-700 dark:text-teal-300"><span>Pfand-Saldo netto</span><span className="font-medium">{formatCurrency(pfandNet)}</span></div>
+          <div className="flex justify-between text-sm text-teal-700 dark:text-teal-300"><span>MwSt auf Pfand ({rate}%)</span><span className="font-medium">{formatCurrency(pfandTax)}</span></div>
+          <div className="flex justify-between border-t border-gray-200 pt-1.5 text-sm font-bold text-gray-900 dark:border-gray-700 dark:text-gray-100"><span>MwSt {rate}% gesamt</span><span>{formatCurrency(tax + pfandTax)}</span></div>
+        </>}
       </div>
     </div>
   );
@@ -845,8 +870,9 @@ function TransactionListView({ transactions, sort }: { transactions: Transaction
                   </tbody>
                 </table>
                 <div className="mt-2 space-y-0.5 border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                  <div className="flex justify-between"><span>Netto</span><span>{formatCurrency(tx.totalNet)}</span></div>
-                  <div className="flex justify-between"><span>MwSt gesamt</span><span>{formatCurrency(tx.totalTax)}</span></div>
+                  <div className="flex justify-between"><span>Netto (inkl. Pfand)</span><span>{formatCurrency(transactionNet(tx))}</span></div>
+                  <div className="flex justify-between"><span>MwSt gesamt (inkl. Pfand)</span><span>{formatCurrency(transactionTax(tx))}</span></div>
+                  {Math.abs(transactionPfandTax(tx)) >= 0.005 && <div className="flex justify-between"><span>davon MwSt auf Pfand</span><span>{formatCurrency(transactionPfandTax(tx))}</span></div>}
                   {tx.totalPfand > 0 && <div className="flex justify-between"><span>Pfand</span><span>{formatCurrency(tx.totalPfand)}</span></div>}
                   {tx.totalPfand > 0 && <div className="flex justify-between"><span>Pfand (eingenommen)</span><span>{formatCurrency(tx.totalPfand)}</span></div>}
                   <div className="flex justify-between font-bold text-gray-900 dark:text-gray-100"><span>Umsatz (ohne Pfand)</span><span>{formatCurrency(tx.subtotal)}</span></div>

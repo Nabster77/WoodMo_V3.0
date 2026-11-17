@@ -31,7 +31,7 @@ export function CloudLoginGate({ children }: Props) {
   if (session === undefined) {
     return (
       <div className="flex h-dvh items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-700 dark:text-white" />
       </div>
     );
   }
@@ -82,7 +82,7 @@ function LoginForm() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-slate-900 dark:focus:border-white focus:outline-none focus:ring-2 focus:ring-slate-400/40 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           />
         </label>
 
@@ -95,7 +95,7 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoFocus
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-slate-900 dark:focus:border-white focus:outline-none focus:ring-2 focus:ring-slate-400/40 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           />
         </label>
 
@@ -112,7 +112,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-95 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:!text-slate-900 dark:hover:bg-slate-200 active:scale-95 disabled:opacity-60"
         >
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
           Anmelden

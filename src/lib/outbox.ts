@@ -265,8 +265,11 @@ export async function flushOutbox(): Promise<number> {
       if (otherLocal) {
         throw new Error(`Zwei verschiedene lokale Kassenöffnungen für ${opening.location}. Keine Daten wurden verworfen.`);
       }
+      // Only a different open till at the SAME location is a conflict. Friedrichshafen
+      // and Bregenz are open at the same time; the cloud query covers all queued locations.
       const otherCloud = (cloudSessions ?? []).find((row) =>
-        row.id !== opening.id && active({ id: row.id, booking_generation: generation, location: row.location, data: row.data }));
+        row.id !== opening.id && row.location === opening.location &&
+        active({ id: row.id, booking_generation: generation, location: row.location, data: row.data }));
       if (otherCloud) {
         // A queued close of the old cloud till can legitimately precede the
         // new opening. The close is uploaded first, then the new opening.

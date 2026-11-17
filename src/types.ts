@@ -81,6 +81,8 @@ export interface Product {
   isPfandArticle?: boolean;
   hasIndividualPrice?: boolean;
   pfand: Record<Location, number>;
+  /** Kennzeichnung auf der Kachel (Excel-Spalte „Kennzeichnung“): Likör oder Schnaps. */
+  spiritType?: 'likoer' | 'schnaps';
 }
 
 export interface CartItem {
@@ -104,6 +106,15 @@ export interface TransactionItem {
   pfand: number; // total pfand for this line
   shotName?: string;
   isPfandRetoure?: boolean;
+  /**
+   * Umsatzsteuer auf das Pfand dieser Zeile (ab 17.11.2026). Das Pfand teilt
+   * den Steuersatz des Getraenks; eine Pfand-Rueckgabe ist eine
+   * Entgeltminderung (negative Werte). Fehlt bei aelteren Bons: dort wurde das
+   * Pfand ohne Umsatzsteuer gebucht (siehe Korrekturblatt).
+   */
+  pfandTaxRate?: number;
+  pfandNet?: number;
+  pfandTax?: number;
 }
 
 export type PaymentMethod = 'cash' | 'card';
@@ -131,6 +142,14 @@ export interface Transaction {
    */
   paymentSplitId?: string;
   paymentSplitRole?: 'card-goods' | 'cash-pfand-payout';
+  /**
+   * Umsatzsteuer und Netto auf den Pfand-Saldo dieses Bons (ab 17.11.2026),
+   * getrennt von taxByRate/totalNet (Ware), damit aeltere Bons und die
+   * Datenbank-Pruefungen fuer reine Pfandausgaben unveraendert gueltig bleiben.
+   * Berichte addieren beides ueber die Hilfsfunktionen in lib/tax.ts.
+   */
+  pfandTaxByRate?: Record<number, number>;
+  pfandNet?: number;
   // Legacy fields, kept for backward compatibility with old stored transactions
   tax7?: number;
   tax19?: number;

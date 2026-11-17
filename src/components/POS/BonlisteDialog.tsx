@@ -5,6 +5,7 @@ import type { StornoRecord } from '@/lib/stornoRules';
 import { lastFiveCashReceipts, lastFiveStornoCandidates, prepareStorno } from '@/lib/stornoRules';
 import { formatCurrency } from '@/lib/format';
 import { exportStornoDocument } from '@/lib/stornoReceiptPdf';
+import { getTaxByRate, transactionNet } from '@/lib/tax';
 
 interface Props {
   session: CashSession;
@@ -146,8 +147,8 @@ export function BonlisteDialog({ session, transactions, stornos, staff, currentC
               </div>
               <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-sm">
                 <dt>Brutto ohne Pfand</dt><dd className="text-right">{formatCurrency(selected.subtotal)}</dd>
-                <dt>Netto</dt><dd className="text-right">{formatCurrency(selected.totalNet)}</dd>
-                {Object.entries(selected.taxByRate).map(([rate,money]) => <div key={rate} className="contents">
+                <dt>Netto (inkl. Pfand)</dt><dd className="text-right">{formatCurrency(transactionNet(selected))}</dd>
+                {[...getTaxByRate(selected).entries()].sort((a, b) => a[0] - b[0]).map(([rate,money]) => <div key={rate} className="contents">
                   <dt>MwSt {rate}%</dt><dd className="text-right">{formatCurrency(money)}</dd>
                 </div>)}
                 <dt>Pfand</dt><dd className="text-right">{formatCurrency(selected.totalPfand)}</dd>
