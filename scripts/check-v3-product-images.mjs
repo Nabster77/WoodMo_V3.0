@@ -40,7 +40,7 @@ assert.match(pos, /aria-label="Favoriten" title="Favoriten"/);
 assert.match(pos, /if \(favoritesActive\) \{\s*const back = /, '★ ein zweites Mal antippen: zurück zur letzten Warengruppe');
 assert.match(pos, /flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl/, 'Favoriten: kleines Quadrat nur mit Stern');
 assert.doesNotMatch(pos, /favoriteRank|FAVORITE_DAYS/, 'Favoriten nur von Hand, keine Automatik (Nutzerwunsch 17.11. 20:43)');
-assert.match(pos, /list = list\.filter\(\(p\) => favoriteIds\.includes\(p\.id\)\);/);
+assert.match(pos, /list = list\.filter\(\(p\) => shownIds\.includes\(p\.id\)\);/);
 assert.match(pos, /!search\.trim\(\) && !favoritesActive && !favoriteEdit && \(/, 'Kacheln verschieben nicht in Favoriten');
 // Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
 assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
@@ -49,7 +49,10 @@ assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/)
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
 assert.match(tile, /group relative flex h-full min-h-\[6\.25rem\] w-full min-w-0 flex-col/, 'kompakte Kacheln immer volle Zellbreite und gleiche Höhe');
 assert.match(tile, /group relative isolate aspect-square w-full min-w-0/, 'Bild-Kacheln nie 0 breit');
-assert.match(pos, /if \(!favoriteEdit && favoritesActive && shownCategories\[0\]\) setActiveCat\(shownCategories\[0\]\.id\);/);
+assert.match(pos, /if \(favoritesActive && favoriteIds\.length === 0 && shownCategories\[0\]\) setActiveCat\(shownCategories\[0\]\.id\);/, 'Favoriten wählen in ★: nur ohne Favoriten zur ersten Gruppe');
+assert.match(pos, /setFavoriteEditShown\(\[\.\.\.favoriteIds\]\);/, 'Favoriten wählen in ★: Liste bleibt beim Abwählen sichtbar');
+assert.match(pos, /favoriteEdit && favoriteEditShown\s*\?/, 'abgewählte bleiben bis Fertig sichtbar');
+assert.match(pos, /setFavoriteEditShown\(null\);/, 'Fertig: abgewählte verschwinden');
 // Warenkorb: SCHUSS zwischen Name und Menge, Details aufklappbar, Gesamt immer sichtbar.
 const cartRow = readFileSync('src/components/POS/CartItemRow.tsx', 'utf8');
 assert.ok(cartRow.indexOf("'SCHUSS ✎' : '+ SCHUSS'") < cartRow.indexOf('Menge verringern'), 'SCHUSS vor der Mengeneingabe');

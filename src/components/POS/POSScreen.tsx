@@ -136,6 +136,10 @@ export function POSScreen({
     return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
   });
   const [favoriteEdit, setFavoriteEdit] = useState(false);
+  // Favoriten direkt in der ★-Ansicht abwählen: Während „Favoriten wählen“ bleiben die
+  // Artikel sichtbar (☆ = wird entfernt, nochmal antippen = bleibt). Erst bei „✓ Fertig“
+  // verschwinden die abgewählten. Kein Umweg über die Warengruppen nötig.
+  const [favoriteEditShown, setFavoriteEditShown] = useState<string[] | null>(null);
   // Letzte echte Warengruppe: ★ ein zweites Mal antippen führt dorthin zurück (★ wirkt wie ein Schalter).
   const lastCategoryRef = useRef<string>(categories[0]?.id ?? '');
   const toggleFavorite = (product: Product) => setFavoriteIds((ids) => {
@@ -250,8 +254,12 @@ export function POSScreen({
       list = list.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
     } else if (activeCat === FAVORITES_ID) {
       // Nur die von Hand markierten Favoriten, in der Reihenfolge der Markierung.
-      list = list.filter((p) => favoriteIds.includes(p.id));
-      if (sortMode === 'manual') return [...list].sort((a, b) => favoriteIds.indexOf(a.id) - favoriteIds.indexOf(b.id));
+      // Beim Bearbeiten bleiben auch gerade abgewählte sichtbar (bis „✓ Fertig“).
+      const shownIds = favoriteEdit && favoriteEditShown
+        ? [...favoriteEditShown, ...favoriteIds.filter((id) => !favoriteEditShown.includes(id))]
+        : favoriteIds;
+      list = list.filter((p) => shownIds.includes(p.id));
+      if (sortMode === 'manual') return [...list].sort((a, b) => shownIds.indexOf(a.id) - shownIds.indexOf(b.id));
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
@@ -262,7 +270,7 @@ export function POSScreen({
       : sortMode === 'desc'
         ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
-  }, [products, activeCat, search, sortMode, favoriteIds]);
+  }, [products, activeCat, search, sortMode, favoriteIds, favoriteEdit, favoriteEditShown]);
 
   function addToCart(product: Product, shot: ShotOption | null = null, customPrice?: number) {
     const basePrice = customPrice !== undefined ? customPrice : product.prices[currentLocation];
@@ -423,8 +431,14 @@ export function POSScreen({
             </select>
             <button type="button" aria-pressed={favoriteEdit}
               onClick={() => {
-                // Markieren geschieht in den Warengruppen; die Favoriten-Ansicht selbst würde sich beim Markieren verändern.
-                if (!favoriteEdit && favoritesActive && shownCategories[0]) setActiveCat(shownCategories[0].id);
+                if (!favoriteEdit) {
+                  // In der ★-Ansicht: direkt dort abwählen. Nur wenn noch keine Favoriten da sind,
+                  // geht es zur ersten Warengruppe, um welche zu markieren.
+                  if (favoritesActive && favoriteIds.length === 0 && shownCategories[0]) setActiveCat(shownCategories[0].id);
+                  setFavoriteEditShown([...favoriteIds]);
+                } else {
+                  setFavoriteEditShown(null);
+                }
                 setFavoriteEdit((v) => !v); setDragMode(false);
               }}
               title="Artikel als Favorit markieren oder entfernen"
@@ -454,7 +468,9 @@ export function POSScreen({
           </div>
           {favoriteEdit && (
             <p role="status" className="mb-2 shrink-0 rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-200">
-              ★ Artikel antippen = als Favorit markieren oder entfernen (in jeder Warengruppe). Es wird nichts verkauft. Danach „✓ Fertig“.
+              {favoritesActive
+                ? '★ Artikel antippen = aus den Favoriten entfernen (☆) oder behalten (★). Es wird nichts verkauft. Danach „✓ Fertig“.'
+                : '★ Artikel antippen = als Favorit markieren oder entfernen (in jeder Warengruppe). Es wird nichts verkauft. Danach „✓ Fertig“.'}
             </p>
           )}
 
