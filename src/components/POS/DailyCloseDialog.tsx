@@ -4,6 +4,7 @@ import { X, Lock, FileDown, Check, TriangleAlert as AlertTriangle, Calculator, C
 import { formatCurrency, formatTime } from '@/lib/format';
 import { formatCashSessionTimestamp, verifiedCloseTimestamp } from '@/lib/cashSessionTimes';
 import { escapeHtml } from '@/lib/escapeHtml';
+import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
 import { mergeTaxByRate, sortedRateKeys, transactionNet, transactionPfandTax } from '@/lib/tax';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { renderPdfHtml } from '@/lib/journalPdfFile';
@@ -152,7 +153,7 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
   const deposits = session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const withdrawals = session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
   const expected = Math.round((session.openingBalance + cashTillTransactionTotal + deposits - withdrawals) * 100) / 100;
-  const openingCorrectionTotal = session.corrections.reduce((sum, correction) => sum + correction.newAmount - correction.oldAmount, 0);
+  const openingView = openingCorrectionView(session);
   const cashPfandIncome = sessionTx
     .filter((transaction) => transaction.paymentMethod === 'cash')
     .reduce((sum, transaction) => sum + transaction.items
@@ -292,13 +293,22 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
           {/* Kassenbestand: nur Bargeld, von oben nach unten gerechnet */}
           <div className="mb-3 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Kassenbestand (nur Bargeld)</p>
-            <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
+            {openingView ? (
+              <>
+                <Row label="Übernommen vom Vortag" value={formatCurrency(openingView.carriedBalance)} />
+                {openingView.lines.map((line) => (
+                  <Row key={line.timestamp} label={`Korrektur Anfangsbestand · ${formatTime(line.timestamp)} · ${line.employeeName ?? 'unbekannt'}${line.reason ? ` · Grund: ${line.reason}` : ''}`} value={signedAmountLabel(line.amount, formatCurrency)} />
+                ))}
+                <Row label="= Anfangsbestand (Ist)" value={<MoneyAmount value={session.openingBalance} />} bold />
+              </>
+            ) : (
+              <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
+            )}
             <Row label="Barumsatz (ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
             <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
             <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
             <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
             <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
-            {openingCorrectionTotal !== 0 && <Row label="Korrekturen am Anfangsbestand (bereits enthalten)" value={`${openingCorrectionTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(openingCorrectionTotal))}`} />}
             <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
               <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
             </div>
@@ -657,10 +667,12 @@ async function generatePDF(
     .reduce((sum, transaction) => sum + transaction.items
       .filter((item) => item.isPfandRetoure)
       .reduce((itemSum, item) => itemSum + item.price * item.quantity, 0), 0));
-  const openingCorrectionTotal = session.corrections.reduce((sum, correction) => sum + correction.newAmount - correction.oldAmount, 0);
-  const correctionLine = openingCorrectionTotal === 0
-    ? ''
-    : `<div class="sum"><span>Korrekturen am Anfangsbestand (bereits enthalten)</span><span>${openingCorrectionTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(openingCorrectionTotal))}</span></div>`;
+  const printOpeningView = openingCorrectionView(session);
+  const openingLines = printOpeningView
+    ? `<div class="sum"><span>Übernommen vom Vortag</span><span>${formatCurrency(printOpeningView.carriedBalance)}</span></div>` +
+      printOpeningView.lines.map((line) => `<div class="sum"><span>Korrektur Anfangsbestand · ${escapeHtml(formatTime(line.timestamp))} · ${escapeHtml(line.employeeName ?? 'unbekannt')}${line.reason ? ` · Grund: ${escapeHtml(line.reason)}` : ''}</span><span>${signedAmountLabel(line.amount, formatCurrency)}</span></div>`).join('') +
+      `<div class="sum bold"><span>= Anfangsbestand (Ist)</span><span>${formatCurrency(session.openingBalance)}</span></div>`
+    : `<div class="sum"><span>Anfangsbestand</span><span>${formatCurrency(session.openingBalance)}</span></div>`;
   const pfandBalance = Math.round((pfandIncome - pfandPayout) * 100) / 100;
   const pfandResult = pfandBalance > 0
     ? `<div class="sum bold pfand-profit"><span>Pfandgewinn</span><span>+ ${formatCurrency(pfandBalance)}</span></div>`
@@ -723,12 +735,12 @@ async function generatePDF(
       Math.abs(receiptPfandTax) >= 0.005 ? `<div class="sum"><span>davon Mehrwertsteuer auf Pfand</span><span>${formatCurrency(receiptPfandTax)}</span></div>` : ''}
     </div>
     <h2>Kassenbestand</h2><div class="box">
-      <div class="sum"><span>Anfangsbestand</span><span>${formatCurrency(session.openingBalance)}</span></div>
+      ${openingLines}
       <div class="sum"><span>Barumsatz</span><span>${formatCurrency(sums.cashTxTotal)}</span></div>
       <div class="sum"><span>Pfandeinnahmen (bar)</span><span>+ ${formatCurrency(cashPfandIncome)}</span></div>
       <div class="sum"><span>Pfandretouren (bar)</span><span>- ${formatCurrency(cashPfandPayout)}</span></div>
       <div class="sum"><span>Bareinlagen</span><span>+ ${formatCurrency(sums.deposits)}</span></div>
-      <div class="sum"><span>Barausgaben</span><span>- ${formatCurrency(sums.withdrawals)}</span></div>${correctionLine}
+      <div class="sum"><span>Barausgaben</span><span>- ${formatCurrency(sums.withdrawals)}</span></div>
       <div class="sum bold"><span>Erwarteter Kassenbestand</span><span>${formatCurrency(sums.expected)}</span></div>
       <div class="sum bold"><span>Tatsächlicher Kassenbestand</span><span>${formatCurrency(sums.closingBalance)}</span></div>
       <div class="sum bold"><span>Differenz</span><span>${formatCurrency(sums.difference)}</span></div>
