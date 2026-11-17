@@ -1,4 +1,5 @@
 import { CatalogTransferDialog } from './CatalogTransferDialog';
+import { withCurrentCategories } from '@/lib/reportCategory';
 import type { CatalogImportSession } from '@/lib/catalogEngine';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
@@ -138,6 +139,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   const activeAdminMenuItem = 'border-blue-500 bg-blue-600/30 text-white';
   const adminMenuHeading = 'mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-emerald-300';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
+  // Kassen-Übersicht/Tagesinfo: Bons zusammengelegter Warengruppen der heutigen Gruppe zuordnen (nur Anzeige).
+  const overviewTransactions = useMemo(
+    () => withCurrentCategories(props.transactions, props.categories, props.products),
+    [props.transactions, props.categories, props.products],
+  );
   const [showReset, setShowReset] = useState(false);
   const [showImport, setShowImport] = useState(false);
   // A selected menu entry, including a modal, is always named in the shared
@@ -260,7 +266,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'sessions' ? <LiveSessionOverview transactions={props.transactions} cashSessions={props.cashSessions} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
+        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
           : tab === 'categories' ? <CategoryManager {...props} />
             : tab === 'products' ? <ProductManager {...props} testMode={testMode} />
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />

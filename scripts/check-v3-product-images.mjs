@@ -78,3 +78,4 @@ assert.match(pos, /loadJSON<boolean>\(TILE_IMAGES_KEY, false\) === true/);
   console.log('SICHERHEITSARCHIV: Hinweis nur für Admins und nur bei nicht übertragenen Bons/Kassen.');
 }
 assert.match(pos, /openDialogAfterConfirmedClose\.current = true;\n\s*const result = await onCloseCash/);
+assert.match(readFileSync('src/components/Admin/AdminScreen.tsx','utf8'), /<LiveSessionOverview transactions=\{overviewTransactions\}/);
