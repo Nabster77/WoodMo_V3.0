@@ -676,7 +676,7 @@ export function POSScreen({
       )}
       {checkoutNotice && (
         <div key={checkoutNotice.id} role="status" aria-live="polite"
-          className={`pointer-events-none fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(calc(100vw-2rem),36rem)] -translate-x-1/2 rounded-2xl border-2 px-5 py-4 text-center shadow-2xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
+          className={`pointer-events-none fixed left-1/2 top-1/2 z-40 w-[min(calc(100vw-2rem),36rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 px-5 py-4 text-center shadow-2xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
             checkoutNotice.tone === 'success'
               ? 'border-green-400/70 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
               : 'border-amber-400/70 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100'
