@@ -32,5 +32,22 @@ jobs:
         run: npm test
       - name: Build ohne Veröffentlichung
         run: npm run build
+      - name: Pages-Probe (Unterpfad /WoodMo_V3.0/ wie live, ohne Veröffentlichung)
+        env:
+          VITE_DEPLOY_BASE: /WoodMo_V3.0/
+          VITE_SUPABASE_URL: https://example.invalid
+          VITE_SUPABASE_ANON_KEY: probe
+        run: |
+          rm -rf dist && npx vite build --logLevel error
+          echo "--- sw.js importScripts:"; grep -o 'importScripts([^)]*)' dist/sw.js
+          echo "--- sw-reload.js:"; ls -l dist/sw-reload.js
+          echo "--- version.json:"; cat dist/version.json | head -3
+          echo "--- index.html base:"; grep -o 'src="/WoodMo_V3.0/[^"]*"' dist/index.html | head -2; grep -o 'registerSW.js' dist/index.html
+          echo "--- registerSW.js:"; cat dist/registerSW.js
+          echo "--- manifest scope/start:"; grep -o '"start_url":"[^"]*"\|"scope":"[^"]*"' dist/manifest.webmanifest
+          echo "--- precache enthält sw-reload / version.json?"; grep -c 'sw-reload.js' dist/sw.js; grep -c 'version.json' dist/sw.js || true
+          grep -q 'importScripts("sw-reload.js")' dist/sw.js
+          test -f dist/sw-reload.js && test -f dist/version.json
+          grep -q '"/WoodMo_V3.0/sw.js"' dist/registerSW.js
       - name: ESLint
         run: npm run lint
