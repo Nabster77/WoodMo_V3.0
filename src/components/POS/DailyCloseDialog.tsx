@@ -717,6 +717,7 @@ async function generatePDF(
       <div class="sum"><span>davon Kartenumsatz (ohne Pfand)</span><span>${formatCurrency(sums.cardTxTotal)}</span></div>
       <div class="sum"><span>Pfandeinnahmen</span><span>+ ${formatCurrency(pfandIncome)}</span></div>
       <div class="sum"><span>Pfand-Retouren</span><span>- ${formatCurrency(pfandPayout)}</span></div>${pfandResult}
+      <div class="sum bold"><span>Gesamt kassiert (inkl. Pfand) = Bar + Karte</span><span>${formatCurrency(Math.round((sums.txTotal + pfandBalance) * 100) / 100)}</span></div>
       <div class="sum"><span>Netto-Umsatz (inkl. Pfand)</span><span>${formatCurrency(sums.totalNet)}</span></div>
       <div class="sum bold"><span>Enthaltene Mehrwertsteuer (Ware + Pfand)</span><span>${formatCurrency(totalTax)}</span></div>${taxLines}${
       Math.abs(receiptPfandTax) >= 0.005 ? `<div class="sum"><span>davon Mehrwertsteuer auf Pfand</span><span>${formatCurrency(receiptPfandTax)}</span></div>` : ''}
