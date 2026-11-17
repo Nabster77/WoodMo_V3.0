@@ -147,7 +147,7 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
         </div>
 
         {(() => {
-          const notes = updateAvailable && onlineBuild && onlineBuild !== 'wait' ? onlineBuild : INSTALLED_BUILD;
+          const notes: BuildInfo = updateAvailable && typeof onlineBuild === 'object' && onlineBuild !== null ? onlineBuild : INSTALLED_BUILD;
           return notes.notes.length > 0 && (
             <details className="mt-3 rounded-2xl border border-slate-200 p-3 text-sm dark:border-white/15" open={updateAvailable}>
               <summary className="cursor-pointer font-semibold text-slate-900 dark:text-white">{updateAvailable ? 'Das ist neu' : 'Inhalt dieser Version'}{notes.title ? ` · ${notes.title}` : ''}</summary>
