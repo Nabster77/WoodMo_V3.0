@@ -58,6 +58,7 @@ assert.match(admin, /day\.parts\.map\(\(part\) => part\.session\)/, 'PDF bekommt
 assert.match(admin, /parts=\{locationData\.find/, 'Tagesinfo bekommt alle Sitzungen');
 assert.match(admin, /Kassensitzung \$\{index \+ 1\} von \$\{parts\.length\}/);
 
+assert.match(admin, /formatDailyCloseReceiptNumber\(session\.dailyCloseReceiptNumber/, 'Tagesinfo zeigt volle Belegnummer TA-…');
 console.log('check-v3-day-overview: OK');
 
 // Journal: Anfangsbestand zählt je Standort/Tag nur die erste Kasse.
