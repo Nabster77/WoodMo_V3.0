@@ -49,13 +49,14 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
             {item.unitPfand > 0 && <span className="block font-medium text-green-600 dark:text-green-400">+ {formatCurrency(item.unitPfand)} Pfand</span>}
           </div>
         )}
-        {onEditShot && !item.isPfandRetoure && (
-          <button type="button" onClick={onEditShot}
-            className="mt-1 block min-h-8 rounded-lg bg-blue-600 px-2 text-[clamp(11px,3.8cqw,14px)] font-bold text-white hover:bg-blue-700 active:scale-[0.97]">
-            {item.shot ? 'SCHUSS ändern' : '+ SCHUSS'}
-          </button>
-        )}
       </div>
+      {/* SCHUSS zwischen Artikel und Menge: spart eine Zeile pro Position. */}
+      {onEditShot && !item.isPfandRetoure && (
+        <button type="button" onClick={onEditShot} aria-label={item.shot ? `${item.product.name}: SCHUSS ändern` : `${item.product.name}: SCHUSS hinzufügen`}
+          className="flex h-9 shrink-0 items-center rounded-lg bg-blue-600 px-2 text-[clamp(10px,3.4cqw,13px)] font-bold text-white hover:bg-blue-700 active:scale-[0.97]">
+          {item.shot ? 'SCHUSS ✎' : '+ SCHUSS'}
+        </button>
+      )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button type="button" aria-label={`${item.product.name}: Menge verringern`} onClick={onDec}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-800 active:scale-95 dark:bg-slate-700 dark:text-slate-100">

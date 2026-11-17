@@ -14,7 +14,7 @@ assert(cart.includes('Pfand-Retoure'));
 assert(cart.includes('Bonliste / Storno'));
 // Aufgeklappt nebeneinander; zugeklappt (schmale Spalte) untereinander, immer sichtbar.
 assert(cart.includes("mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}"),'Both touch actions always displayed');
-assert((cart.match(/min-h-12 min-w-0/g)||[]).length>=2,'Both buttons need generous touch targets');
+assert((cart.match(/min-h-9 min-w-0/g)||[]).length>=2,'Pfand-Retoure und Bonliste: kompakt (Nutzerwunsch 17.11.), aber mindestens 36 px hoch');
 assert((cart.match(/disabled=\{!activeSession \|\| !currentStaff\}/g)||[]).length>=2);
 assert(pos.includes('<PfandRetoureDialog'));
 assert(pos.includes('<BonlisteDialog'));

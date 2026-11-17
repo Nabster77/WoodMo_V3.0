@@ -39,7 +39,18 @@ assert.match(pos, /const FAVORITES_ID = '__favoriten__';/);
 assert.match(pos, /<Star className="h-4 w-4 shrink-0" \/> Favoriten/);
 assert.match(pos, /if \(item\.isPfandRetoure \|\| !item\.productId\) continue;/);
 assert.match(pos, /tx\.location !== currentLocation \|\| tx\.timestamp < since/);
-assert.match(pos, /!search\.trim\(\) && !favoritesActive && \(/, 'Kacheln verschieben nicht in Favoriten');
+assert.match(pos, /!search\.trim\(\) && !favoritesActive && !favoriteEdit && \(/, 'Kacheln verschieben nicht in Favoriten');
+// Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
+assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
+assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
+assert.match(pos, /if \(favoriteIds\.length > 0\) \{/);
+// Warenkorb: SCHUSS zwischen Name und Menge, Details aufklappbar, Gesamt immer sichtbar.
+const cartRow = readFileSync('src/components/POS/CartItemRow.tsx', 'utf8');
+assert.ok(cartRow.indexOf("'SCHUSS ✎' : '+ SCHUSS'") < cartRow.indexOf('Menge verringern'), 'SCHUSS vor der Mengeneingabe');
+const summary = readFileSync('src/components/POS/CartSummary.tsx', 'utf8');
+assert.match(summary, /const DETAILS_KEY = 'pos_cart_details_open';/);
+assert.match(summary, /\{detailsOpen && <>/);
+assert.ok(summary.indexOf('</>}') < summary.indexOf('>Gesamt</span>'), 'Gesamt bleibt immer sichtbar');
 // Werkzeuge in einer Reihe: Suche, Sortierung, Kacheln verschieben, Bilder an/aus.
 assert.ok(pos.indexOf('placeholder="Artikel suchen..."') < pos.indexOf('aria-label="Kassenartikel sortieren"')
   && pos.indexOf('aria-label="Kassenartikel sortieren"') < pos.indexOf("'Kacheln verschieben'")
