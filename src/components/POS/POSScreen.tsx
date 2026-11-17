@@ -645,10 +645,14 @@ export function POSScreen({
       )}
       {showCloseDialog && activeSession && (
         <DailyCloseDialog session={activeSession} transactions={transactions} stornos={stornos} currentStaff={currentStaff} onClose={async (bal, closingWithdrawalAmount, reason) => {
+          // Set BEFORE awaiting: the active session can already disappear while the
+          // close is confirmed; the opening dialog must still follow (Befund 17.11.2026).
+          openDialogAfterConfirmedClose.current = true;
           const result = await onCloseCash(bal, closingWithdrawalAmount, reason);
           if (result.ok) {
-            openDialogAfterConfirmedClose.current = true;
             setShowCloseDialog(false);
+          } else {
+            openDialogAfterConfirmedClose.current = false;
           }
           return result;
         }} onCancel={() => setShowCloseDialog(false)} />
