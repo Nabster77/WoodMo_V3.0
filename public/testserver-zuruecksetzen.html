@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WOODMO Testserver – Gerätedaten löschen</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #020617; color: #fff; font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 34rem; margin: 1rem; padding: 1.5rem; border: 2px solid rgba(255,255,255,.7); border-radius: 1.25rem; background: #0f172a; }
+  h1 { margin: 0 0 .5rem; font-size: 1.4rem; }
+  button, a.btn { display: block; width: 100%; margin-top: 1rem; padding: .9rem; border: 0; border-radius: .9rem; font-size: 1.05rem; font-weight: 700; text-align: center; text-decoration: none; cursor: pointer; }
+  button { background: #fff; color: #0f172a; }
+  button:disabled { opacity: .5; }
+  a.btn { background: #334155; color: #fff; }
+  .warn { color: #fca5a5; font-weight: 700; }
+  .ok { color: #86efac; font-weight: 700; }
+  ul { padding-left: 1.2rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Testserver: Gerätedaten löschen</h1>
+  <p>Löscht auf <b>diesem Gerät</b> alle gespeicherten Daten der Adresse <b id="origin"></b>:
+    Warteschlange (offline gespeicherte Buchungen/Kassenöffnungen), Anmeldung, Einstellungen, Ordnerwahl, Zwischenspeicher.</p>
+  <p>Die Daten auf dem Testserver (Notebook) und die <b>echte Kasse</b> (nabster77.github.io) bleiben unberührt.</p>
+  <p id="status"></p>
+  <button id="go" type="button">Gerätedaten dieser Testserver-Adresse löschen</button>
+  <a class="btn" href="/">Zurück zur Kasse (Testserver)</a>
+</main>
+<script>
+  const host = location.hostname;
+  const allowed = host === 'localhost' || host === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(host) || /^10\.\d+\.\d+\.\d+$/.test(host);
+  document.getElementById('origin').textContent = location.origin;
+  const status = document.getElementById('status');
+  const go = document.getElementById('go');
+  if (!allowed) {
+    go.disabled = true;
+    status.className = 'warn';
+    status.textContent = 'Gesperrt: Diese Seite funktioniert nur auf dem lokalen Testserver, nie auf der echten Kasse.';
+  }
+  go.addEventListener('click', async () => {
+    if (!allowed) return;
+    if (!confirm('Wirklich alle Gerätedaten von ' + location.origin + ' auf diesem Gerät löschen?')) return;
+    go.disabled = true;
+    const done = [];
+    try { localStorage.clear(); sessionStorage.clear(); done.push('Einstellungen/Anmeldung'); } catch (e) { done.push('localStorage: ' + e); }
+    try {
+      const dbs = indexedDB.databases ? await indexedDB.databases() : [];
+      for (const db of dbs) {
+        if (!db.name) continue;
+        await new Promise((resolve) => { const r = indexedDB.deleteDatabase(db.name); r.onsuccess = r.onerror = r.onblocked = () => resolve(); });
+        done.push('Datenbank ' + db.name);
+      }
+    } catch (e) { done.push('IndexedDB: ' + e); }
+    try { if (window.caches) for (const key of await caches.keys()) { await caches.delete(key); } done.push('Zwischenspeicher'); } catch (e) { done.push('Cache: ' + e); }
+    try { if (navigator.serviceWorker) for (const reg of await navigator.serviceWorker.getRegistrations()) { await reg.unregister(); } } catch (e) { done.push('Service Worker: ' + e); }
+    status.className = 'ok';
+    status.innerHTML = 'Gelöscht:<ul>' + done.map((d) => '<li>' + d + '</li>').join('') + '</ul>Jetzt „Zurück zur Kasse“ tippen. Es kommt die Cloud-Anmeldung (Testserver: admin@kasse.local / woodmo-test).';
+  });
+</script>
+</body>
+</html>
