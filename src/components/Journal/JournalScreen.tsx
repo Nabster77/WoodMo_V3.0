@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { openingBalanceOfDays } from '@/lib/dayOverview';
 import type { Category, CashSession, Product, StaffUser, Transaction } from '@/types';
 import { withCurrentCategories } from '@/lib/reportCategory';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -145,7 +146,8 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
     [cashSessions, start, end, locationFilter],
   );
 
-  const totalOpeningBalance = relevantSessions.reduce((s, sess) => s + sess.openingBalance, 0);
+  // Je Standort und Tag nur der Morgenbestand der ersten Kasse (keine Doppelzählung).
+  const totalOpeningBalance = openingBalanceOfDays(relevantSessions);
   const sessionLocationLabel = locationFilter === 'all' ? 'Alle Standorte' : locationFilter;
   // The control total is intentionally independent from the displayed period:
   // every journal shows the current calendar year's deposit balance.
