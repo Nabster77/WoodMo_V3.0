@@ -8,6 +8,7 @@ import { formatCurrency, formatDateGermanFromISO, formatDateISO, formatTime, par
 import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
 import { buildDailyReport } from '@/lib/dailyReport';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
+import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
 import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
@@ -1424,7 +1425,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                   <div className="rounded-2xl border border-gray-200 p-3 dark:border-gray-700">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
                       {parts.length > 1 ? `Kassensitzung ${index + 1} von ${parts.length}` : 'Kassensitzung'}
-                      {session.dailyCloseReceiptNumber ? ` · ${session.dailyCloseReceiptNumber}` : ''}
+                      {session.dailyCloseReceiptNumber ? ` · ${formatDailyCloseReceiptNumber(session.dailyCloseReceiptNumber, session.dailyCloseReceiptLocation ?? session.location, session.dailyCloseFinalizedAt ?? session.closedAt ?? session.openedAt, session.dailyCloseReceiptYear) ?? session.dailyCloseReceiptNumber}` : ''}
                       {` · geöffnet ${formatTime(session.openedAt)}`}
                       {parts.length > 1 ? ` · ${sessionTx.length} Verkäufe` : ''}
                     </p>
