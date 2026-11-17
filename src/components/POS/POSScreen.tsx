@@ -29,6 +29,8 @@ const TILE_IMAGES_KEY = 'pos_tile_images';
 const FAVORITES_ID = '__favoriten__';
 const FAVORITE_DAYS = 14;
 const FAVORITE_COUNT = 16;
+/** Von Hand markierte Favoriten, pro Gerät gespeichert (nicht in der Datenbank). */
+const FAVORITES_KEY = 'pos_favorites_v1';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
 const CART_WIDTH_KEY = 'pos_cart_width';
 const CART_PINNED_KEY = 'pos_cart_pinned';
@@ -131,6 +133,16 @@ export function POSScreen({
   const [showBonliste, setShowBonliste] = useState(false);
   const [priceEntryProduct, setPriceEntryProduct] = useState<Product | null>(null);
   const [dragMode, setDragMode] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
+    const stored = loadJSON<unknown>(FAVORITES_KEY, []);
+    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
+  });
+  const [favoriteEdit, setFavoriteEdit] = useState(false);
+  const toggleFavorite = (product: Product) => setFavoriteIds((ids) => {
+    const next = ids.includes(product.id) ? ids.filter((id) => id !== product.id) : [...ids, product.id];
+    saveJSON(FAVORITES_KEY, next);
+    return next;
+  });
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
   const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
@@ -252,8 +264,14 @@ export function POSScreen({
     if (search.trim()) {
       list = list.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
     } else if (activeCat === FAVORITES_ID) {
-      list = list.filter((p) => favoriteRank.has(p.id));
-      if (sortMode === 'manual') return [...list].sort((a, b) => (favoriteRank.get(a.id) ?? 0) - (favoriteRank.get(b.id) ?? 0));
+      // Von Hand markierte Favoriten haben Vorrang; ohne Markierung: meistverkaufte Artikel.
+      if (favoriteIds.length > 0) {
+        list = list.filter((p) => favoriteIds.includes(p.id));
+        if (sortMode === 'manual') return [...list].sort((a, b) => favoriteIds.indexOf(a.id) - favoriteIds.indexOf(b.id));
+      } else {
+        list = list.filter((p) => favoriteRank.has(p.id));
+        if (sortMode === 'manual') return [...list].sort((a, b) => (favoriteRank.get(a.id) ?? 0) - (favoriteRank.get(b.id) ?? 0));
+      }
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
@@ -264,7 +282,7 @@ export function POSScreen({
       : sortMode === 'desc'
         ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
-  }, [products, activeCat, search, sortMode, favoriteRank]);
+  }, [products, activeCat, search, sortMode, favoriteRank, favoriteIds]);
 
   function addToCart(product: Product, shot: ShotOption | null = null, customPrice?: number) {
     const basePrice = customPrice !== undefined ? customPrice : product.prices[currentLocation];
@@ -410,11 +428,19 @@ export function POSScreen({
             <select aria-label="Kassenartikel sortieren" value={sortMode}
               onChange={event => { setSortMode(event.target.value as 'manual' | 'asc' | 'desc'); setDragMode(false); }}
               className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-              <option value="manual">{favoritesActive ? 'Meistverkauft zuerst' : 'Eigene Reihenfolge'}</option>
+              <option value="manual">{favoritesActive ? (favoriteIds.length > 0 ? 'Wie markiert' : 'Meistverkauft zuerst') : 'Eigene Reihenfolge'}</option>
               <option value="asc">Aufsteigend (A–Z)</option>
               <option value="desc">Absteigend (Z–A)</option>
             </select>
-            {visibleProducts.length > 1 && !search.trim() && !favoritesActive && (
+            <button type="button" aria-pressed={favoriteEdit}
+              onClick={() => { setFavoriteEdit((v) => !v); setDragMode(false); }}
+              title="Artikel als Favorit markieren oder entfernen"
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${favoriteEdit
+                ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              <Star className="h-3.5 w-3.5" /> {favoriteEdit ? '✓ Fertig' : 'Favoriten wählen'}
+            </button>
+            {visibleProducts.length > 1 && !search.trim() && !favoritesActive && !favoriteEdit && (
               <button type="button" aria-pressed={dragMode}
                 onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
@@ -433,26 +459,31 @@ export function POSScreen({
             </button>
             {search.trim() && <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Suchergebnisse für „{search}“</span>}
           </div>
+          {favoriteEdit && (
+            <p role="status" className="mb-2 shrink-0 rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-200">
+              ★ Artikel antippen = als Favorit markieren oder entfernen (in jeder Warengruppe). Es wird nichts verkauft. Danach „✓ Fertig“.
+            </p>
+          )}
 
           {/* Product grid */}
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleProducts.length === 0 ? (
               <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-                <p className="text-sm">{favoritesActive ? 'Noch keine Verkäufe an diesem Standort. Favoriten erscheinen automatisch.' : 'Keine Artikel gefunden'}</p>
+                <p className="max-w-sm text-center text-sm">{favoritesActive ? 'Noch keine Favoriten. Auf „Favoriten wählen“ tippen und Artikel markieren – oder sie erscheinen nach den ersten Verkäufen automatisch.' : 'Keine Artikel gefunden'}</p>
               </div>
             ) : (
               <div className={showImages
                 ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
                 : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
+                  <div key={product.id} className="relative min-w-0">
                   <ProductTile
-                    key={product.id}
                     compact={!showImages}
                     product={product}
                     location={currentLocation}
-                    onAdd={handleProductTap}
-                    disabled={!activeSession || !currentStaff}
-                    dragMode={dragMode}
+                    onAdd={favoriteEdit ? toggleFavorite : handleProductTap}
+                    disabled={favoriteEdit ? false : !activeSession || !currentStaff}
+                    dragMode={dragMode && !favoriteEdit}
                     onDragStart={(id) => setDragSource(id)}
                     onDragOver={(id) => setDragOver(id)}
                     onDrop={() => {
@@ -465,10 +496,16 @@ export function POSScreen({
                     isDraggedOver={dragOver === product.id}
                     isDragging={dragSource === product.id}
                   />
+                  {favoriteEdit && (
+                    <span aria-hidden="true" className={`pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-lg leading-none shadow ${favoriteIds.includes(product.id) ? 'bg-amber-400 text-slate-950' : 'bg-slate-700/80 text-white'}`}>
+                      {favoriteIds.includes(product.id) ? '★' : '☆'}
+                    </span>
+                  )}
+                  </div>
                 ))}
               </div>
             )}
-            {(!activeSession || !currentStaff) && visibleProducts.length > 0 && (
+            {(!activeSession || !currentStaff) && visibleProducts.length > 0 && !favoriteEdit && (
               <div className="pointer-events-none absolute inset-0 flex items-start justify-center pt-8">
                 <div className="pointer-events-auto flex items-center gap-2 rounded-xl bg-black/80 px-4 py-2.5 text-sm font-semibold text-white shadow-lg backdrop-blur">
                   <Lock className="h-4 w-4" />
@@ -523,7 +560,7 @@ export function POSScreen({
                 disabled={!activeSession || !currentStaff}
                 aria-label="Pfand-Retoure erfassen"
                 title="Pfand-Retoure direkt während des Verkaufs erfassen"
-                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-green-500 bg-green-400 px-2 py-2 text-center text-xs font-bold leading-tight text-slate-950 shadow-sm transition hover:bg-green-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+                className="flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg border border-green-500 bg-green-400 px-2 py-1.5 text-center text-xs font-bold leading-tight text-slate-950 shadow-sm transition hover:bg-green-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Recycle className="h-4 w-4 shrink-0" />
                 <span>Pfand-Retoure</span>
               </button>
@@ -532,7 +569,7 @@ export function POSScreen({
                 disabled={!activeSession || !currentStaff}
                 aria-label="Bonliste öffnen und Bon stornieren"
                 title="Letzte fünf Originalbons ansehen und Bar- oder Kartenbuchung begründet stornieren"
-                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-sky-400/70 bg-sky-700 px-2 py-2 text-center text-xs font-bold leading-tight text-white shadow-sm transition hover:bg-sky-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+                className="flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg border border-sky-400/70 bg-sky-700 px-2 py-1.5 text-center text-xs font-bold leading-tight text-white shadow-sm transition hover:bg-sky-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <ClipboardList className="h-4 w-4 shrink-0" />
                 <span>Bonliste / Storno</span>
               </button>
