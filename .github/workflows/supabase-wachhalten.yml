@@ -9,6 +9,8 @@ on:
   schedule:
     - cron: '41 2 * * *'   # täglich 02:41 UTC = 03:41 Uhr Winterzeit
   workflow_dispatch:
+  push:   # nur zum Testen auf diesem Branch
+    branches: [claude/supabase-wachhalten]
 
 permissions:
   contents: read
