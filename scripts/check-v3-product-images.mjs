@@ -37,6 +37,7 @@ assert.match(pos, /snap-x gap-2 overflow-x-auto/);
 assert.doesNotMatch(pos, /longestCategoryName|Warengruppen<\/h2>|max-h-\[min\(30dvh/);
 assert.match(pos, /const FAVORITES_ID = '__favoriten__';/);
 assert.match(pos, /aria-label="Favoriten" title="Favoriten"/);
+assert.match(pos, /if \(favoritesActive\) \{\s*const back = /, '★ ein zweites Mal antippen: zurück zur letzten Warengruppe');
 assert.match(pos, /flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl/, 'Favoriten: kleines Quadrat nur mit Stern');
 assert.doesNotMatch(pos, /favoriteRank|FAVORITE_DAYS/, 'Favoriten nur von Hand, keine Automatik (Nutzerwunsch 17.11. 20:43)');
 assert.match(pos, /list = list\.filter\(\(p\) => favoriteIds\.includes\(p\.id\)\);/);

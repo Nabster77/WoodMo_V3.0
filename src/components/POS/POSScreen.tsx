@@ -136,6 +136,8 @@ export function POSScreen({
     return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
   });
   const [favoriteEdit, setFavoriteEdit] = useState(false);
+  // Letzte echte Warengruppe: ★ ein zweites Mal antippen führt dorthin zurück (★ wirkt wie ein Schalter).
+  const lastCategoryRef = useRef<string>(categories[0]?.id ?? '');
   const toggleFavorite = (product: Product) => setFavoriteIds((ids) => {
     const next = ids.includes(product.id) ? ids.filter((id) => id !== product.id) : [...ids, product.id];
     saveJSON(FAVORITES_KEY, next);
@@ -382,7 +384,16 @@ export function POSScreen({
           <div role="tablist" aria-label="Warengruppen"
             className="mb-2 flex shrink-0 snap-x gap-2 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:thin]">
             <button type="button" role="tab" aria-selected={favoritesActive} aria-label="Favoriten" title="Favoriten"
-              onClick={() => { setActiveCat(FAVORITES_ID); setSearch(''); setDragMode(false); }}
+              onClick={() => {
+                setSearch(''); setDragMode(false);
+                if (favoritesActive) {
+                  const back = shownCategories.some((c) => c.id === lastCategoryRef.current) ? lastCategoryRef.current : shownCategories[0]?.id;
+                  if (back) setActiveCat(back);
+                } else {
+                  if (activeCat !== FAVORITES_ID) lastCategoryRef.current = activeCat;
+                  setActiveCat(FAVORITES_ID);
+                }
+              }}
               className={`flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl shadow-sm transition active:scale-[0.98] ${favoritesActive ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
               <Star className="h-5 w-5" />
             </button>
