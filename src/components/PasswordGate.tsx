@@ -69,7 +69,7 @@ export function PasswordGate({ onSuccess, title, onStaffLogin, onCancel, adminis
     >
       <div className="pointer-events-auto my-auto w-full max-w-sm shrink-0 rounded-3xl bg-white p-6 shadow-xl dark:bg-gray-800">
         <div className="mb-5 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white ring-2 ring-white/70 shadow-lg">
             <Lock className="h-8 w-8" />
           </div>
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h3>
@@ -92,7 +92,7 @@ export function PasswordGate({ onSuccess, title, onStaffLogin, onCancel, adminis
             className={`w-full rounded-xl border px-3 py-3 text-base text-gray-900 focus:outline-none focus:ring-2 dark:bg-gray-900 dark:text-gray-100 ${
               error
                 ? 'border-red-500 focus:ring-red-500/30'
-                : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/30 dark:border-gray-700'
+                : 'border-gray-200 focus:border-slate-900 focus:ring-slate-400/40 dark:focus:border-white dark:border-gray-700'
             }`}
           />
           {error === 'wrong' && (
@@ -108,12 +108,12 @@ export function PasswordGate({ onSuccess, title, onStaffLogin, onCancel, adminis
           <button
             onClick={handleSubmit}
             disabled={checking}
-            className="w-full rounded-xl bg-blue-600 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-95 disabled:opacity-60"
+            className="w-full rounded-xl bg-slate-900 py-3 text-base font-bold text-white shadow-md transition hover:bg-slate-800 dark:bg-white dark:!text-slate-900 dark:hover:bg-slate-200 active:scale-95 disabled:opacity-60"
           >
             {checking ? <Loader2 className="mr-1.5 inline h-5 w-5 animate-spin" /> : <Check className="mr-1.5 inline h-5 w-5" />} Entsperren
           </button>
           {onCancel && <button type="button" onClick={onCancel} disabled={checking} className="w-full rounded-xl border border-gray-300 py-2.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-200 disabled:opacity-60">Abbrechen</button>}
-          {onStaffLogin && <button onClick={onStaffLogin} className="w-full rounded-xl border border-blue-300 bg-blue-50 py-2.5 text-sm font-semibold text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300">Als Administrator anmelden</button>}
+          {onStaffLogin && <button onClick={onStaffLogin} className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/40 dark:bg-white/5 dark:text-slate-100">Als Administrator anmelden</button>}
         </div>}
         {accessDenied && onCancel && <button type="button" onClick={onCancel} className="mt-4 w-full rounded-xl border border-gray-300 py-2.5 text-sm font-semibold dark:border-gray-600 dark:text-gray-200">Abbrechen</button>}
       </div>

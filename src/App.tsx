@@ -1,5 +1,5 @@
 import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBalanceCarry';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useStore } from '@/hooks/useStore';
 import { useCloudSync } from '@/hooks/useCloudSync';
@@ -49,7 +49,7 @@ import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
 import { persistFinalizedCashSession } from '@/lib/finalizedCashCloud';
 import { isTestMode, setTestMode, clearBookings, loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
 import { formatDateISO } from '@/lib/format';
-import { headerDateLong, headerDateShort } from '@/lib/headerDate';
+import { headerDateLong, headerDateShort, headerTime } from '@/lib/headerDate';
 import { exportRecoveryMetadata, restoreBackupSafely, type CompleteBackup } from '@/lib/backupRecovery';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
@@ -76,10 +76,10 @@ export default function App() {
   // active unsaved cart must not disappear merely because its view is hidden.
   const [homeVisible, setHomeVisible] = useState(true);
   const [headerNow, setHeaderNow] = useState(() => Date.now());
-  // Visible shop date updates even when a cash session stays open for weeks.
+  // Visible shop date and clock (device time, also offline) update even when a cash session stays open for weeks.
   useEffect(() => {
     const update = () => setHeaderNow(Date.now());
-    const interval = window.setInterval(update, 60_000);
+    const interval = window.setInterval(update, 10_000);
     document.addEventListener('visibilitychange', update);
     return () => {
       window.clearInterval(interval);
@@ -93,6 +93,13 @@ export default function App() {
   const [deviceSetupOpen, setDeviceSetupOpen] = useState(() => readDeviceSetup() === null);
   const [pdfArchiveWarning, setPdfArchiveWarning] = useState<string | null>(null);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  // Jedes Betreten der Verwaltung (egal mit welcher Anmeldung) öffnet zuerst das Verwaltungsmenü.
+  const adminOpenRef = useRef(false);
+  useEffect(() => {
+    const inAdmin = tab === 'admin' && adminUnlocked && !homeVisible;
+    if (inAdmin && !adminOpenRef.current) setMenuOpen(true);
+    adminOpenRef.current = inAdmin;
+  }, [tab, adminUnlocked, homeVisible]);
   const [headerAction, setHeaderAction] = useState<HeaderAction>(null);
   const [cashierLoginRequest, setCashierLoginRequest] = useState(0);
   const [testMode] = useState<boolean>(isTestMode());
@@ -466,6 +473,8 @@ export default function App() {
       setAdminUnlocked(true);
       setOpeningManagementAccess(null);
       setTab('admin');
+      // Angemeldeter Administrator: direkt das Verwaltungsmenü öffnen statt der Kassen-Übersicht.
+      setMenuOpen(true);
       return;
     }
     setAdminUnlocked(false);
@@ -594,21 +603,14 @@ export default function App() {
       {/* Compact toolbar: Home never closes the register or clears its cart. */}
       {!homeVisible && (
         <>
-          <header className="relative z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-emerald-900/50 bg-[#0d1628] px-2 py-1.5 text-white shadow-sm sm:px-3">
+          <header className="relative z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-white/10 bg-[#0b0f19] px-2 py-1.5 text-white shadow-sm sm:px-3">
             <WoodmoBrand status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'} />
-            <h1 className={`min-w-0 shrink-0 truncate text-base font-bold sm:text-lg ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
-              aria-live="polite">
+            <h1 className={`ml-1.5 min-w-0 shrink-0 truncate pb-0.5 text-2xl font-extrabold leading-[1.25] sm:ml-2.5 sm:text-[1.7rem] ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
+              aria-live="polite" title={tab === 'admin' && adminUnlocked ? `Verwaltung · ${activeAdminSectionTitle}` : undefined}>
               {tab === 'pos' ? 'Kasse' : tab === 'admin' ? 'Verwaltung' : 'Journal'}
             </h1>
-            {tab === 'admin' && adminUnlocked && (
-              <span className="min-w-0 max-w-[35vw] truncate border-l border-emerald-500/50 pl-2 text-xs font-semibold text-emerald-200 sm:text-sm"
-                role="status" aria-live="polite"
-                title={`Verwaltung · ${activeAdminSectionTitle}`}>
-                {activeAdminSectionTitle}
-              </span>
-            )}
             <button type="button" aria-label="Zur Startseite" title="Zur Startseite" onClick={goHome}
-              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl border border-sky-600/80 bg-sky-900/35 px-2.5 text-sky-100 shadow-[0_0_10px_rgba(56,189,248,.12)] transition hover:border-sky-400 hover:bg-sky-700/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
+              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl border border-white/50 bg-transparent px-2.5 text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
               <Home className="h-5 w-5" />
               <span className="hidden min-[1040px]:inline text-xs font-semibold">Home</span>
             </button>
@@ -616,7 +618,7 @@ export default function App() {
               <button type="button" aria-label={tab === 'admin' ? 'Verwaltungsmenü öffnen' : tab === 'journal' ? 'Journalmenü öffnen' : 'Kassenmenü öffnen'}
                 title="Menü" aria-expanded={menuOpen} aria-haspopup="dialog"
                 onClick={() => setMenuOpen((wasOpen) => !wasOpen)}
-                className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${menuOpen ? 'border-emerald-400 bg-emerald-900/40' : 'border-slate-600 bg-slate-800/65'}`}>
+                className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${menuOpen ? 'border-white bg-white !text-slate-900' : 'border-white/50 bg-transparent'}`}>
                 <LayoutGrid className="h-5 w-5" />
                 <span className="hidden min-[740px]:inline text-xs">Menü</span>
               </button>
@@ -636,7 +638,7 @@ export default function App() {
                 aria-label={`Standort ${store.activeSession?.location ?? store.selectedLocation}, aktuelles Datum ${headerDateLong(headerNow)}`}
                 title={`${store.activeSession?.location ?? store.selectedLocation} · ${headerDateLong(headerNow)}`}
               >
-                <MapPin className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
                 <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
                   {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)}
                 </span>
@@ -646,9 +648,21 @@ export default function App() {
                 <span className="min-w-0 truncate whitespace-nowrap font-semibold min-[1100px]:hidden">
                   {headerDateShort(headerNow)}
                 </span>
+                {/* Uhrzeit groß und mittig im freien Platz der Kopfzeile. */}
+                <span className="flex-1 whitespace-nowrap text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl"
+                  role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
+                  {headerTime(headerNow)} Uhr
+                </span>
               </div>
             )}
-            <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
+            {/* Kasse: Uhrzeit steht hinter dem Datum. Verwaltung/Journal: nur die Uhrzeit (Gerätezeit, auch offline). */}
+            {tab !== 'pos' && (
+              <span className="order-2 ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-200 min-[700px]:order-none"
+                role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
+                {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
+              </span>
+            )}
+            <div className={`order-2 flex shrink-0 items-center gap-1.5 ${tab === 'pos' ? 'ml-auto' : ''}`}>
               {tab === 'pos' && (
                 <button type="button"
                   aria-label={currentStaff ? 'Mitarbeiter abmelden' : 'Mitarbeiter anmelden'}
@@ -692,14 +706,16 @@ export default function App() {
               </button>
             </div>
           </header>
-          {resetArchive && resetArchive.archivedEntries > 0 && (
+          {/* Sicherheitsarchiv: Kassierer sehen nichts. Nur Administratoren bekommen einen Hinweis,
+              und zwar nur, wenn wirklich nicht übertragene Bons oder Kassensitzungen gesichert wurden.
+              Reine Alt-Sicherungen (alles übertragen) stehen nur still in der Verwaltung. */}
+          {resetArchive && (resetArchive.pendingReceipts > 0 || resetArchive.pendingSessions > 0) &&
+            (currentStaff?.role === 'administrator' || adminUnlocked) && (
             <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/40 bg-amber-950 px-3 py-2 text-sm text-amber-100">
               <span>
                 <AlertTriangle className="mr-1 inline h-4 w-4" />
-                Offline-Quarantäne: {resetArchive.pendingReceipts} nicht übertragene Bon-ID(s),
-                {resetArchive.pendingSessions} Kassensitzung(en) und
-                {resetArchive.localSnapshots} lokale Sicherung(en) archiviert.
-                Nicht löschen oder automatisch nachbuchen!
+                Sicherheitsarchiv: {resetArchive.pendingReceipts} nicht übertragene Bon(s) und {resetArchive.pendingSessions} Kassensitzung(en)
+                aus einer früheren Kasse auf diesem Gerät gesichert. Bitte prüfen, nicht automatisch nachbuchen.
               </span>
               <button type="button" onClick={() => navigateToProtected('admin')}
                 className="rounded-lg border border-amber-300/60 px-3 py-1.5 font-bold hover:bg-amber-900">
@@ -723,18 +739,18 @@ export default function App() {
                 {/* Home and Kasse stay together, also in the employee-only menu. */}
                 <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
                   <button type="button" onClick={goHome}
-                    className="flex min-h-24 min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-sky-500/45 bg-sky-100 px-3 py-3 text-center text-sm font-bold text-sky-900 transition hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-100 dark:hover:bg-sky-900/65">
-                    <Home className="h-6 w-6" /> <span>Startseite</span>
+                    className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-sky-500/45 bg-sky-100 p-2 text-center text-sm font-bold text-sky-900 transition hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-100 dark:hover:bg-sky-900/65">
+                    <Home className="h-5 w-5" /> <span>Startseite</span>
                   </button>
-                  <button type="button" onClick={() => navigateTo('pos')} className="flex min-h-24 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-3 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
-                    <ShoppingCart className="h-6 w-6" /> Kasse
+                  <button type="button" onClick={() => navigateTo('pos')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                    <ShoppingCart className="h-5 w-5" /> Kasse
                   </button>
                   {(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) && (
                     <>
-                      <button type="button" onClick={() => navigateToProtected('journal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold dark:bg-slate-800">
+                      <button type="button" onClick={() => navigateToProtected('journal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                         <Receipt className="h-5 w-5" /> Journal
                       </button>
-                      <button type="button" onClick={() => navigateToProtected('admin')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold dark:bg-slate-800">
+                      <button type="button" onClick={() => navigateToProtected('admin')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                         <Settings className="h-5 w-5" /> Verwaltung
                       </button>
                     </>
@@ -744,14 +760,15 @@ export default function App() {
                 {store.activeSession && currentStaff && (
                   <>
                     <h3 className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Kassenbewegungen</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button type="button" onClick={() => chooseCashAction('deposit')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-emerald-50 p-2 text-center text-xs font-bold text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                    {/* Gleiche Kachelgröße wie oben: gleiche Spaltenzahl, gleiche Höhe, gleiche Schrift. */}
+                    <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+                      <button type="button" onClick={() => chooseCashAction('deposit')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                         <ArrowDownCircle className="h-5 w-5" /> Einlage
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-xs font-bold dark:bg-slate-800">
+                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                         <ArrowUpCircle className="h-5 w-5" /> Ausgabe
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('correction')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-xs font-bold dark:bg-slate-800">
+                      <button type="button" onClick={() => chooseCashAction('correction')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                         <Settings className="h-5 w-5" /> Bestandskorrektur
                       </button>
                     </div>
@@ -982,26 +999,26 @@ export default function App() {
               resetQuarantineCount={resetArchive?.archivedEntries ?? 0}
               onExportResetQuarantine={async () => {
                 try { setExportedQuarantineKeys(await exportResetQuarantine()); }
-                catch (error) { alert(error instanceof Error ? error.message : 'Quarantäne-Export fehlgeschlagen.'); }
+                catch (error) { alert(error instanceof Error ? error.message : 'Sicherheitsarchiv-Export fehlgeschlagen.'); }
               }}
               onClearResetQuarantine={async () => {
                 const summary = resetArchive;
                 if (summary && (summary.pendingReceipts > 0 || summary.pendingSessions > 0)) {
-                  alert('Löschen gesperrt: Die Quarantäne enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.');
+                  alert('Löschen gesperrt: Das Sicherheitsarchiv enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.');
                   return;
                 }
                 if (!exportedQuarantineKeys) {
-                  alert('Bitte zuerst „Offline-Quarantäne sichern“ ausführen und die Datei aufbewahren. Danach kann gelöscht werden.');
+                  alert('Bitte zuerst „Sicherheitsarchiv sichern“ ausführen und die Datei aufbewahren. Danach kann gelöscht werden.');
                   return;
                 }
-                if (!window.confirm('Offline-Quarantäne auf diesem Gerät endgültig löschen?\n\n' +
+                if (!window.confirm('Sicherheitsarchiv auf diesem Gerät endgültig löschen?\n\n' +
                   'Gelöscht werden nur die archivierten Altstände vor einem Reset (diese liegen weiterhin in der Cloud). ' +
                   'Laufende Kassen, aktuelle Buchungen und noch nicht übertragene Buchungen bleiben unberührt.')) return;
                 try {
                   await clearResetQuarantine(exportedQuarantineKeys);
                   setExportedQuarantineKeys(null);
                 } catch (error) {
-                  alert(error instanceof Error ? error.message : 'Offline-Quarantäne konnte nicht gelöscht werden.');
+                  alert(error instanceof Error ? error.message : 'Sicherheitsarchiv konnte nicht gelöscht werden.');
                 }
               }}
               onCheckResetSafety={checkResetSafety}
@@ -1196,6 +1213,7 @@ export default function App() {
         {!homeVisible && tab === 'journal' && (
           adminUnlocked ? (
             <JournalScreen
+              products={store.products}
               transactions={store.transactions}
               stornos={stornoLedger.records}
               categories={store.categories}

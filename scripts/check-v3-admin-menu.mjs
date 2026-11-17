@@ -24,9 +24,10 @@ assert.match(app, /onOpenJournal=\{\(\) => navigateToProtected\('journal'\)\}/);
 assert.match(app, /onAdminSectionChange=\{setAdminSection\}/,
   'The admin screen must report its current section to App.');
 assert.match(app, /const \[adminSection, setAdminSection\] = useState\('Kassen-Übersicht'\)/);
-assert.match(header, /activeAdminSectionTitle/,
-  'The shared header must show the active admin section.');
-assert.match(app, /title=\{`Verwaltung · \$\{activeAdminSectionTitle\}`\}/);
+assert.match(header, /title=\{tab === 'admin' && adminUnlocked \? `Verwaltung · \$\{activeAdminSectionTitle\}` : undefined\}/,
+  'Active admin section stays as tooltip only (no doubled green label beside the title).');
+assert.doesNotMatch(header, /border-l border-emerald-500\/50/, 'no green section label in the header');
+assert.doesNotMatch(header, /leading-none sm:text-\[1\.7rem\]/, 'title line height must not clip descenders (g in Verwaltung)');
 assert.match(app, /modeConfirm === 'to-test' \? 'Auf Testmodus wechseln'/);
 assert.match(app, /deviceSetupOpen && tab === 'admin'/);
 assert.match(app, /menuOpen && \(tab !== 'admin' \|\| !adminUnlocked\)/,

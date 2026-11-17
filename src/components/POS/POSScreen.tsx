@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CartItem, Category, CashSession, Product, Transaction, ShotOption, Location, PfandSettings, StaffSecurityQuestion, StaffUser } from '@/types';
 import { ProductTile } from './ProductTile';
 import { CartItemRow } from './CartItemRow';
@@ -16,9 +16,18 @@ import type { StornoCloudState } from '@/hooks/useStornoLedger';
 import { DynamicIcon } from '@/components/DynamicIcon';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
+import { loadJSON, saveJSON } from '@/lib/storage';
+import { formatCurrency } from '@/lib/format';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff,
 } from 'lucide-react';
+
+// Ansicht der Artikel-Kacheln (Standard: ohne Bilder), nur auf diesem Gerät gespeichert (keine Cloud,
+// kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
+const TILE_IMAGES_KEY = 'pos_tile_images';
+const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
+const CART_WIDTH_KEY = 'pos_cart_width';
+const CART_PINNED_KEY = 'pos_cart_pinned';
 
 type HeaderAction = 'deposit' | 'withdrawal' | 'pfand' | 'correction' | 'close' | null;
 
@@ -119,6 +128,41 @@ export function POSScreen({
   const [priceEntryProduct, setPriceEntryProduct] = useState<Product | null>(null);
   const [dragMode, setDragMode] = useState(false);
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
+  const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
+  // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
+  const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
+  const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
+  // Warenkorb-Breite per Griff am linken Rand ziehen; „Fixieren“ sperrt die Breite. Pro Gerät gespeichert.
+  const [cartWidth, setCartWidth] = useState<number | null>(() => {
+    const value = loadJSON<number | null>(CART_WIDTH_KEY, null);
+    return typeof value === 'number' && value >= 200 && value <= 1600 ? value : null;
+  });
+  const [cartPinned, setCartPinned] = useState<boolean>(() => loadJSON<boolean>(CART_PINNED_KEY, false) === true);
+  const togglePinned = () => setCartPinned((value) => { const next = !value; saveJSON(CART_PINNED_KEY, next); return next; });
+  const cartPanelRef = useRef<HTMLDivElement | null>(null);
+  const cartDrag = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
+  const onHandleDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const width = cartPanelRef.current?.getBoundingClientRect().width ?? 300;
+    cartDrag.current = { startX: event.clientX, startWidth: width, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onHandleMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = cartDrag.current;
+    if (!drag || cartPinned || cartCollapsed) return;
+    const delta = drag.startX - event.clientX;
+    if (!drag.moved && Math.abs(delta) < 6) return;
+    drag.moved = true;
+    const max = Math.max(260, Math.round(window.innerWidth * 0.6));
+    setCartWidth(Math.min(max, Math.max(200, Math.round(drag.startWidth + delta))));
+  };
+  const onHandleUp = () => {
+    const drag = cartDrag.current;
+    cartDrag.current = null;
+    if (!drag) return;
+    if (drag.moved) { setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; }); return; }
+    toggleCart();
+  };
+  const toggleImages = () => setShowImages((value) => { const next = !value; saveJSON(TILE_IMAGES_KEY, next); return next; });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -178,6 +222,12 @@ export function POSScreen({
 
   const currentLocation: Location = activeSession?.location ?? (selectedLocation ?? 'Friedrichshafen');
 
+  const shownCategories = useMemo(
+    () => [...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder),
+    [categories],
+  );
+  const longestCategoryName = Math.max(6, ...shownCategories.map((c) => c.name.length));
+
   const visibleProducts = useMemo(() => {
     let list = products.filter((p) => p.available);
     if (search.trim()) {
@@ -185,10 +235,12 @@ export function POSScreen({
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
+    // A–Z / Z–A keeps marked articles together: first Schnaps, then Likör, then the rest.
+    const kindRank = (p: Product) => p.spiritType === 'schnaps' ? 0 : p.spiritType === 'likoer' ? 1 : 2;
     return [...list].sort(sortMode === 'asc'
-      ? (a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+      ? (a, b) => kindRank(a) - kindRank(b) || a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
       : sortMode === 'desc'
-        ? (a, b) => b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
+        ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
   }, [products, activeCat, search, sortMode]);
 
@@ -263,6 +315,7 @@ export function POSScreen({
   }
 
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
+  const cartTotal = Math.round(cart.reduce((sum, c) => sum + (c.isPfandRetoure ? c.unitPrice : c.unitPrice + c.unitPfand) * c.quantity, 0) * 100) / 100;
 
     async function handleCheckoutComplete(transactions: Transaction[]): Promise<'queued-online' | 'queued-offline' | 'test'> {
     const result = await onCheckout(transactions);
@@ -299,26 +352,33 @@ export function POSScreen({
     <div className="flex h-full flex-col gap-2 sm:gap-3">
       {/* Portrait tablet: roughly 65% product area / 35% persistent cart.
           Small phones stack because a 200px-wide cart would be unusable. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] sm:overflow-hidden lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)] lg:gap-3">
+      <div style={cartWidth && !cartCollapsed ? { ['--cart-w' as string]: `${cartWidth}px` } : undefined}
+        className={`grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto sm:overflow-hidden lg:gap-3 ${cartCollapsed
+        ? 'sm:grid-cols-[minmax(0,1fr)_9.5rem] lg:grid-cols-[minmax(0,1fr)_11rem]'
+        : cartWidth
+          ? 'sm:grid-cols-[minmax(0,1fr)_var(--cart-w)]'
+          : 'sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)]'}`}>
         {/* Left: products area */}
         <div className="flex min-h-0 min-w-0 flex-col sm:overflow-hidden">
           {/* Categories always visible as readable labeled touch targets. */}
           <div className="mb-1 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Warengruppen</h2>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Wechseln</span>
           </div>
-          <div className="mb-2 grid max-h-[min(27dvh,13.5rem)] shrink-0 grid-cols-2 gap-1.5 overflow-y-auto overscroll-contain pr-1 lg:grid-cols-3 2xl:grid-cols-4">
-            {[...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
+          {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
+          <div className="mb-2 grid max-h-[min(30dvh,15rem)] shrink-0 gap-2 overflow-y-auto overscroll-contain p-2 text-sm font-bold sm:text-base"
+            style={{ gridTemplateColumns: `repeat(auto-fill, min(100%, calc(${longestCategoryName * 1.1}ch + 3.75rem)))` }}>
+            {shownCategories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
                 aria-pressed={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
-                style={cat.color.startsWith('linear-gradient(') ? { background: cat.color } : cat.color.startsWith('#') ? { backgroundColor: cat.color } : undefined}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold leading-tight text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] sm:text-sm bg-gradient-to-r ${cat.color.startsWith('linear-gradient(') || cat.color.startsWith('#') ? '' : cat.color} ${activeCat === cat.id && !search ? 'border-emerald-300 ring-2 ring-emerald-400/70' : 'border-transparent opacity-90'}`}
+                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search
+                  ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                  : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}
               >
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 break-words text-center">{cat.name}</span>
+                <span className="min-w-0 truncate text-center">{cat.name}</span>
               </button>
             ))}
           </div>
@@ -332,20 +392,23 @@ export function POSScreen({
               }
               if (cat) {
                 return (
-                  <h2 className="flex items-center gap-2 text-lg font-bold">
-                    <span style={cat.color.startsWith("linear-gradient(") ? { background: cat.color } : cat.color.startsWith("#") ? { backgroundColor: cat.color } : undefined} className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${cat.color.startsWith("linear-gradient(") || cat.color.startsWith("#") ? "" : cat.color} text-white`}>
+                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">
                       <DynamicIcon name={cat.icon} className="h-4 w-4" />
                     </span>
-                    <span className="text-gray-900 dark:text-gray-100">{cat.name}</span>
-                    <span className="text-sm font-normal text-gray-400">
-                      ({visibleProducts.length} {visibleProducts.length === 1 ? 'Artikel' : 'Artikel'})
-                    </span>
+                    <span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">{cat.name}</span>
                   </h2>
                 );
               }
               return null;
             })()}
             <div className="flex flex-wrap items-center gap-2">
+              <button type="button" aria-pressed={!showImages} onClick={toggleImages}
+                title={showImages ? 'Kompakte Kacheln ohne Bilder anzeigen' : 'Kacheln mit Bildern anzeigen'}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                {showImages ? <ImageOff className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                {showImages ? 'Bilder aus' : 'Bilder an'}
+              </button>
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
                 Sortierung:
                 <select aria-label="Kassenartikel sortieren" value={sortMode}
@@ -356,25 +419,27 @@ export function POSScreen({
                   <option value="desc">Absteigend (Z–A)</option>
                 </select>
               </label>
-              {visibleProducts.length > 1 && !search.trim() && (
-                <button type="button" aria-pressed={dragMode}
-                  onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    dragMode
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                  }`}>
-                  <Move className="h-3.5 w-3.5" /> {dragMode ? '✓ Verschieben aktiv' : 'Kacheln verschieben'}
-                </button>
-              )}
             </div>
           </div>
 
-          {/* Search bar: sales tools are grouped with the cart header. */}
-          <div className="relative mb-2 shrink-0">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Artikel suchen..."
-              className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-base text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:py-2.5 sm:text-sm" />
+          {/* Search bar: schmal, daneben „Kacheln verschieben“ über den Artikeln. */}
+          <div className="mb-2 flex shrink-0 items-center gap-2">
+            <div className="relative w-full max-w-[15rem]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Artikel suchen..."
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-base text-gray-900 placeholder-gray-400 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-white sm:text-sm" />
+            </div>
+            {visibleProducts.length > 1 && !search.trim() && (
+              <button type="button" aria-pressed={dragMode}
+                onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
+                  dragMode
+                    ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                    : 'border-dashed border-slate-400 text-slate-500 hover:bg-slate-100 dark:border-slate-500 dark:text-slate-300 dark:hover:bg-slate-800'
+                }`}>
+                <Move className="h-3.5 w-3.5" /> {dragMode ? '✓ Fertig verschieben' : 'Kacheln verschieben'}
+              </button>
+            )}
           </div>
 
           {/* Product grid */}
@@ -384,10 +449,13 @@ export function POSScreen({
                 <p className="text-sm">Keine Artikel gefunden</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5">
+              <div className={showImages
+                ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
+                : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
                   <ProductTile
                     key={product.id}
+                    compact={!showImages}
                     product={product}
                     location={currentLocation}
                     onAdd={handleProductTap}
@@ -420,28 +488,50 @@ export function POSScreen({
         </div>
 
         {/* Right: cart */}
-        <div className="flex min-h-56 min-w-0 flex-col rounded-2xl border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0">
+        <div ref={cartPanelRef} className={`relative flex min-w-0 flex-col rounded-2xl [container-type:inline-size] border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
+          {/* Griff am linken Rand (Hoch- und Querformat): antippen = zu-/aufklappen,
+              seitlich ziehen = Warenkorb breiter/schmaler (nicht, wenn fixiert). */}
+          <button type="button" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={() => { cartDrag.current = null; }}
+            aria-label={cartCollapsed ? 'Warenkorb aufklappen (Pfeil)' : 'Warenkorb zuklappen (Pfeil)'}
+            title={cartCollapsed ? 'Antippen: aufklappen' : cartPinned ? 'Antippen: zuklappen (Breite fixiert)' : 'Antippen: zuklappen · Ziehen: Breite ändern'}
+            className={`absolute left-0 top-1/2 z-10 hidden h-20 w-10 -translate-x-1/2 -translate-y-1/2 touch-none select-none items-center justify-center rounded-full border-2 border-slate-400 bg-white text-slate-800 shadow-lg transition hover:bg-slate-100 dark:border-white/70 dark:bg-slate-900 dark:text-white sm:flex ${!cartCollapsed && !cartPinned ? 'cursor-ew-resize' : ''}`}>
+            {cartCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          </button>
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <ShoppingCart className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-                <h2 className="font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>
-                {cartCount > 0 && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{cartCount}</span>}
-              </div>
-              {cart.length > 0 && (
+            {/* Kopf: Titel + Anzahl, Fixieren, Leeren. Zu-/Aufklappen über den Griff an der Kante;
+                der Knopf „Zu/Auf“ erscheint nur auf schmalen Handy-Bildschirmen (dort gibt es keinen Griff). */}
+            <div className="flex min-w-0 items-center gap-2">
+              <ShoppingCart className="h-5 w-5 shrink-0 text-slate-700 dark:text-slate-200" />
+              {!cartCollapsed && <h2 className="min-w-0 truncate font-bold text-gray-900 dark:text-gray-100">Warenkorb</h2>}
+              {cartCount > 0 && <span className="shrink-0 rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold text-white dark:bg-white dark:text-slate-900">{cartCount}</span>}
+              {!cartCollapsed && (
+                <button type="button" onClick={togglePinned} aria-pressed={cartPinned}
+                  aria-label={cartPinned ? 'Warenkorb-Breite lösen' : 'Warenkorb-Breite fixieren'}
+                  title={cartPinned ? 'Breite ist fixiert – antippen zum Lösen' : 'Breite fixieren'}
+                  className={`ml-auto hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition active:scale-[0.98] sm:flex ${cartPinned ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'}`}>
+                  {cartPinned ? <Pin className="h-5 w-5" /> : <PinOff className="h-5 w-5" />}
+                </button>
+              )}
+              {cart.length > 0 && !cartCollapsed && (
                 <button type="button" onClick={clearCart}
-                  className="flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30">
+                  className="ml-auto flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 sm:ml-0 dark:hover:bg-red-900/30">
                   <Trash2 className="h-3.5 w-3.5" /> Leeren
                 </button>
               )}
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" onClick={toggleCart} aria-pressed={cartCollapsed}
+              aria-label={cartCollapsed ? 'Warenkorb aufklappen' : 'Warenkorb zuklappen'}
+              className="mt-2 flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl border-2 border-slate-400 px-3 py-2 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-100 active:scale-[0.98] dark:border-white/60 dark:text-white dark:hover:bg-white/10 sm:hidden">
+              {cartCollapsed ? <PanelRightOpen className="h-5 w-5 shrink-0" /> : <PanelRightClose className="h-5 w-5 shrink-0" />}
+              {cartCollapsed ? 'Auf' : 'Zu'}
+            </button>
+            <div className={`mt-2 grid gap-2 ${cartCollapsed ? 'grid-cols-2 sm:grid-cols-1' : 'grid-cols-2'}`}>
               <button type="button"
                 onClick={() => setShowPfandRetoure(true)}
                 disabled={!activeSession || !currentStaff}
                 aria-label="Pfand-Retoure erfassen"
                 title="Pfand-Retoure direkt während des Verkaufs erfassen"
-                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-teal-400/70 bg-teal-700 px-2 py-2 text-center text-xs font-bold leading-tight text-white shadow-sm transition hover:bg-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+                className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-green-500 bg-green-400 px-2 py-2 text-center text-xs font-bold leading-tight text-slate-950 shadow-sm transition hover:bg-green-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Recycle className="h-4 w-4 shrink-0" />
                 <span>Pfand-Retoure</span>
               </button>
@@ -457,6 +547,36 @@ export function POSScreen({
             </div>
           </div>
 
+          {cartCollapsed ? (
+            cart.length === 0 ? (
+              <button type="button" onClick={toggleCart} aria-label="Warenkorb aufklappen"
+                className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                <PanelRightOpen className="h-5 w-5 text-slate-400" />
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">Tippen zum Aufklappen</span>
+              </button>
+            ) : (
+              // Kurzliste der Positionen; Schuss lässt sich auch zugeklappt wählen.
+              <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-1.5 py-1.5">
+                {cart.map((item, index) => (
+                  <li key={index} className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs dark:border-slate-700">
+                    <div className="flex min-w-0 items-baseline gap-1">
+                      <span className="shrink-0 font-bold text-slate-400">{index + 1}.</span>
+                      <span className={`min-w-0 truncate font-semibold ${item.isPfandRetoure ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                        {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.isPfandRetoure ? 'Pfand-Retoure' : item.product.name}
+                      </span>
+                    </div>
+                    {!item.isPfandRetoure && item.product.hasShot && (
+                      <button type="button" onClick={() => { setShotCartIndex(index); setShotProduct(item.product); }}
+                        aria-label={`Schuss für Position ${index + 1} wählen`}
+                        className={`mt-1 min-h-8 w-full truncate rounded-md px-1.5 py-1 text-[11px] font-bold transition active:scale-[0.97] bg-blue-600 text-white hover:bg-blue-700`}>
+                        {item.shot && item.shot.id !== 'none' ? `+ ${item.shot.name}` : '+ Schuss'}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )
+          ) : (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1 sm:px-3">
             {cart.length === 0 && (
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
@@ -465,14 +585,21 @@ export function POSScreen({
               <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
+          )}
 
           <div className="shrink-0 border-t border-gray-200 p-2 dark:border-gray-700 sm:p-3">
-            {cart.length > 0 && <div className="max-h-[min(25dvh,11rem)] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
+            {cartCollapsed && (
+              <div className="rounded-lg bg-slate-100 px-2 py-1.5 text-center dark:bg-slate-900/60">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{cartCount === 0 ? 'Keine Artikel' : `${cartCount} Artikel`}</div>
+                <div className={`text-lg font-extrabold leading-tight ${cartTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cartTotal)}</div>
+              </div>
+            )}
+            {cart.length > 0 && !cartCollapsed && <div className="max-h-[45dvh] overflow-y-auto"><CartSummary items={cart} location={currentLocation} /></div>}
             {cart.length > 0 && (
               <button
                 onClick={() => activeSession && currentStaff && setShowCheckout(true)}
                 disabled={!activeSession || !currentStaff}
-                className={`mt-2 min-h-11 w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white shadow-lg transition active:scale-95 ${activeSession && currentStaff ? 'bg-green-600 hover:bg-green-700' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-600'}`}
+                className={`mt-2 min-h-11 w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white shadow-lg transition active:scale-95 ${activeSession && currentStaff ? 'bg-emerald-800 ring-1 ring-emerald-500/60 hover:bg-emerald-900' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-600'}`}
               >
                 {activeSession && currentStaff ? 'Bezahlen' : 'Bezahlen (Anmeldung erforderlich)'}
               </button>
@@ -519,10 +646,14 @@ export function POSScreen({
       )}
       {showCloseDialog && activeSession && (
         <DailyCloseDialog session={activeSession} transactions={transactions} stornos={stornos} currentStaff={currentStaff} onClose={async (bal, closingWithdrawalAmount, reason) => {
+          // Set BEFORE awaiting: the active session can already disappear while the
+          // close is confirmed; the opening dialog must still follow (Befund 17.11.2026).
+          openDialogAfterConfirmedClose.current = true;
           const result = await onCloseCash(bal, closingWithdrawalAmount, reason);
           if (result.ok) {
-            openDialogAfterConfirmedClose.current = true;
             setShowCloseDialog(false);
+          } else {
+            openDialogAfterConfirmedClose.current = false;
           }
           return result;
         }} onCancel={() => setShowCloseDialog(false)} />
