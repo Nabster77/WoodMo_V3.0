@@ -31,7 +31,19 @@ assert.match(tile, /const color = spiritColor\(kind\);/);
 assert.match(tile, /bg-green-400 text-slate-950`\}>PFAND</);
 const spirit = readFileSync('src/lib/spiritColors.ts', 'utf8');
 assert.match(spirit, /SPIRIT_COLORS = \{ likoer: '#8b5cf6', schnaps: '#ef4444' \}/);
-assert.match(pos, /calc\(\$\{longestCategoryName \* 1\.1\}ch \+ 3\.75rem\)/);
+// Warengruppen als schmale Wisch-Leiste (mehr Platz für Artikel), Favoriten zuerst.
+assert.match(pos, /role="tablist" aria-label="Warengruppen"/);
+assert.match(pos, /snap-x gap-2 overflow-x-auto/);
+assert.doesNotMatch(pos, /longestCategoryName|Warengruppen<\/h2>|max-h-\[min\(30dvh/);
+assert.match(pos, /const FAVORITES_ID = '__favoriten__';/);
+assert.match(pos, /<Star className="h-4 w-4 shrink-0" \/> Favoriten/);
+assert.match(pos, /if \(item\.isPfandRetoure \|\| !item\.productId\) continue;/);
+assert.match(pos, /tx\.location !== currentLocation \|\| tx\.timestamp < since/);
+assert.match(pos, /!search\.trim\(\) && !favoritesActive && \(/, 'Kacheln verschieben nicht in Favoriten');
+// Werkzeuge in einer Reihe: Suche, Sortierung, Kacheln verschieben, Bilder an/aus.
+assert.ok(pos.indexOf('placeholder="Artikel suchen..."') < pos.indexOf('aria-label="Kassenartikel sortieren"')
+  && pos.indexOf('aria-label="Kassenartikel sortieren"') < pos.indexOf("'Kacheln verschieben'")
+  && pos.indexOf("'Kacheln verschieben'") < pos.indexOf("'Bilder aus' : 'Bilder an'"), 'Reihenfolge der Werkzeuge');
 assert.match(pos, /const TILE_IMAGES_KEY = 'pos_tile_images'/);
 assert.match(pos, /compact=\{!showImages\}/);
 assert.match(pos, /'Bilder aus' : 'Bilder an'/);
@@ -51,7 +63,8 @@ const css = readFileSync('src/index.css', 'utf8');
 assert.match(css, /@keyframes woodmo-cat-glow-dark/);
 assert.match(css, /\.dark \.woodmo-cat-pulse-text \{ animation-name: woodmo-cat-text-dark; \}/);
 assert.match(pos, /'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'/);
-assert.match(pos, /<span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">\{cat\.name\}<\/span>/);
+assert.doesNotMatch(pos, /woodmo-cat-pulse-text/, 'Extra-Überschrift der Warengruppe entfällt (Platz für Artikel)');
+assert.doesNotMatch(readFileSync('src/components/POS/DailyCloseDialog.tsx', 'utf8'), /placeholder="0,00 \(keine Entnahme\)" inputMode="decimal" autoFocus/, 'Entnahme: Tastatur nicht automatisch');
 assert.doesNotMatch(pos, /categoryAccent/);
 assert.match(tile, /dark:border-white\/85/);
 console.log('WARENGRUPPE: Schwarz-Weiß, aktive Gruppe und Überschrift pulsieren weiß, Kacheln weiß umrandet.');

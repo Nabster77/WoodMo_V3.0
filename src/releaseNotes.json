@@ -2,6 +2,10 @@
   "title": "Update November 2026",
   "notes": [
     "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
+    "Kasse: Warengruppen als schmale Leiste zum Wischen, „Favoriten“ zuerst (meistverkaufte Artikel der letzten 14 Tage), mehr Platz für Artikel",
+    "Suche, Sortierung, Kacheln verschieben und Bilder an/aus in einer Reihe",
+    "Tagesabschluss: Entnahme-Feld öffnet die Tastatur nicht mehr von selbst; Kassenbestand klar nur aus Bargeld",
+    "Tagesinfo und PDFs: „Gesamt kassiert (inkl. Pfand) = Bar + Karte“",
     "Warenkorb: einklappbar, Breite mit dem Finger verschiebbar, anheften möglich, Schuss auch eingeklappt",
     "Pfand: Mehrwertsteuer wird jetzt richtig auf das Pfand gerechnet (Journal, Tagesabschluss, PDF)",
     "Pfand überall in Grün, Pfand-Retoure mit Zahleneingabe",

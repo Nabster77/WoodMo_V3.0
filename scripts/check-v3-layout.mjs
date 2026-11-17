@@ -37,8 +37,8 @@ assert.match(app, /await saveJournalPdfIfAllowed\(/,
   'Local close PDF retention remains enabled');
 assert.match(pos, /sm:grid-cols-\[minmax\(0,1\.85fr\)_minmax\(220px,1fr\)\]/,
   'Portrait tablet left/right split must be defined');
-assert.match(pos, /Warengruppen<\/h2>/);
-assert.match(pos, /aria-pressed=\{activeCat === cat.id && !search\}/,
+assert.match(pos, /aria-label="Warengruppen"/);
+assert.match(pos, /aria-selected=\{activeCat === cat.id && !search\}/,
   'Category selection must remain visible');
 assert.match(pos, /requestDailyClose\(\)/,
   'The original daily-close confirmation path must stay wired');
