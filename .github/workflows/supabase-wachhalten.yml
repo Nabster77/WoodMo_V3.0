@@ -36,11 +36,14 @@ jobs:
       - name: Kleine Lese-Abfrage (1 Bon-ID, Inhalt wird nicht ausgegeben)
         run: |
           for try in 1 2 3; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+            # Neues Schlüsselformat (sb_publishable_…): nur als apikey senden, nicht als Bearer.
+            code=$(curl -sS -o /tmp/antwort -w '%{http_code}' --max-time 30 \
               "$V3_URL/rest/v1/pos_transactions?select=id&limit=1" \
-              -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY") || code=000
+              -H "apikey: $ANON_KEY") || code=000
             echo "Versuch $try: HTTP $code"
             case "$code" in 200|206) echo "Supabase V3 ist wach."; exit 0;; esac
+            # Fehlertext zeigen (enthält keine Kassendaten), gekürzt.
+            head -c 300 /tmp/antwort; echo
             sleep 20
           done
           echo "Supabase V3 hat nicht geantwortet (pausiert oder gestört). Bitte im Supabase-Dashboard prüfen."
