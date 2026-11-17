@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const pos = readFileSync('src/components/POS/POSScreen.tsx','utf8');
-const search = pos.slice(pos.indexOf('{/* Search bar:'), pos.indexOf('{/* Product grid */}'));
+const search = pos.slice(pos.indexOf('{/* Werkzeuge in einer Reihe:'), pos.indexOf('{/* Product grid */}'));
 const cart = pos.slice(pos.indexOf('{/* Right: cart */}'),pos.indexOf('{/* Dialogs */}'));
 assert(search.includes('Artikel suchen...'));
 assert(!search.includes('setShowPfandRetoure(true)') && !search.includes('setShowBonliste(true)'),

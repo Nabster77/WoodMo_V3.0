@@ -19,12 +19,16 @@ import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { formatCurrency } from '@/lib/format';
 import {
-  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff,
+  ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff, Star,
 } from 'lucide-react';
 
 // Ansicht der Artikel-Kacheln (Standard: ohne Bilder), nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
+/** Virtuelle Warengruppe „Favoriten“: meistverkaufte Artikel (nur Anzeige, nicht in der Datenbank). */
+const FAVORITES_ID = '__favoriten__';
+const FAVORITE_DAYS = 14;
+const FAVORITE_COUNT = 16;
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
 const CART_WIDTH_KEY = 'pos_cart_width';
 const CART_PINNED_KEY = 'pos_cart_pinned';
@@ -226,12 +230,30 @@ export function POSScreen({
     () => [...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder),
     [categories],
   );
-  const longestCategoryName = Math.max(6, ...shownCategories.map((c) => c.name.length));
+  // Favoriten: automatisch die meistverkauften Artikel dieses Standorts der letzten 14 Tage
+  // (nur Anzeige, keine Datenbank-Änderung). Reihenfolge = Häufigkeit.
+  const favoriteRank = useMemo(() => {
+    const since = Date.now() - FAVORITE_DAYS * 24 * 60 * 60 * 1000;
+    const counts = new Map<string, number>();
+    for (const tx of transactions) {
+      if (tx.location !== currentLocation || tx.timestamp < since) continue;
+      for (const item of tx.items) {
+        if (item.isPfandRetoure || !item.productId) continue;
+        counts.set(item.productId, (counts.get(item.productId) ?? 0) + Math.max(0, item.quantity));
+      }
+    }
+    const ranked = [...counts.entries()].filter(([, qty]) => qty > 0).sort((a, b) => b[1] - a[1]).slice(0, FAVORITE_COUNT);
+    return new Map(ranked.map(([id], index) => [id, index]));
+  }, [transactions, currentLocation]);
+  const favoritesActive = activeCat === FAVORITES_ID && !search.trim();
 
   const visibleProducts = useMemo(() => {
     let list = products.filter((p) => p.available);
     if (search.trim()) {
       list = list.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
+    } else if (activeCat === FAVORITES_ID) {
+      list = list.filter((p) => favoriteRank.has(p.id));
+      if (sortMode === 'manual') return [...list].sort((a, b) => (favoriteRank.get(a.id) ?? 0) - (favoriteRank.get(b.id) ?? 0));
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
@@ -242,7 +264,7 @@ export function POSScreen({
       : sortMode === 'desc'
         ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
-  }, [products, activeCat, search, sortMode]);
+  }, [products, activeCat, search, sortMode, favoriteRank]);
 
   function addToCart(product: Product, shot: ShotOption | null = null, customPrice?: number) {
     const basePrice = customPrice !== undefined ? customPrice : product.prices[currentLocation];
@@ -360,76 +382,39 @@ export function POSScreen({
           : 'sm:grid-cols-[minmax(0,1.85fr)_minmax(220px,1fr)] lg:grid-cols-[minmax(0,2.15fr)_minmax(250px,1fr)]'}`}>
         {/* Left: products area */}
         <div className="flex min-h-0 min-w-0 flex-col sm:overflow-hidden">
-          {/* Categories always visible as readable labeled touch targets. */}
-          <div className="mb-1 flex shrink-0 items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Warengruppen</h2>
-          </div>
-          {/* Alle Gruppen-Knöpfe gleich breit: so breit wie der längste Gruppenname mit Symbol. */}
-          <div className="mb-2 grid max-h-[min(30dvh,15rem)] shrink-0 gap-2 overflow-y-auto overscroll-contain p-2 text-sm font-bold sm:text-base"
-            style={{ gridTemplateColumns: `repeat(auto-fill, min(100%, calc(${longestCategoryName * 1.1}ch + 3.75rem)))` }}>
+          {/* Warengruppen: eine schmale Leiste zum Wischen, Favoriten zuerst. Spart Platz für die Artikel. */}
+          <div role="tablist" aria-label="Warengruppen"
+            className="mb-2 flex shrink-0 snap-x gap-2 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:thin]">
+            <button type="button" role="tab" aria-selected={favoritesActive}
+              onClick={() => { setActiveCat(FAVORITES_ID); setSearch(''); setDragMode(false); }}
+              className={`flex h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-xl px-4 text-sm font-bold shadow-sm transition active:scale-[0.98] sm:text-base ${favoritesActive ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
+              <Star className="h-4 w-4 shrink-0" /> Favoriten
+            </button>
             {shownCategories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                aria-pressed={activeCat === cat.id && !search}
+              <button key={cat.id} type="button" role="tab" aria-selected={activeCat === cat.id && !search}
                 onClick={() => { setActiveCat(cat.id); setSearch(''); }}
-                className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search
-                  ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                  : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}
-              >
+                className={`flex h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-xl px-4 text-sm font-bold shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 truncate text-center">{cat.name}</span>
+                <span>{cat.name}</span>
               </button>
             ))}
           </div>
 
-          {/* Active category heading */}
-          <div className="mb-2 flex items-center gap-2">
-            {(() => {
-              const cat = categories.find((c) => c.id === activeCat);
-              if (search.trim()) {
-                return <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Suchergebnisse für "{search}"</h2>;
-              }
-              if (cat) {
-                return (
-                  <h2 className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">
-                      <DynamicIcon name={cat.icon} className="h-4 w-4" />
-                    </span>
-                    <span className="woodmo-cat-pulse-text text-slate-900 dark:text-white">{cat.name}</span>
-                  </h2>
-                );
-              }
-              return null;
-            })()}
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" aria-pressed={!showImages} onClick={toggleImages}
-                title={showImages ? 'Kompakte Kacheln ohne Bilder anzeigen' : 'Kacheln mit Bildern anzeigen'}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-                {showImages ? <ImageOff className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                {showImages ? 'Bilder aus' : 'Bilder an'}
-              </button>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
-                Sortierung:
-                <select aria-label="Kassenartikel sortieren" value={sortMode}
-                  onChange={event => { setSortMode(event.target.value as 'manual' | 'asc' | 'desc'); setDragMode(false); }}
-                  className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                  <option value="manual">Eigene Reihenfolge</option>
-                  <option value="asc">Aufsteigend (A–Z)</option>
-                  <option value="desc">Absteigend (Z–A)</option>
-                </select>
-              </label>
-            </div>
-          </div>
-
-          {/* Search bar: schmal, daneben „Kacheln verschieben“ über den Artikeln. */}
-          <div className="mb-2 flex shrink-0 items-center gap-2">
+          {/* Werkzeuge in einer Reihe: Suche · Sortierung · Kacheln verschieben · Bilder an/aus */}
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative w-full max-w-[15rem]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Artikel suchen..."
                 className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-base text-gray-900 placeholder-gray-400 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-white sm:text-sm" />
             </div>
-            {visibleProducts.length > 1 && !search.trim() && (
+            <select aria-label="Kassenartikel sortieren" value={sortMode}
+              onChange={event => { setSortMode(event.target.value as 'manual' | 'asc' | 'desc'); setDragMode(false); }}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+              <option value="manual">{favoritesActive ? 'Meistverkauft zuerst' : 'Eigene Reihenfolge'}</option>
+              <option value="asc">Aufsteigend (A–Z)</option>
+              <option value="desc">Absteigend (Z–A)</option>
+            </select>
+            {visibleProducts.length > 1 && !search.trim() && !favoritesActive && (
               <button type="button" aria-pressed={dragMode}
                 onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
@@ -440,13 +425,20 @@ export function POSScreen({
                 <Move className="h-3.5 w-3.5" /> {dragMode ? '✓ Fertig verschieben' : 'Kacheln verschieben'}
               </button>
             )}
+            <button type="button" aria-pressed={!showImages} onClick={toggleImages}
+              title={showImages ? 'Kompakte Kacheln ohne Bilder anzeigen' : 'Kacheln mit Bildern anzeigen'}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+              {showImages ? <ImageOff className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              {showImages ? 'Bilder aus' : 'Bilder an'}
+            </button>
+            {search.trim() && <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Suchergebnisse für „{search}“</span>}
           </div>
 
           {/* Product grid */}
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleProducts.length === 0 ? (
               <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-                <p className="text-sm">Keine Artikel gefunden</p>
+                <p className="text-sm">{favoritesActive ? 'Noch keine Verkäufe an diesem Standort. Favoriten erscheinen automatisch.' : 'Keine Artikel gefunden'}</p>
               </div>
             ) : (
               <div className={showImages
