@@ -46,6 +46,8 @@ assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/)
 assert.match(pos, /if \(favoriteIds\.length > 0\) \{/);
 // Kachel-Hülle muss die Kachel auf volle Zellbreite strecken (sonst fallen Bild-Kacheln mit aspect-square auf 0 zusammen).
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
+assert.match(tile, /group relative flex h-full min-h-\[6\.25rem\] w-full min-w-0 flex-col/, 'kompakte Kacheln immer volle Zellbreite und gleiche Höhe');
+assert.match(tile, /group relative isolate aspect-square w-full min-w-0/, 'Bild-Kacheln nie 0 breit');
 assert.match(pos, /if \(!favoriteEdit && favoritesActive && shownCategories\[0\]\) setActiveCat\(shownCategories\[0\]\.id\);/);
 // Warenkorb: SCHUSS zwischen Name und Menge, Details aufklappbar, Gesamt immer sichtbar.
 const cartRow = readFileSync('src/components/POS/CartItemRow.tsx', 'utf8');
