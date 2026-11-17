@@ -22,9 +22,11 @@ assert.match(lib, /version\.json\?t=\$\{Date\.now\(\)\}`, \{ cache: 'no-store'/,
 // Zugang: kleiner Knopf auf der Startseite, nur persönliches Administrator-Passwort.
 assert.match(home, /onUpdateCenter && \(/);
 assert.match(home, /aria-label="Update-Zentrale \(nur Administrator\)"/);
-assert.match(center, /allowManagerPassword=\{false\}/);
+// Zugang: persönliches Administrator-Passwort ODER das Verwaltungs-Passwort (Nutzerwunsch 17.11. 20:33).
+assert.match(center, /administrators=\{admins\} allowManagerPassword\n/);
 assert.match(center, /user\.active && user\.role === 'administrator'/);
-assert.match(center, /if \(administrator\) setUnlocked\(true\)/);
+assert.match(center, /onSuccess=\{\(\) => setUnlocked\(true\)\}/);
+assert.doesNotMatch(center, /open=\{updateAvailable\}/, 'Änderungsliste startet zugeklappt');
 
 // Prüfliste: Internet, alles übertragen, keine Kasse offen sind Pflicht; Backup/Speicherort Hinweis.
 assert.match(center, /required: true, state: online \? 'ok' : 'fail', title: 'Internet verbunden'/);
