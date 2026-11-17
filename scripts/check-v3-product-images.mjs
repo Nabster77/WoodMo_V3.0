@@ -77,3 +77,4 @@ assert.match(pos, /loadJSON<boolean>\(TILE_IMAGES_KEY, false\) === true/);
   assert.doesNotMatch(app, /Offline-Quarantäne:/);
   console.log('SICHERHEITSARCHIV: Hinweis nur für Admins und nur bei nicht übertragenen Bons/Kassen.');
 }
+assert.match(pos, /openDialogAfterConfirmedClose\.current = true;\n\s*const result = await onCloseCash/);
