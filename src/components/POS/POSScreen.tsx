@@ -25,10 +25,8 @@ import {
 // Ansicht der Artikel-Kacheln (Standard: ohne Bilder), nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
-/** Virtuelle Warengruppe „Favoriten“: meistverkaufte Artikel (nur Anzeige, nicht in der Datenbank). */
+/** Virtuelle Warengruppe „Favoriten“: nur von Hand markierte Artikel (nur Anzeige, nicht in der Datenbank). */
 const FAVORITES_ID = '__favoriten__';
-const FAVORITE_DAYS = 14;
-const FAVORITE_COUNT = 16;
 /** Von Hand markierte Favoriten, pro Gerät gespeichert (nicht in der Datenbank). */
 const FAVORITES_KEY = 'pos_favorites_v1';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
@@ -242,21 +240,6 @@ export function POSScreen({
     () => [...categories].filter((c) => c.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder),
     [categories],
   );
-  // Favoriten: automatisch die meistverkauften Artikel dieses Standorts der letzten 14 Tage
-  // (nur Anzeige, keine Datenbank-Änderung). Reihenfolge = Häufigkeit.
-  const favoriteRank = useMemo(() => {
-    const since = Date.now() - FAVORITE_DAYS * 24 * 60 * 60 * 1000;
-    const counts = new Map<string, number>();
-    for (const tx of transactions) {
-      if (tx.location !== currentLocation || tx.timestamp < since) continue;
-      for (const item of tx.items) {
-        if (item.isPfandRetoure || !item.productId) continue;
-        counts.set(item.productId, (counts.get(item.productId) ?? 0) + Math.max(0, item.quantity));
-      }
-    }
-    const ranked = [...counts.entries()].filter(([, qty]) => qty > 0).sort((a, b) => b[1] - a[1]).slice(0, FAVORITE_COUNT);
-    return new Map(ranked.map(([id], index) => [id, index]));
-  }, [transactions, currentLocation]);
   const favoritesActive = activeCat === FAVORITES_ID && !search.trim();
 
   const visibleProducts = useMemo(() => {
@@ -264,14 +247,9 @@ export function POSScreen({
     if (search.trim()) {
       list = list.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
     } else if (activeCat === FAVORITES_ID) {
-      // Von Hand markierte Favoriten haben Vorrang; ohne Markierung: meistverkaufte Artikel.
-      if (favoriteIds.length > 0) {
-        list = list.filter((p) => favoriteIds.includes(p.id));
-        if (sortMode === 'manual') return [...list].sort((a, b) => favoriteIds.indexOf(a.id) - favoriteIds.indexOf(b.id));
-      } else {
-        list = list.filter((p) => favoriteRank.has(p.id));
-        if (sortMode === 'manual') return [...list].sort((a, b) => (favoriteRank.get(a.id) ?? 0) - (favoriteRank.get(b.id) ?? 0));
-      }
+      // Nur die von Hand markierten Favoriten, in der Reihenfolge der Markierung.
+      list = list.filter((p) => favoriteIds.includes(p.id));
+      if (sortMode === 'manual') return [...list].sort((a, b) => favoriteIds.indexOf(a.id) - favoriteIds.indexOf(b.id));
     } else if (activeCat) {
       list = list.filter((p) => p.categoryId === activeCat);
     }
@@ -282,7 +260,7 @@ export function POSScreen({
       : sortMode === 'desc'
         ? (a, b) => kindRank(a) - kindRank(b) || b.name.localeCompare(a.name, 'de', { sensitivity: 'base' })
         : (a, b) => a.sortOrder - b.sortOrder);
-  }, [products, activeCat, search, sortMode, favoriteRank, favoriteIds]);
+  }, [products, activeCat, search, sortMode, favoriteIds]);
 
   function addToCart(product: Product, shot: ShotOption | null = null, customPrice?: number) {
     const basePrice = customPrice !== undefined ? customPrice : product.prices[currentLocation];
@@ -403,10 +381,10 @@ export function POSScreen({
           {/* Warengruppen: eine schmale Leiste zum Wischen, Favoriten zuerst. Spart Platz für die Artikel. */}
           <div role="tablist" aria-label="Warengruppen"
             className="mb-2 flex shrink-0 snap-x gap-2 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:thin]">
-            <button type="button" role="tab" aria-selected={favoritesActive}
+            <button type="button" role="tab" aria-selected={favoritesActive} aria-label="Favoriten" title="Favoriten"
               onClick={() => { setActiveCat(FAVORITES_ID); setSearch(''); setDragMode(false); }}
-              className={`flex h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-xl px-4 text-sm font-bold shadow-sm transition active:scale-[0.98] sm:text-base ${favoritesActive ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
-              <Star className="h-4 w-4 shrink-0" /> Favoriten
+              className={`flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl shadow-sm transition active:scale-[0.98] ${favoritesActive ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
+              <Star className="h-5 w-5" />
             </button>
             {shownCategories.map((cat) => (
               <button key={cat.id} type="button" role="tab" aria-selected={activeCat === cat.id && !search}
@@ -428,7 +406,7 @@ export function POSScreen({
             <select aria-label="Kassenartikel sortieren" value={sortMode}
               onChange={event => { setSortMode(event.target.value as 'manual' | 'asc' | 'desc'); setDragMode(false); }}
               className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-              <option value="manual">{favoritesActive ? (favoriteIds.length > 0 ? 'Wie markiert' : 'Meistverkauft zuerst') : 'Eigene Reihenfolge'}</option>
+              <option value="manual">{favoritesActive ? 'Wie markiert' : 'Eigene Reihenfolge'}</option>
               <option value="asc">Aufsteigend (A–Z)</option>
               <option value="desc">Absteigend (Z–A)</option>
             </select>
@@ -473,7 +451,7 @@ export function POSScreen({
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleProducts.length === 0 ? (
               <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-                <p className="max-w-sm text-center text-sm">{favoritesActive ? 'Noch keine Favoriten. Auf „Favoriten wählen“ tippen und Artikel markieren – oder sie erscheinen nach den ersten Verkäufen automatisch.' : 'Keine Artikel gefunden'}</p>
+                <p className="max-w-sm text-center text-sm">{favoritesActive ? 'Noch keine Favoriten. Auf „Favoriten wählen“ tippen und in den Warengruppen Artikel markieren.' : 'Keine Artikel gefunden'}</p>
               </div>
             ) : (
               <div className={showImages
