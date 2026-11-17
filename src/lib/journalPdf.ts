@@ -351,6 +351,11 @@ function pfandTaxNote(s: LocationStats): string {
     : '';
 }
 
+/** Umsatz + Pfand-Saldo = alles, was bar und mit Karte kassiert wurde. */
+function collectedTotal(s: LocationStats): number {
+  return Math.round((s.total + s.pfandSaldo) * 100) / 100;
+}
+
 function summaryCards(s: LocationStats, accentColor: string): string {
   const taxSummaryLine = Object.keys(s.taxByRate).length > 0
     ? Object.entries(s.taxByRate).map(([r, v]) => `MwSt ${r}%: ${formatCurrency(v)}`).join(' · ')
@@ -362,6 +367,7 @@ function summaryCards(s: LocationStats, accentColor: string): string {
     <div class="summary-card pfand"><div class="label">Pfand eingenommen</div><div class="value">${formatCurrency(s.pfandCollected)}</div></div>
     <div class="summary-card pfand"><div class="label">Pfand retourniert</div><div class="value">${formatCurrency(s.pfandReturned)}</div></div>
     <div class="summary-card pfand"><div class="label">${pfandSaldoLabel(s.pfandSaldo)}</div><div class="value">${pfandSaldoDisplay(s.pfandSaldo)}</div></div>
+    <div class="summary-card accent"><div class="label">Gesamt kassiert (inkl. Pfand)</div><div class="value">${formatCurrency(collectedTotal(s))}</div><div class="label" style="margin-top:3px">= Bar + Karte</div></div>
     <div class="summary-card count"><div class="label">Verkäufe / Stornos</div><div class="value">${s.count} / ${s.stornoCount}</div></div>
     <div class="summary-card"><div class="label">MwSt nach Satz</div><div class="value" style="font-size:11px">${taxSummaryLine}</div></div>
   </div>`;
@@ -496,6 +502,7 @@ function combinedSection(transactions: Transaction[], categories: Category[], st
         <div class="summary-card pfand"><div class="label">Pfand eingenommen</div><div class="value">${formatCurrency(stats.pfandCollected)}</div></div>
         <div class="summary-card pfand"><div class="label">Pfand retourniert</div><div class="value">${formatCurrency(stats.pfandReturned)}</div></div>
         <div class="summary-card pfand"><div class="label">${pfandSaldoLabel(stats.pfandSaldo)}</div><div class="value">${pfandSaldoDisplay(stats.pfandSaldo)}</div></div>
+        <div class="summary-card accent"><div class="label">Gesamt kassiert (inkl. Pfand)</div><div class="value">${formatCurrency(collectedTotal(stats))}</div><div class="label" style="margin-top:3px">= Bar + Karte</div></div>
         <div class="summary-card count"><div class="label">Verkäufe / Stornos</div><div class="value">${stats.count} / ${stats.stornoCount}</div></div>
         <div class="summary-card"><div class="label">MwSt nach Satz</div><div class="value" style="font-size:11px">${taxSummaryLine}</div></div>
       </div>
@@ -546,6 +553,7 @@ export function buildJournalHTML(data: JournalReportData): string {
           ${compareRow('Pfand eingenommen', formatCurrency(fhStats.pfandCollected), formatCurrency(bgStats.pfandCollected), formatCurrency(totalStats.pfandCollected))}
           ${compareRow('Pfand retourniert', formatCurrency(fhStats.pfandReturned), formatCurrency(bgStats.pfandReturned), formatCurrency(totalStats.pfandReturned))}
           ${compareRow('Pfand-Saldo', pfandSaldoCell(fhStats.pfandSaldo), pfandSaldoCell(bgStats.pfandSaldo), pfandSaldoCell(totalStats.pfandSaldo))}
+          ${compareRow('Gesamt kassiert (inkl. Pfand)', formatCurrency(collectedTotal(fhStats)), formatCurrency(collectedTotal(bgStats)), formatCurrency(collectedTotal(totalStats)))}
         </tbody>
       </table>`;
 

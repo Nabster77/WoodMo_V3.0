@@ -53,4 +53,7 @@ assert.match(adminTagesinfo, /Gesamt kassiert \(inkl\. Pfand\)[\s\S]{0,400}forma
 const closeDialog = readFileSync('src/components/POS/DailyCloseDialog.tsx','utf8');
 assert.match(closeDialog, /Kassenbestand \(nur Bargeld\)[\s\S]{0,900}label="= Erwarteter Kassenbestand"/, 'Abschluss: Kassenbestand nur aus Bargeld, von oben nach unten');
 assert.match(closeDialog, /Umsatz des Tages \(zur Information\)[\s\S]{0,400}davon Karte \(nicht in der Kasse\)/, 'Abschluss: Umsatz getrennt, Karte klar ausgewiesen');
+const journalPdfSrc = readFileSync('src/lib/journalPdf.ts','utf8');
+assert.equal((journalPdfSrc.match(/Gesamt kassiert \(inkl\. Pfand\)/g) ?? []).length, 3, 'Journal-PDF: Gesamt kassiert je Standort, gesamt und im Vergleich');
+assert.match(closeDialog, /Gesamt kassiert \(inkl\. Pfand\) = Bar \+ Karte<\/span><span>\$\{formatCurrency\(Math\.round\(\(sums\.txTotal \+ pfandBalance\)/, 'Tagesabschluss-PDF: Gesamt kassiert');
 console.log('V3-LAYOUT: Home mit zwei Kacheln, Login/Home, Warenkorb-Erhalt bei Navigation, 65/35-Aufteilung und Kassenfunktionen geprüft.');
