@@ -433,7 +433,11 @@ export function POSScreen({
               <option value="desc">Absteigend (Z–A)</option>
             </select>
             <button type="button" aria-pressed={favoriteEdit}
-              onClick={() => { setFavoriteEdit((v) => !v); setDragMode(false); }}
+              onClick={() => {
+                // Markieren geschieht in den Warengruppen; die Favoriten-Ansicht selbst würde sich beim Markieren verändern.
+                if (!favoriteEdit && favoritesActive && shownCategories[0]) setActiveCat(shownCategories[0].id);
+                setFavoriteEdit((v) => !v); setDragMode(false);
+              }}
               title="Artikel als Favorit markieren oder entfernen"
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${favoriteEdit
                 ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
@@ -476,7 +480,7 @@ export function POSScreen({
                 ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
                 : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
-                  <div key={product.id} className="relative min-w-0">
+                  <div key={product.id} className="relative grid min-w-0">
                   <ProductTile
                     compact={!showImages}
                     product={product}

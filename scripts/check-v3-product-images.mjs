@@ -44,6 +44,9 @@ assert.match(pos, /!search\.trim\(\) && !favoritesActive && !favoriteEdit && \(/
 assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
 assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
 assert.match(pos, /if \(favoriteIds\.length > 0\) \{/);
+// Kachel-Hülle muss die Kachel auf volle Zellbreite strecken (sonst fallen Bild-Kacheln mit aspect-square auf 0 zusammen).
+assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
+assert.match(pos, /if \(!favoriteEdit && favoritesActive && shownCategories\[0\]\) setActiveCat\(shownCategories\[0\]\.id\);/);
 // Warenkorb: SCHUSS zwischen Name und Menge, Details aufklappbar, Gesamt immer sichtbar.
 const cartRow = readFileSync('src/components/POS/CartItemRow.tsx', 'utf8');
 assert.ok(cartRow.indexOf("'SCHUSS ✎' : '+ SCHUSS'") < cartRow.indexOf('Menge verringern'), 'SCHUSS vor der Mengeneingabe');
