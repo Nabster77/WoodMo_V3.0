@@ -289,20 +289,27 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
             {session.dailyCloseReceiptNumber && <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Belegnummer: {formatDailyCloseReceiptNumber(session.dailyCloseReceiptNumber, session.dailyCloseReceiptLocation ?? session.location, session.closedAt ?? session.openedAt, session.dailyCloseReceiptYear)}</p>}
           </div>
 
-          {/* Summary */}
-          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+          {/* Kassenbestand: nur Bargeld, von oben nach unten gerechnet */}
+          <div className="mb-3 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Kassenbestand (nur Bargeld)</p>
             <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
-            <Row label="Brutto-Umsatz (ohne Pfand)" value={<MoneyAmount value={txTotal} />} bold />
-            <Row label="davon Barumsatz (ohne Pfand)" value={<MoneyAmount value={cashTxTotal} />} />
-            <Row label="davon Kartenumsatz (ohne Pfand)" value={<MoneyAmount value={cardTxTotal} />} />
+            <Row label="Barumsatz (ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
             <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
-            <Row label="Pfandretouren" value={`- ${formatCurrency(cashPfandPayout)}`} />
+            <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
             <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
             <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
             {openingCorrectionTotal !== 0 && <Row label="Korrekturen am Anfangsbestand (bereits enthalten)" value={`${openingCorrectionTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(openingCorrectionTotal))}`} />}
             <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
-              <Row label="Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
+              <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
             </div>
+          </div>
+
+          {/* Umsatz zur Information: Karte fließt nicht in den Kassenbestand */}
+          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Umsatz des Tages (zur Information)</p>
+            <Row label="Umsatz gesamt (ohne Pfand)" value={<MoneyAmount value={txTotal} />} bold />
+            <Row label="davon bar" value={<MoneyAmount value={cashTxTotal} />} />
+            <Row label="davon Karte (nicht in der Kasse)" value={<MoneyAmount value={cardTxTotal} />} />
           </div>
 
           {/* Tax breakdown */}
