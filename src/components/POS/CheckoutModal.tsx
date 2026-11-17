@@ -81,7 +81,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
           <div className="max-h-40 overflow-y-auto space-y-1">
             {items.map((item) => (
               <div key={`${item.product.id}-${item.shot?.id ?? 'none'}-${item.isPfandRetoure ? 'pf' : 'reg'}`} className="flex items-center justify-between text-sm">
-                <span className={item.isPfandRetoure ? 'flex items-center gap-1.5 text-teal-600 dark:text-teal-400' : 'text-gray-600 dark:text-gray-400'}>
+                <span className={item.isPfandRetoure ? 'flex items-center gap-1.5 text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}>
                   {item.isPfandRetoure && <Recycle className="h-3.5 w-3.5" />}
                   {item.quantity}× {item.shot && item.shot.id !== 'none' ? `${item.product.name} + ${item.shot.name}` : item.product.name}
                 </span>
@@ -108,12 +108,12 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
             <span className={`text-3xl font-bold ${(splitPayout ? goodsTotal : total) < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(splitPayout ? goodsTotal : total)}</span>
           </div>
           {splitPayout && (
-            <div role="status" className="rounded-xl border border-teal-500/60 bg-teal-50 p-3 text-sm dark:bg-teal-900/20">
-              <div className="flex items-baseline justify-between font-bold text-teal-700 dark:text-teal-300">
+            <div role="status" className="rounded-xl border border-green-500/60 bg-green-50 p-3 text-sm dark:bg-green-900/20">
+              <div className="flex items-baseline justify-between font-bold text-green-700 dark:text-green-300">
                 <span className="flex items-center gap-1.5"><Recycle className="h-4 w-4" /> Pfand bar auszahlen</span>
                 <span className="text-xl">{formatCurrency(cashPayout)}</span>
               </div>
-              <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">
+              <p className="mt-1 text-xs text-green-800 dark:text-green-200">
                 Ware wird per Karte gebucht. Die Pfand-Retoure wird bar aus der Kasse ausgezahlt und mindert den Kassenbestand (eigener Beleg „Pfandausgabe“).
               </p>
             </div>
@@ -176,7 +176,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
           <button
             onClick={() => void handleConfirm()}
             disabled={!canPay}
-            className={`sticky bottom-0 w-full rounded-xl py-4 text-lg font-bold text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${isPfandOnly ? 'bg-teal-600 hover:bg-teal-700' : paymentMethod === 'card' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
+            className={`sticky bottom-0 w-full rounded-xl py-4 text-lg font-bold text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${isPfandOnly ? 'bg-green-400 !text-slate-950 hover:bg-green-300' : paymentMethod === 'card' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
           >
             <Check className="mr-1.5 inline h-5 w-5" />
             {saving ? 'Wird gebucht …' : isPfandOnly ? 'Pfandausgabe abschließen & buchen' : 'Bezahlen abschließen & buchen'}

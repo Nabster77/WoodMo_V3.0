@@ -571,32 +571,32 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
       </div>
 
       {/* Global pfand settings */}
-      <div className="mb-4 rounded-2xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-700 dark:bg-teal-900/20">
+      <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
         <div className="mb-2 flex items-center gap-2">
-          <Recycle className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-          <p className="text-sm font-bold text-teal-800 dark:text-teal-300">Globaler Pfandbetrag</p>
+          <Recycle className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <p className="text-sm font-bold text-green-800 dark:text-green-300">Globaler Pfandbetrag</p>
         </div>
-        <p className="mb-3 text-xs text-teal-700/80 dark:text-teal-400/70">Diese Beträge gelten für alle als Pfandartikel markierten Artikel. Pro Standort individuell einstellbar.</p>
+        <p className="mb-3 text-xs text-green-700/80 dark:text-green-400/70">Diese Beträge gelten für alle als Pfandartikel markierten Artikel. Pro Standort individuell einstellbar.</p>
         <div className="flex flex-wrap items-end gap-4">
           {LOCATIONS.map((loc) => {
             const val = loc === 'Friedrichshafen' ? pfandF : pfandB;
             const setVal = loc === 'Friedrichshafen' ? setPfandF : setPfandB;
             return (
               <div key={loc}>
-                <label className="mb-1 block text-xs font-semibold text-teal-700 dark:text-teal-400">{loc}</label>
+                <label className="mb-1 block text-xs font-semibold text-green-700 dark:text-green-400">{loc}</label>
       <div className="flex items-center gap-1">
                   <input value={val} onChange={(e) => { setVal(e.target.value); setPfandEditing(true); setPfandPhase('dirty'); setPfandError(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePfandSettings(); } }}
                     placeholder="0,00" inputMode="decimal" disabled={pfandPhase === 'saving'}
                     aria-label={`Pfandbetrag ${loc} in Euro`}
-                    className="w-24 rounded-lg border border-teal-300 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-teal-500 focus:outline-none disabled:opacity-50 dark:border-teal-700 dark:bg-gray-900 dark:text-gray-100" />
-                  <span className="text-sm text-teal-600 dark:text-teal-400">€</span>
+                    className="w-24 rounded-lg border border-green-300 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-green-500 focus:outline-none disabled:opacity-50 dark:border-green-700 dark:bg-gray-900 dark:text-gray-100" />
+                  <span className="text-sm text-green-600 dark:text-green-400">€</span>
                 </div>
               </div>
             );
           })}
           <button type="button" onClick={() => void savePfandSettings()} disabled={pfandPhase === 'saving'}
-            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 active:scale-95 disabled:opacity-50">
+            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-95 disabled:opacity-50">
             {pfandPhase === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {pfandPhase === 'saving' ? 'Cloud wird geprüft …' : 'Speichern'}
           </button>
@@ -611,9 +611,9 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
         </div>
       </div>
       <div className="-mx-6 -mt-4 mb-0 flex gap-1.5 overflow-x-auto px-6 pb-6 pt-4">
-        <button onClick={() => setFilterCat('')} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${!filterCat ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>Alle</button>
+        <button onClick={() => setFilterCat('')} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition ${!filterCat ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}>Alle</button>
         {[...categories].filter((cat) => cat.id !== SHOT_CATEGORY_ID).sort((a, b) => a.sortOrder - b.sortOrder).map((cat) => (
-          <button key={cat.id} onClick={() => setFilterCat(cat.id)} style={cat.color.startsWith("#") ? { backgroundColor: cat.color } : cat.color.startsWith("linear-gradient(") ? { background: cat.color } : undefined} className={`whitespace-nowrap rounded-lg bg-gradient-to-r px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 ${cat.color.startsWith("#") || cat.color.startsWith("linear-gradient(") ? "" : cat.color} ${filterCat === cat.id ? "woodmo-filter-active" : "opacity-85"}`}>{cat.name}</button>
+          <button key={cat.id} onClick={() => setFilterCat(cat.id)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition ${filterCat === cat.id ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-500 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'}`}>{cat.name}</button>
         ))}
       </div>
       <div className="mb-3 flex flex-wrap items-center justify-start gap-3">
@@ -627,7 +627,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
               else { setFilterCat(''); setSortMode(value as 'alphabetical' | 'reverse' | 'manual'); }
               setDragEnabled(false);
             }}
-            className={`rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white ${filterCat ? 'woodmo-filter-active' : ''}`}>
+            className={`rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white ${filterCat ? 'woodmo-cat-active' : ''}`}>
             <option value="manual">Filter &amp; Sortierung</option>
             <option value="alphabetical">Aufsteigend (A–Z)</option>
             <option value="reverse">Absteigend (Z–A)</option>
@@ -661,7 +661,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
                 <p className="truncate font-semibold text-gray-900 dark:text-gray-100">
                   {product.name}
                   {product.hasShot && <Wine className="ml-1 inline h-3.5 w-3.5 text-blue-500" />}
-                  {product.isPfandArticle && <Recycle className="ml-1 inline h-3.5 w-3.5 text-teal-500" />}
+                  {product.isPfandArticle && <Recycle className="ml-1 inline h-3.5 w-3.5 text-green-500" />}
                   {product.hasIndividualPrice && <Euro className="ml-1 inline h-3.5 w-3.5 text-amber-500" />}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -851,10 +851,10 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
           {/* Pfand & Individual price toggles */}
           <div className="space-y-2.5">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              <Recycle className="h-4 w-4 text-teal-500" />
-              <input type="checkbox" checked={isPfandArticle} onChange={(e) => setIsPfandArticle(e.target.checked)} className="h-4 w-4 rounded accent-teal-600" />
+              <Recycle className="h-4 w-4 text-green-500" />
+              <input type="checkbox" checked={isPfandArticle} onChange={(e) => setIsPfandArticle(e.target.checked)} className="h-4 w-4 rounded accent-green-600" />
               Pfandartikel
-              {isPfandArticle && <span className="text-xs text-teal-600 dark:text-teal-400">(F: {formatCurrency(pfandSettings.Friedrichshafen)} · B: {formatCurrency(pfandSettings.Bregenz)})</span>}
+              {isPfandArticle && <span className="text-xs text-green-600 dark:text-green-400">(F: {formatCurrency(pfandSettings.Friedrichshafen)} · B: {formatCurrency(pfandSettings.Bregenz)})</span>}
             </label>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               <Euro className="h-4 w-4 text-amber-500" />
@@ -1206,7 +1206,7 @@ function LocationSessionCard({ loc, session, total, count, totalNet, totalTax, t
         <div className="mb-3 flex items-center gap-4 text-sm">
           {totalPfand > 0 && (
             <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <Recycle className="h-4 w-4 text-teal-500" />
+              <Recycle className="h-4 w-4 text-green-500" />
               Pfand: <span className="font-bold">{formatCurrency(totalPfand)}</span>
             </div>
           )}
@@ -1369,9 +1369,9 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
                   <p className="text-xs text-rose-700/70 dark:text-rose-400/70">MwSt</p>
                   <p className="text-base font-bold text-rose-700 dark:text-rose-300">{formatCurrency(totalTax)}</p>
                 </div>
-                <div className="rounded-xl bg-teal-50 px-3 py-2.5 dark:bg-teal-900/20">
-                  <p className="text-xs text-teal-700/70 dark:text-teal-400/70">Pfand</p>
-                  <p className="text-base font-bold text-teal-700 dark:text-teal-300">{formatCurrency(totalPfand)}</p>
+                <div className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
+                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Pfand</p>
+                  <p className="text-base font-bold text-green-700 dark:text-green-300">{formatCurrency(totalPfand)}</p>
                 </div>
               </div>
 
@@ -1491,7 +1491,7 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
                             <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">{p.qty}</td>
                             <td className="px-3 py-2 text-right font-bold text-gray-900 dark:text-gray-100">{formatCurrency(p.gross)}</td>
                             <td className="px-3 py-2 text-right text-gray-500 dark:text-gray-400">{formatCurrency(p.tax)}</td>
-                            <td className="px-3 py-2 text-right text-teal-600 dark:text-teal-400">{formatCurrency(p.pfand)}</td>
+                            <td className="px-3 py-2 text-right text-green-600 dark:text-green-400">{formatCurrency(p.pfand)}</td>
                           </tr>
                         ))}
                       </tbody>
