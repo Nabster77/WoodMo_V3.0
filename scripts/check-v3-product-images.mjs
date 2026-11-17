@@ -36,14 +36,14 @@ assert.match(pos, /role="tablist" aria-label="Warengruppen"/);
 assert.match(pos, /snap-x gap-2 overflow-x-auto/);
 assert.doesNotMatch(pos, /longestCategoryName|Warengruppen<\/h2>|max-h-\[min\(30dvh/);
 assert.match(pos, /const FAVORITES_ID = '__favoriten__';/);
-assert.match(pos, /<Star className="h-4 w-4 shrink-0" \/> Favoriten/);
-assert.match(pos, /if \(item\.isPfandRetoure \|\| !item\.productId\) continue;/);
-assert.match(pos, /tx\.location !== currentLocation \|\| tx\.timestamp < since/);
+assert.match(pos, /aria-label="Favoriten" title="Favoriten"/);
+assert.match(pos, /flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl/, 'Favoriten: kleines Quadrat nur mit Stern');
+assert.doesNotMatch(pos, /favoriteRank|FAVORITE_DAYS/, 'Favoriten nur von Hand, keine Automatik (Nutzerwunsch 17.11. 20:43)');
+assert.match(pos, /list = list\.filter\(\(p\) => favoriteIds\.includes\(p\.id\)\);/);
 assert.match(pos, /!search\.trim\(\) && !favoritesActive && !favoriteEdit && \(/, 'Kacheln verschieben nicht in Favoriten');
 // Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
 assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
 assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
-assert.match(pos, /if \(favoriteIds\.length > 0\) \{/);
 // Kachel-Hülle muss die Kachel auf volle Zellbreite strecken (sonst fallen Bild-Kacheln mit aspect-square auf 0 zusammen).
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
 assert.match(tile, /group relative flex h-full min-h-\[6\.25rem\] w-full min-w-0 flex-col/, 'kompakte Kacheln immer volle Zellbreite und gleiche Höhe');
