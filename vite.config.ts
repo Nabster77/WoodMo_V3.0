@@ -58,6 +58,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // Lädt eine offene ältere App nach dem Update einmal selbst neu (siehe public/sw-reload.js).
+        importScripts: ['sw-reload.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/storage/v1/object/public/article-images/'),
