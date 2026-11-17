@@ -30,6 +30,8 @@ import type { PfandSettings } from '@/types';
 import type { Location, StaffUser } from '@/types';
 import { POSScreen } from '@/components/POS/POSScreen';
 import { WoodmoHome } from '@/components/WoodmoHome';
+import { UpdateCenter, UpdateReport } from '@/components/UpdateCenter';
+import { clearUpdateCheck, markBackupExported, readUpdateCheck } from '@/lib/updateCenter';
 import { WoodmoBrand } from '@/components/WoodmoBrand';
 import { AdminScreen } from '@/components/Admin/AdminScreen';
 import { JournalScreen } from '@/components/Journal/JournalScreen';
@@ -71,6 +73,8 @@ type OpeningManagementAccess =
 export default function App() {
   const { theme, toggle } = useTheme();
   const store = useStore();
+  const [updateCenterOpen, setUpdateCenterOpen] = useState(false);
+  const [updateReport, setUpdateReport] = useState(() => readUpdateCheck());
   const [tab, setTab] = useState<Tab>('pos');
   // A cash register remains mounted when navigating Home/Admin/Journal: the
   // active unsaved cart must not disappear merely because its view is hidden.
@@ -808,6 +812,7 @@ export default function App() {
             location={store.activeSession?.location ?? store.selectedLocation}
             status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
             testMode={testMode}
+            onUpdateCenter={() => setUpdateCenterOpen(true)}
           />
         )}
         {posVisited && (
@@ -1101,6 +1106,7 @@ export default function App() {
                 };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const savedAs = await saveBackupFile(backupTarget, blob, `kasse-backup-${formatDateISO(Date.now())}.json`);
+                markBackupExported();
                 if (backupTarget.mode === 'folder') alert(`Backup gespeichert: ${savedAs}`);
                 } catch (error) {
                   // Keep the existing error dialog and propagate failure to the
@@ -1245,6 +1251,16 @@ export default function App() {
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
       <ArchivePermissionGate suspended={deviceSetupOpen} onOpenSetup={openDeviceSetup} />
+      {updateCenterOpen && (
+        <UpdateCenter administrators={staff.users} online={online}
+          cloudStatus={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
+          sessionOpen={Boolean(store.activeSession)} transactions={store.transactions} cashSessions={store.cashSessions}
+          onClose={() => setUpdateCenterOpen(false)} />
+      )}
+      {updateReport && (
+        <UpdateReport check={updateReport} transactions={store.transactions} cashSessions={store.cashSessions}
+          onClose={() => { clearUpdateCheck(); setUpdateReport(null); }} />
+      )}
       {deviceSetupOpen && <DeviceSetupDialog warning={pdfArchiveWarning} onComplete={() => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); }} onCancel={readDeviceSetup() ? () => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); } : undefined} />}
       <InstallPrompt />
       <RootPasswordWarning visible={signedInUser === 'admin' && rootWarningOpen} onClose={() => { saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); setRootWarningOpen(false); }} />

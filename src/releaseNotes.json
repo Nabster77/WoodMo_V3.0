@@ -1,0 +1,15 @@
+{
+  "title": "Update November 2026",
+  "notes": [
+    "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
+    "Warenkorb: einklappbar, Breite mit dem Finger verschiebbar, anheften möglich, Schuss auch eingeklappt",
+    "Pfand: Mehrwertsteuer wird jetzt richtig auf das Pfand gerechnet (Journal, Tagesabschluss, PDF)",
+    "Pfand überall in Grün, Pfand-Retoure mit Zahleneingabe",
+    "Kopfzeile mit großer Uhrzeit, Hinweis „Zahlung erfolgreich“ in der Bildschirmmitte",
+    "Sync: Kassen-Konflikt wird nur noch am selben Standort gemeldet (wichtig für Friedrichshafen + Bregenz gleichzeitig)",
+    "Tagesabschluss: Eröffnungsfenster erscheint danach zuverlässig",
+    "Excel: Spalte „Kennzeichnung“, Blatt „Pfand“",
+    "Neu: diese Update-Zentrale mit Prüfliste und Prüfbericht",
+    "Supabase wird täglich wachgehalten (nur lesend)"
+  ]
+}
