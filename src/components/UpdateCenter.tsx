@@ -78,7 +78,7 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
       const status = await archiveFolderStatus().catch(() => 'missing' as const);
       setFolder(status === 'missing'
         ? { state: 'fail', detail: 'Ordner ist eingetragen, aber nicht mehr verfügbar.' }
-        : { state: 'ok', detail: `Ordner „${setup.folderLabel ?? 'eingerichtet'}“ bleibt erhalten${status === 'needs-permission' ? ' (Android fragt beim ersten Speichern wie gewohnt nach der Erlaubnis)' : ''}.` });
+        : { state: 'ok', detail: `Ordner „${setup.folderLabel ?? 'eingerichtet'}“ bleibt.` });
     }
   }
 
@@ -87,8 +87,8 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
   if (!unlocked) {
     return (
       <div className="fixed inset-0 z-50 bg-black/60">
-        <PasswordGate title="Update-Zentrale · Entwickler" administrators={admins} allowManagerPassword={false}
-          onSuccess={(administrator) => { if (administrator) setUnlocked(true); }} onCancel={onClose} />
+        <PasswordGate title="Update-Zentrale" administrators={admins} allowManagerPassword
+          onSuccess={() => setUnlocked(true)} onCancel={onClose} />
       </div>
     );
   }
@@ -97,17 +97,17 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
   const backupAt = lastBackupExport();
   const backupToday = backupAt !== null && formatDateISO(backupAt) === formatDateISO(Date.now());
   const checks: { state: CheckState; title: string; detail?: string; required: boolean }[] = [
-    { required: true, state: online ? 'ok' : 'fail', title: 'Internet verbunden', detail: online ? undefined : 'Ohne Internet kein Update. Die jetzige Version läuft weiter.' },
+    { required: true, state: online ? 'ok' : 'fail', title: 'Internet verbunden', detail: online ? undefined : 'Ohne Internet kein Update.' },
     { required: true,
       state: pending === null ? 'wait' : pending === 0 && cloudStatus === 'ok' ? 'ok' : pending < 0 ? 'warn' : 'fail',
       title: 'Alle Buchungen übertragen',
-      detail: pending === null ? undefined : pending > 0 ? `${pending} Eintrag/Einträge warten noch auf die Übertragung. Erst „Sync Cloud“.`
-        : cloudStatus !== 'ok' ? 'Cloud-Abgleich läuft oder steht aus. Kurz warten bzw. „Sync Cloud“.' : undefined },
+      detail: pending === null ? undefined : pending > 0 ? `${pending} offen – „Sync Cloud“ tippen.`
+        : cloudStatus !== 'ok' ? 'Abgleich läuft – kurz warten.' : undefined },
     { required: true, state: sessionOpen ? 'fail' : 'ok', title: 'Keine Kasse offen auf diesem Gerät',
       detail: sessionOpen ? 'Erst den Tagesabschluss machen.' : undefined },
     { required: false, state: backupToday ? 'ok' : 'warn', title: 'Backup von heute',
-      detail: backupToday ? `Exportiert um ${new Date(backupAt ?? 0).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr (dieses Gerät).`
-        : 'Auf diesem Gerät heute noch kein Backup exportiert. Empfohlen: Verwaltung → Backup exportieren (oder am PC).' },
+      detail: backupToday ? `Um ${new Date(backupAt ?? 0).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr.`
+        : 'Heute noch keins auf diesem Gerät (Hinweis, kein Muss).' },
     { required: false, state: folder?.state === 'fail' ? 'warn' : folder?.state ?? 'wait', title: 'Speicherort für PDFs', detail: folder?.detail },
   ];
   const blocked = checks.some((check) => check.required && check.state !== 'ok');
@@ -149,8 +149,8 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
         {(() => {
           const notes: BuildInfo = updateAvailable && typeof onlineBuild === 'object' && onlineBuild !== null ? onlineBuild : INSTALLED_BUILD;
           return notes.notes.length > 0 && (
-            <details className="mt-3 rounded-2xl border border-slate-200 p-3 text-sm dark:border-white/15" open={updateAvailable}>
-              <summary className="cursor-pointer font-semibold text-slate-900 dark:text-white">{updateAvailable ? 'Das ist neu' : 'Inhalt dieser Version'}{notes.title ? ` · ${notes.title}` : ''}</summary>
+            <details className="mt-3 rounded-2xl border border-slate-200 p-3 text-sm dark:border-white/15">
+              <summary className="cursor-pointer font-semibold text-slate-900 dark:text-white">{updateAvailable ? 'Was ist neu?' : 'Inhalt dieser Version'} ({notes.notes.length} Punkte, zum Aufklappen)</summary>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700 dark:text-slate-300">
                 {notes.notes.map((note) => <li key={note}>{note}</li>)}
               </ul>
@@ -180,7 +180,7 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
               className="min-h-12 w-full rounded-xl bg-slate-900 px-4 py-3 text-base font-bold text-white disabled:opacity-40 dark:bg-white dark:!text-slate-900">
               {updateAvailable ? 'Jetzt aktualisieren' : 'Neu starten und prüfen'}
             </button>
-            {blocked && <p className="text-center text-xs text-slate-500 dark:text-slate-400">Erst wenn die drei oberen Punkte grün sind, ist der Knopf frei.</p>}
+            {blocked && <p className="text-center text-xs text-slate-500 dark:text-slate-400">Knopf frei, sobald die oberen drei Punkte grün sind.</p>}
             <button type="button" onClick={() => void refresh()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/30 dark:text-slate-100">
               <RefreshCw className="h-4 w-4" /> Erneut prüfen
             </button>
