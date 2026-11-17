@@ -1365,7 +1365,7 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
               {/* Summary tiles */}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
-                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Brutto</p>
+                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Umsatz (ohne Pfand)</p>
                   <p className="text-base font-bold text-green-700 dark:text-green-400">{formatCurrency(total)}</p>
                 </div>
                 <div className="rounded-xl bg-blue-50 px-3 py-2.5 dark:bg-blue-900/20">
@@ -1377,9 +1377,18 @@ function DayInfoDialog({ location, date, categories, transactions, session, onCl
                   <p className="text-base font-bold text-rose-700 dark:text-rose-300">{formatCurrency(totalTax)}</p>
                 </div>
                 <div className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
-                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Pfand</p>
+                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Pfand-Saldo</p>
                   <p className="text-base font-bold text-green-700 dark:text-green-300">{formatCurrency(totalPfand)}</p>
                 </div>
+              </div>
+
+              {/* Gesamt kassiert = Umsatz + Pfand-Saldo = Bar + Karte (zur schnellen Kontrolle) */}
+              <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-green-500/60 bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
+                <div>
+                  <p className="text-sm font-bold text-green-800 dark:text-green-300">Gesamt kassiert (inkl. Pfand)</p>
+                  <p className="text-xs text-green-700/70 dark:text-green-400/70">Umsatz {formatCurrency(total)} + Pfand {formatCurrency(totalPfand)} = Bar + Karte</p>
+                </div>
+                <p className="text-lg font-extrabold text-green-700 dark:text-green-300">{formatCurrency(cashTotal + cardTotal)}</p>
               </div>
 
               {/* Payment breakdown */}
