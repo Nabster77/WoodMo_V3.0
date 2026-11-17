@@ -1665,7 +1665,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
           <section className="mb-3 rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100" aria-label="Reset-Sicherheitsprüfung">
             <div className="flex items-center justify-between gap-2">
               <strong>Sicherheitsprüfung</strong>
-              <span className="font-bold tabular-nums">{report?.percent ?? 0} % geprüft</span>
+              <span className="font-bold tabular-nums">Prüfung zu {report?.percent ?? 0} % gelaufen</span>
             </div>
             <progress aria-label="Fortschritt der Sicherheitsprüfung"
               className="mt-2 h-2 w-full accent-amber-500" max={100} value={report?.percent ?? 0} />
@@ -1689,8 +1689,8 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
                   : 'Prüfung abgeschlossen: Rote Punkte zuerst beheben, danach den Dialog schließen und neu öffnen.'}
               </p>
             )}
-            <p className="mt-2 text-xs">100 % bedeutet: Alle Prüfungen wurden ausgeführt, nicht automatisch bestanden.
-              Offline-Daten anderer Geräte sind von hier nicht vollständig kontrollierbar.</p>
+            <p className="mt-2 text-xs">Der Balken zeigt, wie weit die Prüfung gelaufen ist – nicht, ob alles bestanden ist. Entscheidend sind die grünen Haken.</p>
+            <p className="mt-1 text-xs font-semibold">Wichtig: Dieses Gerät sieht nur, was schon in der Cloud ist. Bitte vorher an jedem anderen Kassen-Tablet einmal „Sync Cloud“ tippen, damit dort keine Buchungen mehr offline warten.</p>
           </section>
         )}
 
