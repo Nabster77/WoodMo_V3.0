@@ -42,6 +42,11 @@ jobs:
               -H "apikey: $ANON_KEY") || code=000
             echo "Versuch $try: HTTP $code"
             case "$code" in 200|206) echo "Supabase V3 ist wach."; exit 0;; esac
+            # 401 mit Datenbank-Code 42501: Die Datenbank selbst hat die Abfrage geprüft und
+            # ohne Anmeldung abgelehnt (so gewollt). Sie ist also wach und hat gearbeitet.
+            if [ "$code" = 401 ] && grep -q '"42501"' /tmp/antwort; then
+              echo "Supabase V3 ist wach (Datenbank hat geantwortet, Kassendaten ohne Anmeldung korrekt gesperrt)."; exit 0
+            fi
             # Fehlertext zeigen (enthält keine Kassendaten), gekürzt.
             head -c 300 /tmp/antwort; echo
             sleep 20
