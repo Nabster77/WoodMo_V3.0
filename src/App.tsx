@@ -708,14 +708,16 @@ export default function App() {
               </button>
             </div>
           </header>
-          {resetArchive && resetArchive.archivedEntries > 0 && (
+          {/* Sicherheitsarchiv: Kassierer sehen nichts. Nur Administratoren bekommen einen Hinweis,
+              und zwar nur, wenn wirklich nicht übertragene Bons oder Kassensitzungen gesichert wurden.
+              Reine Alt-Sicherungen (alles übertragen) stehen nur still in der Verwaltung. */}
+          {resetArchive && (resetArchive.pendingReceipts > 0 || resetArchive.pendingSessions > 0) &&
+            (currentStaff?.role === 'administrator' || adminUnlocked) && (
             <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/40 bg-amber-950 px-3 py-2 text-sm text-amber-100">
               <span>
                 <AlertTriangle className="mr-1 inline h-4 w-4" />
-                Offline-Quarantäne: {resetArchive.pendingReceipts} nicht übertragene Bon-ID(s),
-                {resetArchive.pendingSessions} Kassensitzung(en) und
-                {resetArchive.localSnapshots} lokale Sicherung(en) archiviert.
-                Nicht löschen oder automatisch nachbuchen!
+                Sicherheitsarchiv: {resetArchive.pendingReceipts} nicht übertragene Bon(s) und {resetArchive.pendingSessions} Kassensitzung(en)
+                aus einer früheren Kasse auf diesem Gerät gesichert. Bitte prüfen, nicht automatisch nachbuchen.
               </span>
               <button type="button" onClick={() => navigateToProtected('admin')}
                 className="rounded-lg border border-amber-300/60 px-3 py-1.5 font-bold hover:bg-amber-900">
@@ -999,26 +1001,26 @@ export default function App() {
               resetQuarantineCount={resetArchive?.archivedEntries ?? 0}
               onExportResetQuarantine={async () => {
                 try { setExportedQuarantineKeys(await exportResetQuarantine()); }
-                catch (error) { alert(error instanceof Error ? error.message : 'Quarantäne-Export fehlgeschlagen.'); }
+                catch (error) { alert(error instanceof Error ? error.message : 'Sicherheitsarchiv-Export fehlgeschlagen.'); }
               }}
               onClearResetQuarantine={async () => {
                 const summary = resetArchive;
                 if (summary && (summary.pendingReceipts > 0 || summary.pendingSessions > 0)) {
-                  alert('Löschen gesperrt: Die Quarantäne enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.');
+                  alert('Löschen gesperrt: Das Sicherheitsarchiv enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.');
                   return;
                 }
                 if (!exportedQuarantineKeys) {
-                  alert('Bitte zuerst „Offline-Quarantäne sichern“ ausführen und die Datei aufbewahren. Danach kann gelöscht werden.');
+                  alert('Bitte zuerst „Sicherheitsarchiv sichern“ ausführen und die Datei aufbewahren. Danach kann gelöscht werden.');
                   return;
                 }
-                if (!window.confirm('Offline-Quarantäne auf diesem Gerät endgültig löschen?\n\n' +
+                if (!window.confirm('Sicherheitsarchiv auf diesem Gerät endgültig löschen?\n\n' +
                   'Gelöscht werden nur die archivierten Altstände vor einem Reset (diese liegen weiterhin in der Cloud). ' +
                   'Laufende Kassen, aktuelle Buchungen und noch nicht übertragene Buchungen bleiben unberührt.')) return;
                 try {
                   await clearResetQuarantine(exportedQuarantineKeys);
                   setExportedQuarantineKeys(null);
                 } catch (error) {
-                  alert(error instanceof Error ? error.message : 'Offline-Quarantäne konnte nicht gelöscht werden.');
+                  alert(error instanceof Error ? error.message : 'Sicherheitsarchiv konnte nicht gelöscht werden.');
                 }
               }}
               onCheckResetSafety={checkResetSafety}
