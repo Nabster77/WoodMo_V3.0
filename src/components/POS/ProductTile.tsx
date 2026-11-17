@@ -49,7 +49,7 @@ export function ProductTile({
     // Kompakte Kachel ohne Bild, Schwarz-Weiß: dunkler Hintergrund, weißer Rahmen
     // (Hellmodus umgekehrt). Alles mittig: Name, gleich große Hinweise (Kennzeichnung,
     // Schuss, Pfand), MwSt rutscht nach, darunter der Preis. Farbe tragen nur die Hinweise.
-    const compactClasses = `group relative flex min-h-[6.25rem] min-w-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 bg-white px-1.5 py-2 text-center shadow-sm transition-all dark:bg-slate-900 ${
+    const compactClasses = `group relative flex h-full min-h-[6.25rem] w-full min-w-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 bg-white px-1.5 py-2 text-center shadow-sm transition-all dark:bg-slate-900 ${
       isDraggedOver
         ? 'border-blue-500 ring-2 ring-blue-400/50'
         : 'border-slate-800 hover:bg-slate-100 dark:border-white/85 dark:hover:bg-slate-800'
@@ -89,7 +89,7 @@ export function ProductTile({
   // Square, full-bleed picture like the approved visual reference.
   // The picture fills the entire tile; a dark overlay near the bottom keeps
   // article name, price and deposit legible on 800 x 800 product images.
-  const tileClasses = `group relative isolate aspect-square min-w-0 overflow-hidden rounded-xl border bg-slate-800 text-left shadow-sm transition-all ${
+  const tileClasses = `group relative isolate aspect-square w-full min-w-0 overflow-hidden rounded-xl border bg-slate-800 text-left shadow-sm transition-all ${
     isDraggedOver
       ? 'border-blue-500 ring-2 ring-blue-400/50'
       : 'border-slate-800 hover:shadow-lg dark:border-white/85'
