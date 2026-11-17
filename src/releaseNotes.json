@@ -8,6 +8,7 @@
     "Tagesabschluss: Entnahme-Feld öffnet die Tastatur nicht mehr von selbst; Kassenbestand klar nur aus Bargeld",
     "Tagesinfo und PDFs: „Gesamt kassiert (inkl. Pfand) = Bar + Karte“",
     "Verwaltung: Kassen-Übersicht und Tagesinfo zeigen den ganzen Tag (alle Kassen des Tages zusammen, Bestände je Kasse); Journal-Anfangsbestand ohne Doppelzählung",
+    "Kassenrechnung: Korrektur des Anfangsbestands steht oben als eigene Zeile (Übernommen vom Vortag → Korrektur → Anfangsbestand Ist) – im Tagesabschluss, im PDF und in der Tagesinfo",
     "Warenkorb: einklappbar, Breite mit dem Finger verschiebbar, anheften möglich, Schuss auch eingeklappt",
     "Pfand: Mehrwertsteuer wird jetzt richtig auf das Pfand gerechnet (Journal, Tagesabschluss, PDF)",
     "Pfand überall in Grün, Pfand-Retoure mit Zahleneingabe",

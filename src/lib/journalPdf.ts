@@ -43,6 +43,10 @@ export interface JournalReportData {
     cashWithdrawals: number;
     /** Corrections already change the opening balance and are information only. */
     openingCorrectionTotal: number;
+    /** Einzelne Korrekturen für die Anzeige oben in der Kassenrechnung. */
+    openingCorrections?: { amount: number; timestamp: number; employeeName?: string; reason?: string }[];
+    /** Bestand vor der ersten Korrektur (Übernahme vom Vortag). */
+    carriedBalance?: number;
     balanceBeforeWithdrawal: number;
     closingWithdrawalAmount: number;
     remainingBalance: number;
@@ -399,19 +403,25 @@ function stornoAuditSection(stornos: readonly StornoRecord[]): string {
 
 function dailyCloseCashSection(cash?: JournalReportData['dailyCloseCash']): string {
   if (!cash) return '';
-  const correction = cash.openingCorrectionTotal === 0
-    ? ''
-    : `<tr><td>Korrekturen am Anfangsbestand (bereits enthalten)</td><td style="text-align:right">${cash.openingCorrectionTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(cash.openingCorrectionTotal))}</td></tr>`;
+  const corrections = cash.openingCorrections ?? [];
+  const hasCorrection = corrections.length > 0 || cash.openingCorrectionTotal !== 0;
+  const carried = cash.carriedBalance ?? Math.round((cash.openingBalance - cash.openingCorrectionTotal) * 100) / 100;
+  const correctionRows = corrections.length > 0
+    ? corrections.map((line) => `<tr><td>Korrektur Anfangsbestand · ${escapeHtml(formatTime(line.timestamp))} · ${escapeHtml(line.employeeName ?? 'unbekannt')}${line.reason ? ` · Grund: ${escapeHtml(line.reason)}` : ''}</td><td style="text-align:right">${line.amount < 0 ? '−' : '+'} ${formatCurrency(Math.abs(line.amount))}</td></tr>`).join('')
+    : `<tr><td>Korrektur Anfangsbestand</td><td style="text-align:right">${cash.openingCorrectionTotal < 0 ? '−' : '+'} ${formatCurrency(Math.abs(cash.openingCorrectionTotal))}</td></tr>`;
+  const openingRows = hasCorrection
+    ? `<tr><td>Übernommen vom Vortag</td><td style="text-align:right">${formatCurrency(carried)}</td></tr>${correctionRows}
+      <tr><td><b>= Kassenanfangsbestand (Ist)</b></td><td style="text-align:right"><b>${formatCurrency(cash.openingBalance)}</b></td></tr>`
+    : `<tr><td>Kassenanfangsbestand</td><td style="text-align:right"><b>${formatCurrency(cash.openingBalance)}</b></td></tr>`;
   return `<section class="report-table-section table-block daily-close-cash">
     <h2>Kassenbestand beim Tagesabschluss</h2>
     <table><tbody>
-      <tr><td>Kassenanfangsbestand</td><td style="text-align:right"><b>${formatCurrency(cash.openingBalance)}</b></td></tr>
+      ${openingRows}
       <tr><td>Barumsatz</td><td style="text-align:right"><b>${formatCurrency(cash.cashSales)}</b></td></tr>
       <tr><td>Pfandeinnahmen (bar)</td><td style="text-align:right">+ ${formatCurrency(cash.cashPfandIncome)}</td></tr>
       <tr><td>Pfandretouren (bar)</td><td style="text-align:right">- ${formatCurrency(cash.cashPfandPayout)}</td></tr>
       <tr><td>Bareinlagen</td><td style="text-align:right">+ ${formatCurrency(cash.cashDeposits)}</td></tr>
       <tr><td>Barausgaben</td><td style="text-align:right">- ${formatCurrency(cash.cashWithdrawals)}</td></tr>
-      ${correction}
       <tr><td>Kassenendbestand vor Entnahme</td><td style="text-align:right"><b>${formatCurrency(cash.balanceBeforeWithdrawal)}</b></td></tr>
       <tr><td>Entnahme zum Tagesabschluss</td><td style="text-align:right"><b>-${formatCurrency(cash.closingWithdrawalAmount)}</b></td></tr>
       <tr><td><b>Restbestand / nächster Anfangsbestand</b></td><td style="text-align:right"><b>${formatCurrency(cash.remainingBalance)}</b></td></tr>
