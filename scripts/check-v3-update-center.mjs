@@ -57,4 +57,11 @@ assert.equal(sameBuild(a, { ...a }), true);
 assert.equal(sameBuild(a, { ...a, builtAt: '2026-11-17T22:05:00.000Z' }), false);
 assert.equal(buildLabel(a), '17.11.2026, 23:00 Uhr · abc1234');
 
+// Automatischer Wechsel ohne Zutun am Tablet: nach dem Update lädt die offene App einmal selbst neu,
+// nur bei einem echten Update (vorher aktive Version), nie beim ersten Installieren.
+const reloadSw = read('public/sw-reload.js');
+assert.match(vite, /importScripts: \['sw-reload\.js'\]/);
+assert.match(reloadSw, /woodmoIsUpdate = Boolean\(self\.registration && self\.registration\.active\)/);
+assert.match(reloadSw, /if \(!woodmoIsUpdate\) return;/);
+assert.match(reloadSw, /await self\.clients\.claim\(\);[\s\S]*client\.navigate\(client\.url\)/);
 console.log('V3-UPDATE-ZENTRALE: Admin-Zugang, unveränderter Update-Weg, Prüfliste, Abbruch und Prüfbericht geprüft.');
