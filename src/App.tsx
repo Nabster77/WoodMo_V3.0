@@ -49,7 +49,7 @@ import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
 import { persistFinalizedCashSession } from '@/lib/finalizedCashCloud';
 import { isTestMode, setTestMode, clearBookings, loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
 import { formatDateISO } from '@/lib/format';
-import { headerDateLong, headerDateShort } from '@/lib/headerDate';
+import { headerDateLong, headerDateShort, headerTime } from '@/lib/headerDate';
 import { exportRecoveryMetadata, restoreBackupSafely, type CompleteBackup } from '@/lib/backupRecovery';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
@@ -76,10 +76,10 @@ export default function App() {
   // active unsaved cart must not disappear merely because its view is hidden.
   const [homeVisible, setHomeVisible] = useState(true);
   const [headerNow, setHeaderNow] = useState(() => Date.now());
-  // Visible shop date updates even when a cash session stays open for weeks.
+  // Visible shop date and clock (device time, also offline) update even when a cash session stays open for weeks.
   useEffect(() => {
     const update = () => setHeaderNow(Date.now());
-    const interval = window.setInterval(update, 60_000);
+    const interval = window.setInterval(update, 10_000);
     document.addEventListener('visibilitychange', update);
     return () => {
       window.clearInterval(interval);
@@ -645,7 +645,7 @@ export default function App() {
                 aria-label={`Standort ${store.activeSession?.location ?? store.selectedLocation}, aktuelles Datum ${headerDateLong(headerNow)}`}
                 title={`${store.activeSession?.location ?? store.selectedLocation} · ${headerDateLong(headerNow)}`}
               >
-                <MapPin className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
                 <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
                   {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)}
                 </span>
@@ -657,7 +657,11 @@ export default function App() {
                 </span>
               </div>
             )}
-            <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
+            <span className="order-2 ml-auto shrink-0 rounded-lg border border-white/30 px-2 py-1 text-sm font-bold tabular-nums text-white min-[700px]:order-none"
+              role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`} title="Uhrzeit (Gerät)">
+              {headerTime(headerNow)}
+            </span>
+            <div className="order-2 flex shrink-0 items-center gap-1.5">
               {tab === 'pos' && (
                 <button type="button"
                   aria-label={currentStaff ? 'Mitarbeiter abmelden' : 'Mitarbeiter anmelden'}
