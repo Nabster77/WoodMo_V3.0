@@ -70,3 +70,10 @@ assert.doesNotMatch(pos + readFileSync('src/components/POS/CartItemRow.tsx', 'ut
 console.log('WARENKORB: Breite ziehen/fixieren, Pfand einheitlich grün.');
 assert.match(pos, /'✓ Fertig verschieben' : 'Kacheln verschieben'/);
 assert.match(pos, /loadJSON<boolean>\(TILE_IMAGES_KEY, false\) === true/);
+// Sicherheitsarchiv (früher „Offline-Quarantäne“): Hinweis nur für Administratoren und nur bei echten offenen Daten.
+{
+  const app = readFileSync('src/App.tsx', 'utf8');
+  assert.match(app, /resetArchive && \(resetArchive\.pendingReceipts > 0 \|\| resetArchive\.pendingSessions > 0\) &&\s*\(currentStaff\?\.role === 'administrator' \|\| adminUnlocked\)/);
+  assert.doesNotMatch(app, /Offline-Quarantäne:/);
+  console.log('SICHERHEITSARCHIV: Hinweis nur für Admins und nur bei nicht übertragenen Bons/Kassen.');
+}

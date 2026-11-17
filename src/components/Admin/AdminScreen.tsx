@@ -237,14 +237,14 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onExportResetQuarantine(); })}>
                     <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
-                    Offline-Quarantäne sichern ({resetQuarantineCount})
+                    Sicherheitsarchiv sichern ({resetQuarantineCount})
                   </button>
                 )}
                 {onClearResetQuarantine && resetQuarantineCount > 0 && (
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onClearResetQuarantine(); })}>
                     <Trash2 className="h-5 w-5 shrink-0 text-amber-300" />
-                    Offline-Quarantäne löschen
+                    Sicherheitsarchiv löschen
                   </button>
                 )}
                 {onResetAllData && (
