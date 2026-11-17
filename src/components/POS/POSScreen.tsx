@@ -22,7 +22,7 @@ import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff,
 } from 'lucide-react';
 
-// Ansicht der Artikel-Kacheln, nur auf diesem Gerät gespeichert (keine Cloud,
+// Ansicht der Artikel-Kacheln (Standard: ohne Bilder), nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
@@ -127,7 +127,7 @@ export function POSScreen({
   const [priceEntryProduct, setPriceEntryProduct] = useState<Product | null>(null);
   const [dragMode, setDragMode] = useState(false);
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
-  const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, true) !== false);
+  const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
   const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
   const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
