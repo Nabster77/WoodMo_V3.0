@@ -66,4 +66,11 @@ assert.match(vite, /importScripts: \['sw-reload\.js'\]/);
 assert.match(reloadSw, /woodmoIsUpdate = Boolean\(self\.registration && self\.registration\.active\)/);
 assert.match(reloadSw, /if \(!woodmoIsUpdate\) return;/);
 assert.match(reloadSw, /await self\.clients\.claim\(\);[\s\S]*client\.navigate\(client\.url\)/);
+
+// Installations-Hinweis: Installieren nur anbieten, wenn Chrome es anbietet (App noch nicht installiert);
+// sonst auf das vorhandene App-Symbol hinweisen und nie zum Löschen/Neuinstallieren raten.
+const install = readFileSync(new URL('../src/components/InstallPrompt.tsx', import.meta.url), 'utf8');
+assert.match(install, /deferred \? 'Bitte als App installieren' : 'App ist schon installiert'/);
+assert.match(install, /neu installieren ist nicht nötig/);
+assert.doesNotMatch(install, /löschen|deinstallieren/i);
 console.log('V3-UPDATE-ZENTRALE: Admin-Zugang, unveränderter Update-Weg, Prüfliste, Abbruch und Prüfbericht geprüft.');
