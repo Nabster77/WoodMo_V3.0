@@ -9,6 +9,7 @@ import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@
 import { buildDailyReport } from '@/lib/dailyReport';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
+import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
 import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
@@ -1430,7 +1431,16 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       {parts.length > 1 ? ` · ${sessionTx.length} Verkäufe` : ''}
                     </p>
                     <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                      <div><p className="text-xs text-gray-400">{session.corrections.length ? 'Anfangsbestand (korrigiert)' : 'Anfangsbestand'}</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p></div>
+                      {session.corrections.length > 0 && (() => {
+                        const view = openingCorrectionView(session);
+                        return view ? (
+                          <>
+                            <div><p className="text-xs text-gray-400">Übernommen vom Vortag</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(view.carriedBalance)}</p></div>
+                            <div><p className="text-xs text-gray-400">Korrektur Anfangsbestand</p><p className={`font-bold ${view.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>{signedAmountLabel(view.total, formatCurrency)}</p></div>
+                          </>
+                        ) : null;
+                      })()}
+                      <div><p className="text-xs text-gray-400">{session.corrections.length ? 'Anfangsbestand (Ist)' : 'Anfangsbestand'}</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p></div>
                       <div><p className="text-xs text-gray-400">Einzahlungen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0))}</p></div>
                       <div><p className="text-xs text-gray-400">Entnahmen</p><p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0))}</p></div>
                       {session.closed ? (

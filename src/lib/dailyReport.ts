@@ -1,4 +1,5 @@
 import type { Category, CashSession, Location, StaffActivity, StaffLoginInterval, Transaction } from '@/types';
+import { openingCorrectionView } from '@/lib/openingCorrection';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -157,6 +158,8 @@ export function closedSessionReport(session: CashSession, transactions: Transact
       cashDeposits: deposits,
       cashWithdrawals: normalWithdrawals,
       openingCorrectionTotal,
+      openingCorrections: openingCorrectionView(session)?.lines ?? [],
+      carriedBalance: openingCorrectionView(session)?.carriedBalance,
       balanceBeforeWithdrawal,
       closingWithdrawalAmount,
       // The printed remaining balance must be reproducible from the document
