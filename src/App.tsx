@@ -605,17 +605,10 @@ export default function App() {
         <>
           <header className="relative z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-white/10 bg-[#0b0f19] px-2 py-1.5 text-white shadow-sm sm:px-3">
             <WoodmoBrand status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'} />
-            <h1 className={`min-w-0 shrink-0 truncate text-2xl font-extrabold leading-none sm:text-[1.7rem] ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
-              aria-live="polite">
+            <h1 className={`ml-1.5 min-w-0 shrink-0 truncate pb-0.5 text-2xl font-extrabold leading-[1.25] sm:ml-2.5 sm:text-[1.7rem] ${!online ? 'woodmo-heading-offline text-red-400' : 'text-white'}`}
+              aria-live="polite" title={tab === 'admin' && adminUnlocked ? `Verwaltung · ${activeAdminSectionTitle}` : undefined}>
               {tab === 'pos' ? 'Kasse' : tab === 'admin' ? 'Verwaltung' : 'Journal'}
             </h1>
-            {tab === 'admin' && adminUnlocked && (
-              <span className="min-w-0 max-w-[35vw] truncate border-l border-emerald-500/50 pl-2 text-xs font-semibold text-emerald-200 sm:text-sm"
-                role="status" aria-live="polite"
-                title={`Verwaltung · ${activeAdminSectionTitle}`}>
-                {activeAdminSectionTitle}
-              </span>
-            )}
             <button type="button" aria-label="Zur Startseite" title="Zur Startseite" onClick={goHome}
               className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl border border-white/50 bg-transparent px-2.5 text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
               <Home className="h-5 w-5" />
@@ -647,13 +640,18 @@ export default function App() {
               >
                 <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
                 <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)} · {headerTime(headerNow)} Uhr
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)}
                 </span>
                 <span className="hidden min-[1100px]:inline min-[1500px]:hidden min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)}
                 </span>
                 <span className="min-w-0 truncate whitespace-nowrap font-semibold min-[1100px]:hidden">
-                  {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
+                  {headerDateShort(headerNow)}
+                </span>
+                {/* Uhrzeit groß und mittig im freien Platz der Kopfzeile. */}
+                <span className="flex-1 whitespace-nowrap text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl"
+                  role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
+                  {headerTime(headerNow)} Uhr
                 </span>
               </div>
             )}
