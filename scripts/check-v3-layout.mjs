@@ -46,4 +46,8 @@ assert.match(cart, /onEditShot/);
 assert.match(cart, /onInc/);
 assert.match(cart, /onDec/);
 assert.match(cart, /onRemove/);
+const adminTagesinfo = readFileSync('src/components/Admin/AdminScreen.tsx','utf8');
+assert.match(adminTagesinfo, />Umsatz \(ohne Pfand\)</, 'Tagesinfo: Umsatz ohne Pfand klar benannt');
+assert.match(adminTagesinfo, />Pfand-Saldo</, 'Tagesinfo: Pfand als Saldo benannt');
+assert.match(adminTagesinfo, /Gesamt kassiert \(inkl\. Pfand\)[\s\S]{0,400}formatCurrency\(cashTotal \+ cardTotal\)/, 'Tagesinfo: Gesamt kassiert = Bar + Karte');
 console.log('V3-LAYOUT: Home mit zwei Kacheln, Login/Home, Warenkorb-Erhalt bei Navigation, 65/35-Aufteilung und Kassenfunktionen geprüft.');
