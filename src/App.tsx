@@ -647,13 +647,13 @@ export default function App() {
               >
                 <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
                 <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)} · {headerTime(headerNow)}
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)} · {headerTime(headerNow)} Uhr
                 </span>
                 <span className="hidden min-[1100px]:inline min-[1500px]:hidden min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)} · {headerTime(headerNow)}
+                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
                 </span>
                 <span className="min-w-0 truncate whitespace-nowrap font-semibold min-[1100px]:hidden">
-                  {headerDateShort(headerNow)} · {headerTime(headerNow)}
+                  {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
                 </span>
               </div>
             )}
@@ -661,7 +661,7 @@ export default function App() {
             {tab !== 'pos' && (
               <span className="order-2 ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-200 min-[700px]:order-none"
                 role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
-                {headerDateShort(headerNow)} · {headerTime(headerNow)}
+                {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
               </span>
             )}
             <div className={`order-2 flex shrink-0 items-center gap-1.5 ${tab === 'pos' ? 'ml-auto' : ''}`}>
