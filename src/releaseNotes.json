@@ -4,6 +4,8 @@
     "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
     "Bilder an/aus gilt jetzt je Warengruppe (z. B. Handwerk mit Bildern, Getränke ohne) – pro Gerät gespeichert",
     "Dunkler Modus ist immer Standard; hell bleibt nur, wenn man auf dem Gerät selbst auf hell umschaltet",
+    "Journal: „Heute“/„Diese Woche“ springen über Mitternacht von selbst um; neu „Letzte Woche“ (Mo–So, als Wochenjournal abgelegt)",
+    "Kassen-Übersicht: „PDF-Export“ speichert jetzt das PDF und „Drucken“ öffnet den Druck (waren vertauscht)",
     "Startseite: kleine Signatur „Holz trifft Code · by Nabster77“ neben „Update“",
     "Update-Zentrale: Update auch bei offener Kasse möglich – der Warenkorb wird automatisch geprüft (muss leer sein); die Kasse bleibt offen",
     "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",

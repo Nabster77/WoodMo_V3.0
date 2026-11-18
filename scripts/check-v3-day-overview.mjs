@@ -69,3 +69,15 @@ assert.equal(openingBalanceOfDays([]), 0);
 const journal = readFileSync(new URL('../src/components/Journal/JournalScreen.tsx', import.meta.url), 'utf8');
 assert.match(journal, /const totalOpeningBalance = openingBalanceOfDays\(relevantSessions\);/);
 console.log('check-v3-day-overview (Journal-Anfangsbestand): OK');
+
+// Journal: „Heute“ springt über Mitternacht; „Letzte Woche“ (Mo–So) als Wochenjournal (18.11.2026).
+assert.match(journal, /const \[today, setToday\] = useState/);
+assert.match(journal, /\}, \[period, customFrom, customTo, today\]\);/);
+assert.match(journal, /<option value="lastweek">Letzte Woche<\/option>/);
+assert.match(journal, /buildJournalFileName\(period === 'lastweek' \? 'weekly' : period/);
+// Kassen-Übersicht: „PDF-Export“ speichert das PDF, „Drucken“ öffnet den Druck (vorher vertauscht).
+const adminButtons = readFileSync(new URL('../src/components/Admin/AdminScreen.tsx', import.meta.url), 'utf8');
+assert.match(adminButtons, /onClick=\{onExport\}[\s\S]{0,600}PDF-Export/);
+assert.match(adminButtons, /onClick=\{onPrint\}[\s\S]{0,600}Drucken/);
+console.log('check-v3-day-overview (Journal-Datum, Vorwoche, Knöpfe): OK');
+
