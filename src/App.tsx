@@ -74,6 +74,8 @@ type OpeningManagementAccess =
 export default function App() {
   const { theme, toggle } = useTheme();
   const store = useStore();
+  // Artikel im Warenkorb (für die Update-Zentrale: Neustart nur mit leerem Warenkorb).
+  const [cartCount, setCartCount] = useState(0);
   const [updateCenterOpen, setUpdateCenterOpen] = useState(false);
   const [updateReport, setUpdateReport] = useState(() => readUpdateCheck());
   const [tab, setTab] = useState<Tab>('pos');
@@ -989,6 +991,7 @@ export default function App() {
             onHome={goHome}
             openingBalanceSuggestions={openingBalanceSuggestions}
             openSessionsByLocation={openSessionsByLocation}
+            onCartCountChange={setCartCount}
             onContinueSessionAt={continueOpenSessionAt}
           />
           </div>
@@ -1276,7 +1279,7 @@ export default function App() {
       {updateCenterOpen && (
         <UpdateCenter administrators={staff.users} online={online}
           cloudStatus={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
-          sessionOpen={Boolean(store.activeSession)} transactions={store.transactions} cashSessions={store.cashSessions}
+          sessionOpen={Boolean(store.activeSession)} cartCount={cartCount} transactions={store.transactions} cashSessions={store.cashSessions}
           onClose={() => setUpdateCenterOpen(false)} />
       )}
       {updateReport && (
