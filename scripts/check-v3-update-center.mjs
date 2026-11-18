@@ -31,7 +31,10 @@ assert.doesNotMatch(center, /open=\{updateAvailable\}/, 'Änderungsliste startet
 // Prüfliste: Internet, alles übertragen, keine Kasse offen sind Pflicht; Backup/Speicherort Hinweis.
 assert.match(center, /required: true, state: online \? 'ok' : 'fail', title: 'Internet verbunden'/);
 assert.match(center, /title: 'Alle Buchungen übertragen'/);
-assert.match(center, /required: true, state: sessionOpen \? 'fail' : 'ok', title: 'Keine Kasse offen auf diesem Gerät'/);
+// Regel 18.11.2026 (gelockert): offene Kasse sperrt nicht, aber „Warenkorb ist leer“ muss bestätigt werden.
+assert.match(center, /required: false, state: sessionOpen \? 'warn' : 'ok'/);
+assert.match(center, /\|\| \(sessionOpen && !cartConfirmed\);/);
+assert.match(center, /Warenkorb ist leer, gerade wird kein Kunde bedient\. Die Kasse bleibt offen\./);
 assert.match(center, /required: false, state: backupToday/);
 assert.match(center, /title: 'Speicherort für PDFs'/);
 assert.match(center, /const blocked = checks\.some\(\(check\) => check\.required && check\.state !== 'ok'\)/);
