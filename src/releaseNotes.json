@@ -2,6 +2,7 @@
   "title": "Update November 2026",
   "notes": [
     "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
+    "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",
     "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
     "Kasse: Warengruppen als schmale Leiste zum Wischen, vorne ★ für Favoriten: Artikel aus jeder Gruppe selbst markieren („Favoriten wählen“)",
     "Favoriten: in der ★-Ansicht über „Favoriten wählen“ direkt abwählen – abgewählte verschwinden bei „✓ Fertig“, ohne Umweg über die Warengruppen",

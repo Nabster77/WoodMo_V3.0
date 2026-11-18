@@ -166,7 +166,19 @@ export function POSScreen({
   const togglePinned = () => setCartPinned((value) => { const next = !value; saveJSON(CART_PINNED_KEY, next); return next; });
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const cartDrag = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
+  // Griff blendet sich nach 5 Sekunden aus (deckt sonst Artikelnamen ab). Ein Antippen
+  // des schmalen Streifens am Warenkorbrand holt ihn wieder für 5 Sekunden.
+  const HANDLE_VISIBLE_MS = 5000;
+  const [handleVisible, setHandleVisible] = useState(true);
+  const handleTimer = useRef<number | null>(null);
+  const showHandle = useCallback(() => {
+    setHandleVisible(true);
+    if (handleTimer.current) window.clearTimeout(handleTimer.current);
+    handleTimer.current = window.setTimeout(() => { if (!cartDrag.current) setHandleVisible(false); }, HANDLE_VISIBLE_MS);
+  }, []);
+  useEffect(() => { showHandle(); return () => { if (handleTimer.current) window.clearTimeout(handleTimer.current); }; }, [showHandle, cartCollapsed]);
   const onHandleDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    showHandle();
     const width = cartPanelRef.current?.getBoundingClientRect().width ?? 300;
     cartDrag.current = { startX: event.clientX, startWidth: width, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -184,6 +196,7 @@ export function POSScreen({
     const drag = cartDrag.current;
     cartDrag.current = null;
     if (!drag) return;
+    showHandle();
     if (drag.moved) { setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; }); return; }
     toggleCart();
   };
@@ -537,12 +550,17 @@ export function POSScreen({
         <div ref={cartPanelRef} className={`relative flex min-w-0 flex-col rounded-2xl [container-type:inline-size] border border-emerald-700/20 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:h-full sm:min-h-0 ${cartCollapsed ? '' : 'min-h-56'}`}>
           {/* Griff am linken Rand (Hoch- und Querformat): antippen = zu-/aufklappen,
               seitlich ziehen = Warenkorb breiter/schmaler (nicht, wenn fixiert). */}
-          <button type="button" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={() => { cartDrag.current = null; }}
+          {!handleVisible && (
+            <button type="button" onClick={showHandle} aria-label="Warenkorb-Griff anzeigen"
+              title="Antippen: Griff zum Zu-/Aufklappen anzeigen"
+              className="absolute left-0 top-1/2 z-10 hidden h-24 w-3 -translate-y-1/2 items-center justify-center rounded-r-full bg-slate-400/40 transition hover:bg-slate-400/70 dark:bg-white/20 sm:flex" />
+          )}
+          {handleVisible && <button type="button" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={() => { cartDrag.current = null; }}
             aria-label={cartCollapsed ? 'Warenkorb aufklappen (Pfeil)' : 'Warenkorb zuklappen (Pfeil)'}
             title={cartCollapsed ? 'Antippen: aufklappen' : cartPinned ? 'Antippen: zuklappen (Breite fixiert)' : 'Antippen: zuklappen · Ziehen: Breite ändern'}
             className={`absolute left-0 top-1/2 z-10 hidden h-20 w-10 -translate-x-1/2 -translate-y-1/2 touch-none select-none items-center justify-center rounded-full border-2 border-slate-400 bg-white text-slate-800 shadow-lg transition hover:bg-slate-100 dark:border-white/70 dark:bg-slate-900 dark:text-white sm:flex ${!cartCollapsed && !cartPinned ? 'cursor-ew-resize' : ''}`}>
             {cartCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-          </button>
+          </button>}
           <div className="shrink-0 border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
             {/* Kopf: Titel + Anzahl, Fixieren, Leeren. Zu-/Aufklappen über den Griff an der Kante;
                 der Knopf „Zu/Auf“ erscheint nur auf schmalen Handy-Bildschirmen (dort gibt es keinen Griff). */}
