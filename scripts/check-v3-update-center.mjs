@@ -33,8 +33,14 @@ assert.match(center, /required: true, state: online \? 'ok' : 'fail', title: 'In
 assert.match(center, /title: 'Alle Buchungen übertragen'/);
 // Regel 18.11.2026 (gelockert): offene Kasse sperrt nicht, aber „Warenkorb ist leer“ muss bestätigt werden.
 assert.match(center, /required: false, state: sessionOpen \? 'warn' : 'ok'/);
-assert.match(center, /\|\| \(sessionOpen && !cartConfirmed\);/);
-assert.match(center, /Warenkorb ist leer, gerade wird kein Kunde bedient\. Die Kasse bleibt offen\./);
+// Warenkorb wird automatisch geprüft (statt Häkchen, Wunsch 18.11.2026 10:53).
+assert.match(center, /required: true, state: cartCount === 0 \? 'ok' : 'fail', title: 'Warenkorb ist leer'/);
+assert.doesNotMatch(center, /cartConfirmed/);
+const appSrc = read('src/App.tsx');
+assert.match(appSrc, /cartCount=\{cartCount\}/);
+assert.match(appSrc, /onCartCountChange=\{setCartCount\}/);
+const posSrc = read('src/components/POS/POSScreen.tsx');
+assert.match(posSrc, /onCartCountChange\?\.\(cart\.reduce\(/);
 assert.match(center, /required: false, state: backupToday/);
 assert.match(center, /title: 'Speicherort für PDFs'/);
 assert.match(center, /const blocked = checks\.some\(\(check\) => check\.required && check\.state !== 'ok'\)/);

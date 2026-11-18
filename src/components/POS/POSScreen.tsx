@@ -75,6 +75,8 @@ interface Props {
   openSessionsByLocation?: Record<Location, CashSession | null>;
   /** Gerät auf den Standort einer dort offenen Kasse umstellen (weiterführen statt neu eröffnen). */
   onContinueSessionAt?: (location: Location) => void;
+  /** Meldet die Anzahl Artikel im Warenkorb (Update-Zentrale prüft „Warenkorb ist leer“). */
+  onCartCountChange?: (count: number) => void;
 }
 
 const PFAND_RETOURE_PRODUCT: Product = {
@@ -93,10 +95,11 @@ const PFAND_RETOURE_PRODUCT: Product = {
 export function POSScreen({
   categories, products, shotOptions, activeSession, onCheckout,
   onOpenCash, onCorrectOpening, onCashEntry, onCloseCash, transactions, stornos, stornoStatus, stornoError, stornoServiceReady, testMode, onCommitStorno, onMoveProduct,
-  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openSessionsByLocation, onContinueSessionAt,
+  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openSessionsByLocation, onContinueSessionAt, onCartCountChange,
 }: Props) {
   const [activeCat, setActiveCat] = useState<string>(categories[0]?.id ?? '');
   const [cart, setCart] = useState<CartItem[]>([]);
+  useEffect(() => { onCartCountChange?.(cart.reduce((sum, item) => sum + Math.abs(item.quantity), 0)); }, [cart, onCartCountChange]);
   const [search, setSearch] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutCommitted, setCheckoutCommitted] = useState(false);
