@@ -27,6 +27,8 @@ export const STORAGE_KEYS = {
   products: 'pos_products',
   transactions: 'pos_transactions',
   theme: 'pos_theme',
+  /** true, sobald jemand auf diesem Gerät selbst hell/dunkel umgeschaltet hat. */
+  themeUserChoice: 'pos_theme_user_choice_v1',
   cashSessions: 'pos_cash_sessions',
   selectedLocation: 'pos_selected_location',
   pfandSettings: 'pos_pfand_settings',
