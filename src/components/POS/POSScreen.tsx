@@ -26,6 +26,8 @@ import {
 // Ansicht der Artikel-Kacheln (Standard: ohne Bilder), nur auf diesem Gerät gespeichert (keine Cloud,
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
+/** Bilder an/aus je Warengruppe (und ★-Ansicht), pro Gerät. Ohne Eintrag gilt die bisherige Grundeinstellung. */
+const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';
 /** Virtuelle Warengruppe „Favoriten“: nur von Hand markierte Artikel (nur Anzeige, nicht in der Datenbank). */
 const FAVORITES_ID = '__favoriten__';
 /** Von Hand markierte Favoriten, pro Gerät gespeichert (nicht in der Datenbank). */
@@ -156,7 +158,13 @@ export function POSScreen({
     return next;
   });
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
-  const [showImages, setShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
+  const [defaultShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
+  const [imagesByGroup, setImagesByGroup] = useState<Record<string, boolean>>(() => {
+    const stored = loadJSON<unknown>(TILE_IMAGES_BY_GROUP_KEY, {});
+    return stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? Object.fromEntries(Object.entries(stored as Record<string, unknown>).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
+      : {};
+  });
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
   const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
   const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
@@ -203,7 +211,14 @@ export function POSScreen({
     if (drag.moved) { setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; }); return; }
     toggleCart();
   };
-  const toggleImages = () => setShowImages((value) => { const next = !value; saveJSON(TILE_IMAGES_KEY, next); return next; });
+  // Bilder an/aus gilt für die gerade gewählte Warengruppe (bzw. ★-Ansicht), nicht mehr für alle.
+  const imageGroupKey = search.trim() ? '__suche__' : activeCat;
+  const showImages = imagesByGroup[imageGroupKey] ?? defaultShowImages;
+  const toggleImages = () => setImagesByGroup((map) => {
+    const next = { ...map, [imageGroupKey]: !(map[imageGroupKey] ?? defaultShowImages) };
+    saveJSON(TILE_IMAGES_BY_GROUP_KEY, next);
+    return next;
+  });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -483,7 +498,7 @@ export function POSScreen({
               </button>
             )}
             <button type="button" aria-pressed={!showImages} onClick={toggleImages}
-              title={showImages ? 'Kompakte Kacheln ohne Bilder anzeigen' : 'Kacheln mit Bildern anzeigen'}
+              title={showImages ? 'Nur in dieser Warengruppe: kompakte Kacheln ohne Bilder' : 'Nur in dieser Warengruppe: Kacheln mit Bildern'}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
               {showImages ? <ImageOff className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
               {showImages ? 'Bilder aus' : 'Bilder an'}
