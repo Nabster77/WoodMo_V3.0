@@ -54,12 +54,16 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
           {sessionOpen && <span>{location} · Kasse geöffnet</span>}
           {testMode && <span className="font-semibold text-amber-300">TESTMODUS</span>}
         </div>
-        {onUpdateCenter && (
-          <button type="button" onClick={onUpdateCenter} aria-label="Update-Zentrale (nur Administrator)"
-            className="self-end rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-white/5 hover:text-slate-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-slate-400">
-            Update
-          </button>
-        )}
+        {/* Fußzeile: Signatur mittig, „Update“ rechts – beide klein und grau. */}
+        <div className="relative flex w-full items-center justify-center">
+          <p className="px-16 text-center text-[11px] font-semibold text-slate-500">Holz trifft Code · by Nabster77</p>
+          {onUpdateCenter && (
+            <button type="button" onClick={onUpdateCenter} aria-label="Update-Zentrale (nur Administrator)"
+              className="absolute right-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-white/5 hover:text-slate-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-slate-400">
+              Update
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );
