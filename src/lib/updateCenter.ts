@@ -31,7 +31,7 @@ export function buildLabel(info: BuildInfo): string {
   const at = new Intl.DateTimeFormat('de-DE', {
     timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(info.builtAt));
-  return `${info.version ? `Version ${info.version} · ` : ''}${at} Uhr · ${info.commit}`;
+  return `${at} Uhr · ${info.commit}`;
 }
 
 /** Liest version.json direkt vom Server, am Zwischenspeicher vorbei. */
