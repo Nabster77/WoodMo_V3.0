@@ -3,6 +3,7 @@ import { formatCurrency } from '@/lib/format';
 import { taxRateForProduct } from '@/lib/tax';
 import { Minus, Plus, Trash2, Recycle } from 'lucide-react';
 import { SpiritBadge } from './ProductTile';
+import { shotParts } from '@/lib/shotCombine';
 
 interface Props {
   item: CartItem;
@@ -42,7 +43,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
         ) : (
           <div className="mt-0.5 text-[clamp(10px,3.6cqw,13px)] leading-snug text-slate-500 dark:text-slate-400">
             {shotPrice > 0 ? (
-              <span>Grundpreis {formatCurrency(basePrice)} + SCHUSS {formatCurrency(shotPrice)}</span>
+              <span>{item.product.name} {formatCurrency(basePrice)} + {shotParts(item.shot).length > 1 ? `${shotParts(item.shot).length} Schüsse` : 'SCHUSS'} {formatCurrency(shotPrice)} = {formatCurrency(item.unitPrice)}</span>
             ) : (
               <span>Stückpreis {formatCurrency(unitTotal)} · MwSt. {rate}%</span>
             )}
@@ -54,7 +55,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
       {onEditShot && !item.isPfandRetoure && (
         <button type="button" onClick={onEditShot} aria-label={item.shot ? `${item.product.name}: SCHUSS ändern` : `${item.product.name}: SCHUSS hinzufügen`}
           className="flex h-9 shrink-0 items-center rounded-lg bg-blue-600 px-2 text-[clamp(10px,3.4cqw,13px)] font-bold text-white hover:bg-blue-700 active:scale-[0.97]">
-          {item.shot ? 'SCHUSS ✎' : '+ SCHUSS'}
+          {item.shot && item.shot.id !== 'none' ? 'SCHUSS ✎' : '+ SCHUSS'}
         </button>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
