@@ -10,7 +10,7 @@
  */
 import type { CashSession, Transaction } from '@/types';
 
-export interface BuildInfo { commit: string; builtAt: string; title: string; notes: string[] }
+export interface BuildInfo { version?: string; commit: string; builtAt: string; title: string; notes: string[] }
 
 const FALLBACK: BuildInfo = { commit: 'unbekannt', builtAt: '', title: '', notes: [] };
 export const INSTALLED_BUILD: BuildInfo =
@@ -23,12 +23,15 @@ export function sameBuild(a: BuildInfo, b: BuildInfo): boolean {
   return a.commit === b.commit && a.builtAt === b.builtAt;
 }
 
+/** Anzeige auf der Startseite: „3.27“; ältere Builds ohne Nummer: „3.0“. */
+export const APP_VERSION: string = INSTALLED_BUILD.version ?? '3.0';
+
 export function buildLabel(info: BuildInfo): string {
   if (!info.builtAt) return info.commit;
   const at = new Intl.DateTimeFormat('de-DE', {
     timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(info.builtAt));
-  return `${at} Uhr · ${info.commit}`;
+  return `${info.version ? `Version ${info.version} · ` : ''}${at} Uhr · ${info.commit}`;
 }
 
 /** Liest version.json direkt vom Server, am Zwischenspeicher vorbei. */
@@ -41,7 +44,7 @@ export async function fetchOnlineBuild(timeoutMs = 10_000): Promise<BuildInfo | 
     if (!response.ok) return null;
     const data = await response.json() as Partial<BuildInfo>;
     if (typeof data.commit !== 'string' || typeof data.builtAt !== 'string') return null;
-    return { commit: data.commit, builtAt: data.builtAt, title: String(data.title ?? ''),
+    return { ...(typeof data.version === 'string' ? { version: data.version } : {}), commit: data.commit, builtAt: data.builtAt, title: String(data.title ?? ''),
       notes: Array.isArray(data.notes) ? data.notes.map(String) : [] };
   } catch {
     return null;

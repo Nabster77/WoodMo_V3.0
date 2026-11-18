@@ -58,6 +58,14 @@ const a = { commit: 'abc1234', builtAt: '2026-11-17T22:00:00.000Z', title: '', n
 assert.equal(sameBuild(a, { ...a }), true);
 assert.equal(sameBuild(a, { ...a, builtAt: '2026-11-17T22:05:00.000Z' }), false);
 assert.equal(buildLabel(a), '17.11.2026, 23:00 Uhr · abc1234');
+// Versionsnummer 3.<PR> (Wunsch 18.11.2026): Startseite und Update-Zentrale.
+assert.equal(buildLabel({ ...a, version: '3.27' }), 'Version 3.27 · 17.11.2026, 23:00 Uhr · abc1234');
+assert.match(vite, /log\.match\(\/Merge pull request #\(\\d\+\)\/\)/, 'Version aus der Merge-Nachricht des PR');
+assert.match(vite, /return match \? `3\.\$\{match\[1\]\}` : '3\.0';/);
+assert.match(vite, /const WOODMO_BUILD = \{ version: appVersion\(\)/);
+const homeScreen = readFileSync(new URL('../src/components/WoodmoHome.tsx', import.meta.url), 'utf8');
+assert.match(homeScreen, /Kassen-App · Version \{APP_VERSION\}/);
+assert.match(vite, /name: 'WOODMO Kassen-App Version 3\.0'/, 'App-Name im Manifest bleibt (sonst fragt Chrome am Tablet nach)');
 
 // Automatischer Wechsel ohne Zutun am Tablet: nach dem Update lädt die offene App einmal selbst neu,
 // nur bei einem echten Update (vorher aktive Version), nie beim ersten Installieren.

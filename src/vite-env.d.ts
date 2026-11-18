@@ -10,6 +10,8 @@ interface ImportMeta {
 }
 
 interface WoodmoBuildInfo {
+  /** „3.27“ = Version 3, zuletzt gemergter PR #27. Ältere version.json haben das Feld nicht. */
+  version?: string;
   commit: string;
   builtAt: string;
   title: string;
