@@ -1,3 +1,4 @@
+import { activeSessionForLocation } from '@/lib/cashSessionSelection';
 import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBalanceCarry';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
@@ -205,6 +206,12 @@ export default function App() {
 
   // The last finalized balance per location is a suggestion only. It is not
   // copied until the user actually opens the next cash session.
+  // Offene Kasse je Standort (aus den synchronisierten Cloud-Daten): Das Eröffnungsfenster zeigt beim
+  // Antippen eines Standorts sofort „bereits geöffnet – weiterführen“ statt „eröffnen“.
+  const openSessionsByLocation = useMemo<Record<Location, CashSession | null>>(() => ({
+    Friedrichshafen: activeSessionForLocation(store.cashSessions, 'Friedrichshafen'),
+    Bregenz: activeSessionForLocation(store.cashSessions, 'Bregenz'),
+  }), [store.cashSessions]);
   const openingBalanceSuggestions = useMemo<Record<Location, number | null>>(() => {
     const latestFor = (location: Location) => openingBalanceForLocation(store.cashSessions, store.transactions, location);
     return { Friedrichshafen: latestFor('Friedrichshafen'), Bregenz: latestFor('Bregenz') };
@@ -493,6 +500,19 @@ export default function App() {
       setOpeningManagementAccess({ kind: 'employee-denied' });
     }
     setTab('admin');
+  }
+
+  /** Am gewählten Standort ist schon eine Kasse offen: Gerät dorthin umstellen und weiterführen.
+   * Die Anmeldung des Mitarbeiters wird in DIESER Kasse vermerkt (Mitarbeiterzeiten im Abschluss). */
+  function continueOpenSessionAt(location: Location) {
+    const session = openSessionsByLocation[location];
+    store.switchLocation(location);
+    if (session && currentStaff) {
+      store.recordStaffActivity(session.id, {
+        id: `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        type: 'login', staffId: currentStaff.id, staffName: currentStaff.name, timestamp: Date.now(),
+      });
+    }
   }
 
   function recordStaff(type: 'login' | 'logout', user: StaffUser) {
@@ -968,6 +988,8 @@ export default function App() {
             onDiscardEmptySession={discardUnusedSession}
             onHome={goHome}
             openingBalanceSuggestions={openingBalanceSuggestions}
+            openSessionsByLocation={openSessionsByLocation}
+            onContinueSessionAt={continueOpenSessionAt}
           />
           </div>
         )}
