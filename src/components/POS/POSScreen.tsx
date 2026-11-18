@@ -9,6 +9,7 @@ import { CashEntryDialog } from './CashEntryDialog';
 import { CashCorrectionDialog } from './CashCorrectionDialog';
 import { DailyCloseDialog } from './DailyCloseDialog';
 import { ShotSelectionDialog } from './ShotSelectionDialog';
+import { applyShotChoice } from '@/lib/shotCombine';
 import { PfandRetoureDialog } from './PfandRetoureDialog';
 import { BonlisteDialog } from './BonlisteDialog';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -315,8 +316,11 @@ export function POSScreen({
     if (shotCartIndex !== null) {
       setCart((prev) => prev.flatMap((item, index) => {
         if (index !== shotCartIndex || item.isPfandRetoure) return [item];
-        const oldShotPrice = item.shot?.price ?? 0;
-        const nextShot = shot.id === 'none' ? null : shot;
+        const oldShotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
+        // Mehrere Schüsse: jede Auswahl kommt dazu („Glühwein + Rum + Whiskey“).
+        // „Ohne Schuss“ ändert nichts, „Alle Schüsse entfernen“ setzt zurück.
+        const nextShot = applyShotChoice(item.shot, shot);
+        if ((nextShot?.id ?? 'none') === ((item.shot && item.shot.id !== 'none') ? item.shot.id : 'none')) return [item];
         const updated = { ...item, quantity: 1, shot: nextShot, unitPrice: Math.round((item.unitPrice - oldShotPrice + (nextShot?.price ?? 0)) * 100) / 100 };
         return item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }, updated] : [updated];
       }));
@@ -697,7 +701,7 @@ export function POSScreen({
         }} onCancel={() => setShowCloseDialog(false)} />
       )}
       {shotProduct && (
-        <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} onSelect={handleShotSelect} onCancel={() => { setShotProduct(null); setShotCartIndex(null); }} />
+        <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} current={shotCartIndex !== null ? cart[shotCartIndex]?.shot ?? null : null} onSelect={handleShotSelect} onCancel={() => { setShotProduct(null); setShotCartIndex(null); }} />
       )}
       {priceEntryProduct && (
         <IndividualPriceDialog
