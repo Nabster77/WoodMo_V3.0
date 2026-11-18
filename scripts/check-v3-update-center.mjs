@@ -84,4 +84,7 @@ const install = readFileSync(new URL('../src/components/InstallPrompt.tsx', impo
 assert.match(install, /deferred \? 'Bitte als App installieren' : 'App ist schon installiert'/);
 assert.match(install, /neu installieren ist nicht nötig/);
 assert.doesNotMatch(install, /löschen|deinstallieren/i);
+// Startbildschirm-Icon: maskable mit Rand, damit Android WOODMO nicht abschneidet (18.11.2026).
+assert.match(vite, /pwa-maskable-512\.png`, sizes: '512x512', type: 'image\/png', purpose: 'maskable'/);
+assert.doesNotMatch(vite, /pwa-512\.png`, sizes: '512x512', type: 'image\/png', purpose: 'maskable'/);
 console.log('V3-UPDATE-ZENTRALE: Admin-Zugang, unveränderter Update-Weg, Prüfliste, Abbruch und Prüfbericht geprüft.');

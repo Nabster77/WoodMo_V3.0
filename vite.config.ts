@@ -58,7 +58,9 @@ export default defineConfig({
           { src: `${base}woodmo-v3-logo.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Android schneidet „maskable“-Icons rund zu: Logo mit Rand (72 %), damit WOODMO ganz lesbar bleibt (18.11.2026).
+          { src: `${base}pwa-maskable-192.png`, sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: `${base}pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
