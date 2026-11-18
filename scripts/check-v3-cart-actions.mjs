@@ -20,3 +20,18 @@ assert(pos.includes('<PfandRetoureDialog'));
 assert(pos.includes('<BonlisteDialog'));
 assert(pos.includes('onCommit={onCommitStorno}'));
 console.log('Warenkorb: Pfand-Retoure und Bonliste/Storno sichtbar, gut erreichbar, sicher gesperrt ohne Kasse und weiterhin korrekt verdrahtet.');
+
+// Griff am Warenkorb blendet sich nach 5 Sekunden aus; schmaler Streifen holt ihn zurück (Wunsch 18.11.2026).
+const posHandle = readFileSync('src/components/POS/POSScreen.tsx', 'utf8');
+assert.match(posHandle, /const HANDLE_VISIBLE_MS = 5000;/);
+assert.match(posHandle, /\{!handleVisible && \(\s*<button type="button" onClick=\{showHandle\} aria-label="Warenkorb-Griff anzeigen"/);
+assert.match(posHandle, /\{handleVisible && <button type="button" onPointerDown=\{onHandleDown\}/);
+console.log('WARENKORB-GRIFF: blendet nach 5 s aus, Streifen zeigt ihn wieder.');
+
+// Einlage ohne Begründung; Ausgabe weiter mit Grund (Wunsch 18.11.2026).
+const entryDialog = readFileSync('src/components/POS/CashEntryDialog.tsx', 'utf8');
+assert.match(entryDialog, /onSave\(a, isDeposit \? 'Einlage' : reason\.trim\(\)\)/);
+assert.match(entryDialog, /\{!isDeposit && <div>\s*<label[^>]*>Beschreibung \/ Grund<\/label>/);
+assert.match(entryDialog, /disabled=\{!validAmount \|\| \(!isDeposit && !reason\.trim\(\)\)\}/);
+console.log('EINLAGE: ohne Begründung, Ausgabe mit Grund.');
+

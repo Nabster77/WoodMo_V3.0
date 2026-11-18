@@ -24,10 +24,12 @@ export function CashEntryDialog({ currentCashBalance, type, onSave, onClose }: P
   function handleSave() {
     if (submitted.current) return;
     const a = parsedAmount;
-    if (!validAmount || !reason.trim()) return;
+    if (!validAmount || (!isDeposit && !reason.trim())) return;
     submitted.current = true;
     try {
-      onSave(a, reason.trim());
+      // Einlage ohne Begründung (Wunsch 18.11.2026): gespeichert wird der feste Text „Einlage“,
+      // damit Datenformat, Journal und PDF unverändert bleiben. Ausgaben brauchen weiter einen Grund.
+      onSave(a, isDeposit ? 'Einlage' : reason.trim());
     } catch (error) {
       submitted.current = false;
       throw error;
@@ -55,13 +57,13 @@ export function CashEntryDialog({ currentCashBalance, type, onSave, onClose }: P
             <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="z.B. 50,00" inputMode="decimal"
               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
           </div>
-          <div>
+          {!isDeposit && <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Beschreibung / Grund</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isDeposit ? 'z.B. Wechselgeld aufgefüllt' : 'z.B. Privatentnahme'}
               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-          </div>
+          </div>}
           {!isDeposit && !validAmount && amount.trim() && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-400">Die Buchung kann nicht durchgeführt werden. Der vorhandene Bargeldbestand reicht nicht aus oder der Betrag ist ungültig. Ein negativer Kassenbestand ist nicht zulässig.</p>}
-          <button type="submit" disabled={!validAmount || !reason.trim()}
+          <button type="submit" disabled={!validAmount || (!isDeposit && !reason.trim())}
             className={`w-full rounded-xl py-3 text-base font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-50 ${isDeposit ? 'bg-violet-600 hover:bg-violet-700' : 'bg-red-600 hover:bg-red-700'}`}>
             <Check className="mr-1.5 inline h-4 w-4" /> Bestätigen
           </button>
