@@ -50,7 +50,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
             {shotPrice > 0 ? (
               <span>{item.product.name} {formatCurrency(basePrice)} + {shotParts(item.shot).length > 1 ? `${shotParts(item.shot).length} Schüsse` : 'SCHUSS'} {formatCurrency(shotPrice)} = {formatCurrency(item.unitPrice)}</span>
             ) : (
-              <span>Stückpreis {formatCurrency(unitTotal)} · MwSt. {rate}%</span>
+              <span>{item.product.name} {formatCurrency(item.unitPrice)} · MwSt. {rate}%</span>
             )}
             {item.unitPfand > 0 && <span className="block font-medium text-green-600 dark:text-green-400">+ {formatShortEuro(item.unitPfand)} Pfand</span>}
           </div>
