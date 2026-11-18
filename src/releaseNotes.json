@@ -3,6 +3,7 @@
   "notes": [
     "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
     "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",
+    "App-Symbol am Startbildschirm mit Rand: WOODMO wird auf dem Tablet nicht mehr abgeschnitten (Chrome kann einmal „App-Symbol aktualisieren?“ fragen → bestätigen)",
     "Bargeld-Einlage ohne Begründungsfeld (wird als „Einlage“ gespeichert); Ausgaben brauchen weiter einen Grund",
     "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
     "Kasse: Warengruppen als schmale Leiste zum Wischen, vorne ★ für Favoriten: Artikel aus jeder Gruppe selbst markieren („Favoriten wählen“)",
