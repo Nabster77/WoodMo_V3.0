@@ -28,3 +28,10 @@ assert.match(posHandle, /\{!handleVisible && \(\s*<button type="button" onClick=
 assert.match(posHandle, /\{handleVisible && <button type="button" onPointerDown=\{onHandleDown\}/);
 console.log('WARENKORB-GRIFF: blendet nach 5 s aus, Streifen zeigt ihn wieder.');
 
+// Einlage ohne Begründung; Ausgabe weiter mit Grund (Wunsch 18.11.2026).
+const entryDialog = readFileSync('src/components/POS/CashEntryDialog.tsx', 'utf8');
+assert.match(entryDialog, /onSave\(a, isDeposit \? 'Einlage' : reason\.trim\(\)\)/);
+assert.match(entryDialog, /\{!isDeposit && <div>\s*<label[^>]*>Beschreibung \/ Grund<\/label>/);
+assert.match(entryDialog, /disabled=\{!validAmount \|\| \(!isDeposit && !reason\.trim\(\)\)\}/);
+console.log('EINLAGE: ohne Begründung, Ausgabe mit Grund.');
+
