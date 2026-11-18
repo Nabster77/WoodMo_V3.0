@@ -58,6 +58,7 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
   const [step, setStep] = useState<UpdateStep | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [cartConfirmed, setCartConfirmed] = useState(false);
   const admins = useMemo(() => administrators.filter((user) => user.active && user.role === 'administrator'), [administrators]);
 
   async function refresh() {
@@ -103,14 +104,16 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
       title: 'Alle Buchungen übertragen',
       detail: pending === null ? undefined : pending > 0 ? `${pending} offen – „Sync Cloud“ tippen.`
         : cloudStatus !== 'ok' ? 'Abgleich läuft – kurz warten.' : undefined },
-    { required: true, state: sessionOpen ? 'fail' : 'ok', title: 'Keine Kasse offen auf diesem Gerät',
-      detail: sessionOpen ? 'Erst den Tagesabschluss machen.' : undefined },
+    // Offene Kasse sperrt nicht mehr (Regel 18.11.2026): Sie bleibt beim Neustart offen, Bons sind gespeichert.
+    // Nur ein unbezahlter Warenkorb ginge verloren → vorher bestätigen, dass er leer ist.
+    { required: false, state: sessionOpen ? 'warn' : 'ok', title: sessionOpen ? 'Kasse ist offen (bleibt offen)' : 'Keine Kasse offen auf diesem Gerät',
+      detail: sessionOpen ? 'Gebuchte Bons bleiben erhalten. Nur ein unbezahlter Warenkorb würde beim Neustart geleert.' : undefined },
     { required: false, state: backupToday ? 'ok' : 'warn', title: 'Backup von heute',
       detail: backupToday ? `Um ${new Date(backupAt ?? 0).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr.`
         : 'Heute noch keins auf diesem Gerät (Hinweis, kein Muss).' },
     { required: false, state: folder?.state === 'fail' ? 'warn' : folder?.state ?? 'wait', title: 'Speicherort für PDFs', detail: folder?.detail },
   ];
-  const blocked = checks.some((check) => check.required && check.state !== 'ok');
+  const blocked = checks.some((check) => check.required && check.state !== 'ok') || (sessionOpen && !cartConfirmed);
   const busy = step !== null;
 
   async function start() {
@@ -180,7 +183,13 @@ export function UpdateCenter({ administrators, online, cloudStatus, sessionOpen,
               className="min-h-12 w-full rounded-xl bg-slate-900 px-4 py-3 text-base font-bold text-white disabled:opacity-40 dark:bg-white dark:!text-slate-900">
               {updateAvailable ? 'Jetzt aktualisieren' : 'Neu starten und prüfen'}
             </button>
-            {blocked && <p className="text-center text-xs text-slate-500 dark:text-slate-400">Knopf frei, sobald die oberen drei Punkte grün sind.</p>}
+            {sessionOpen && (
+              <label className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                <input type="checkbox" checked={cartConfirmed} onChange={(event) => setCartConfirmed(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" />
+                Warenkorb ist leer, gerade wird kein Kunde bedient. Die Kasse bleibt offen.
+              </label>
+            )}
+            {blocked && <p className="text-center text-xs text-slate-500 dark:text-slate-400">{sessionOpen && !cartConfirmed && !checks.some((check) => check.required && check.state !== 'ok') ? 'Knopf frei, sobald „Warenkorb ist leer“ bestätigt ist.' : 'Knopf frei, sobald Internet und Übertragung grün sind.'}</p>}
             <button type="button" onClick={() => void refresh()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/30 dark:text-slate-100">
               <RefreshCw className="h-4 w-4" /> Erneut prüfen
             </button>

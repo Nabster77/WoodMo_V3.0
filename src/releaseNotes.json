@@ -2,6 +2,7 @@
   "title": "Update November 2026",
   "notes": [
     "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
+    "Update-Zentrale: Update auch bei offener Kasse möglich – vorher „Warenkorb ist leer“ bestätigen; die Kasse bleibt offen",
     "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",
     "Bargeld-Einlage ohne Begründungsfeld (wird als „Einlage“ gespeichert); Ausgaben brauchen weiter einen Grund",
     "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
