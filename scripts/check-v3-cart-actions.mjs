@@ -35,3 +35,11 @@ assert.match(entryDialog, /\{!isDeposit && <div>\s*<label[^>]*>Beschreibung \/ G
 assert.match(entryDialog, /disabled=\{!validAmount \|\| \(!isDeposit && !reason\.trim\(\)\)\}/);
 console.log('EINLAGE: ohne Begründung, Ausgabe mit Grund.');
 
+// Dunkler Modus ist Standard; hell nur nach eigener Wahl auf dem Gerät (Wunsch 18.11.2026).
+const themeHook = readFileSync('src/hooks/useTheme.ts', 'utf8');
+assert.doesNotMatch(themeHook, /prefers-color-scheme/);
+assert.match(themeHook, /if \(userChose && \(stored === 'light' \|\| stored === 'dark'\)\) return stored;\s*return 'dark';/);
+assert.match(themeHook, /saveJSON\(STORAGE_KEYS\.themeUserChoice, true\);/);
+assert.match(readFileSync('index.html', 'utf8'), /<html lang="de" class="dark">/);
+console.log('DARK-MODUS: Standard dunkel, hell nur nach eigener Wahl.');
+

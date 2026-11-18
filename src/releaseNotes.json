@@ -3,6 +3,7 @@
   "notes": [
     "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
     "Bilder an/aus gilt jetzt je Warengruppe (z. B. Handwerk mit Bildern, Getränke ohne) – pro Gerät gespeichert",
+    "Dunkler Modus ist immer Standard; hell bleibt nur, wenn man auf dem Gerät selbst auf hell umschaltet",
     "Update-Zentrale: Update auch bei offener Kasse möglich – der Warenkorb wird automatisch geprüft (muss leer sein); die Kasse bleibt offen",
     "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",
     "App-Symbol am Startbildschirm mit Rand: WOODMO wird auf dem Tablet nicht mehr abgeschnitten (Chrome kann einmal „App-Symbol aktualisieren?“ fragen → bestätigen)",
