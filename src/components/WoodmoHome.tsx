@@ -1,4 +1,5 @@
 import { Cloud, LockKeyhole, Settings2, WifiOff } from 'lucide-react';
+import { APP_VERSION } from '@/lib/updateCenter';
 import type { Location } from '@/types';
 
 interface Props {
@@ -21,7 +22,7 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
       <div className="my-auto flex w-full max-w-3xl flex-col items-center gap-6 py-3 sm:gap-8">
         <div className="text-center">
           <h1 className={`text-3xl font-black tracking-wide sm:text-4xl ${status === 'ok' ? 'woodmo-title-ok' : status === 'error' ? 'woodmo-title-error' : ''}`}>WOODMO</h1>
-          <p className="mt-1 text-sm text-slate-300">Kassen-App · Version 3.0</p>
+          <p className="mt-1 text-sm text-slate-300">Kassen-App Version {APP_VERSION}</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-3 sm:gap-5">
           <button type="button" onClick={onCash}

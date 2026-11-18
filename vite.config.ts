@@ -14,8 +14,17 @@ function gitCommit(): string {
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
   try { return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return 'lokal'; }
 }
+/** Versionsnummer für die Startseite: „3.<Nummer des zuletzt gemergten PR>“, z. B. 3.27.
+ * Wird aus der Merge-Nachricht („Merge pull request #27 …“) gelesen; ohne PR bleibt „3.0“. */
+function appVersion(): string {
+  try {
+    const log = execSync('git log -50 --format=%s', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const match = log.match(/Merge pull request #(\d+)/);
+    return match ? `3.${match[1]}` : '3.0';
+  } catch { return '3.0'; }
+}
 const releaseNotes = JSON.parse(readFileSync(new URL('./src/releaseNotes.json', import.meta.url), 'utf8'));
-const WOODMO_BUILD = { commit: gitCommit(), builtAt: new Date().toISOString(), title: releaseNotes.title, notes: releaseNotes.notes };
+const WOODMO_BUILD = { version: appVersion(), commit: gitCommit(), builtAt: new Date().toISOString(), title: releaseNotes.title, notes: releaseNotes.notes };
 
 // https://vitejs.dev/config/
 export default defineConfig({
