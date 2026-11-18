@@ -41,4 +41,6 @@ assert.match(dialog, /Kein weiterer Schuss/);
 assert.match(dialog, /Alle Schüsse entfernen/);
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 assert.match(types, /shotName\?: string;/, 'Bon-Feld unverändert');
+const row = readFileSync(new URL('../src/components/POS/CartItemRow.tsx', import.meta.url), 'utf8');
+assert.match(row, /\+ \{formatShortEuro\(item\.unitPfand\)\} Pfand/, 'Warenkorb: „+ 3 € Pfand“ bleibt sichtbar');
 console.log('check-v3-shot-combine: OK');

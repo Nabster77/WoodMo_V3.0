@@ -5,6 +5,11 @@ import { Minus, Plus, Trash2, Recycle } from 'lucide-react';
 import { SpiritBadge } from './ProductTile';
 import { shotParts } from '@/lib/shotCombine';
 
+/** „3 €“ statt „3,00 €“; „2,50 €“ bleibt. Nur für den kurzen Pfand-Hinweis im Warenkorb. */
+function formatShortEuro(value: number): string {
+  return Number.isInteger(Math.round(value * 100) / 100) ? `${Math.round(value)} €` : formatCurrency(value);
+}
+
 interface Props {
   item: CartItem;
   location: Location;
@@ -47,7 +52,7 @@ export function CartItemRow({ item, location, onInc, onDec, onRemove, onEditShot
             ) : (
               <span>Stückpreis {formatCurrency(unitTotal)} · MwSt. {rate}%</span>
             )}
-            {item.unitPfand > 0 && <span className="block font-medium text-green-600 dark:text-green-400">+ {formatCurrency(item.unitPfand)} Pfand</span>}
+            {item.unitPfand > 0 && <span className="block font-medium text-green-600 dark:text-green-400">+ {formatShortEuro(item.unitPfand)} Pfand</span>}
           </div>
         )}
       </div>
