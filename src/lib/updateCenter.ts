@@ -26,6 +26,33 @@ export function sameBuild(a: BuildInfo, b: BuildInfo): boolean {
 /** Anzeige auf der Startseite: „3.27“; ältere Builds ohne Nummer: „3.0“. */
 export const APP_VERSION: string = INSTALLED_BUILD.version ?? '3.0';
 
+const RELEASE_NOTICE_KEY = 'woodmo_seen_release_versions_v1';
+
+function seenReleaseVersions(): string[] {
+  try {
+    const versions: unknown = JSON.parse(localStorage.getItem(RELEASE_NOTICE_KEY) ?? '[]');
+    return Array.isArray(versions) ? versions.filter(version => typeof version === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function shouldShowReleaseNotice(existingInstallation: boolean, build = INSTALLED_BUILD): boolean {
+  if (!build.version || !build.notes.length) return false;
+  const seen = seenReleaseVersions();
+  return (existingInstallation || seen.length > 0) && !seen.includes(build.version);
+}
+
+export function markReleaseSeen(build = INSTALLED_BUILD): void {
+  if (!build.version) return;
+  try {
+    const versions = seenReleaseVersions();
+    if (!versions.includes(build.version)) {
+      localStorage.setItem(RELEASE_NOTICE_KEY, JSON.stringify([...versions, build.version]));
+    }
+  } catch { /* Kasse bleibt auch mit blockiertem Browserspeicher bedienbar. */ }
+}
+
 export function buildLabel(info: BuildInfo): string {
   if (!info.builtAt) return info.commit;
   const at = new Intl.DateTimeFormat('de-DE', {

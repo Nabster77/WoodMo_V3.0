@@ -50,7 +50,9 @@ export function buildDailyReport(
     fileName: buildJournalFileName('daily', startOfDay(day.getTime()), endOfDay(day.getTime()), loc),
     reportPeriodStart: startOfDay(day.getTime()),
     exportedByName,
-    cashAuditRecords: cashAuditRecordsFromSessions(sessions),
+    cashAuditRecords: cashAuditRecordsFromSessions(sessions).filter(
+      (entry) => entry.timestamp >= startOfDay(day.getTime()) && entry.timestamp <= endOfDay(day.getTime()),
+    ),
     yearlyPfandOverview: calculateYearlyPfandOverview(
       projectFinancialTransactions(allTransactions, stornos), day.getFullYear(), loc),
   };
