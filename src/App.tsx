@@ -15,7 +15,6 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
-import { ArchivePermissionGate } from '@/components/ArchivePermissionGate';
 import { readDeviceSetup } from '@/lib/deviceSetup';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
 import { RootPasswordWarning } from '@/components/RootPasswordWarning';
@@ -31,8 +30,8 @@ import type { PfandSettings } from '@/types';
 import type { Location, StaffUser } from '@/types';
 import { POSScreen } from '@/components/POS/POSScreen';
 import { WoodmoHome } from '@/components/WoodmoHome';
-import { UpdateCenter, UpdateReport } from '@/components/UpdateCenter';
-import { clearUpdateCheck, markBackupExported, readUpdateCheck } from '@/lib/updateCenter';
+import { ReleaseNotice, UpdateCenter, UpdateReport } from '@/components/UpdateCenter';
+import { clearUpdateCheck, markBackupExported, markReleaseSeen, readUpdateCheck, shouldShowReleaseNotice } from '@/lib/updateCenter';
 import { WoodmoBrand } from '@/components/WoodmoBrand';
 import { AdminScreen } from '@/components/Admin/AdminScreen';
 import { JournalScreen } from '@/components/Journal/JournalScreen';
@@ -53,7 +52,7 @@ import { persistFinalizedCashSession } from '@/lib/finalizedCashCloud';
 import { isTestMode, setTestMode, clearBookings, loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
 import { formatDateISO } from '@/lib/format';
 import { headerDateLong, headerDateShort, headerTime } from '@/lib/headerDate';
-import { exportRecoveryMetadata, restoreBackupSafely, type CompleteBackup } from '@/lib/backupRecovery';
+import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafely, validateBackupCloseArchive, type CompleteBackup } from '@/lib/backupRecovery';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -78,6 +77,12 @@ export default function App() {
   const [cartCount, setCartCount] = useState(0);
   const [updateCenterOpen, setUpdateCenterOpen] = useState(false);
   const [updateReport, setUpdateReport] = useState(() => readUpdateCheck());
+  const [releaseNoticeOpen, setReleaseNoticeOpen] = useState(() =>
+    shouldShowReleaseNotice(updateReport !== null || readDeviceSetup() !== null)
+  );
+  useEffect(() => {
+    if (!releaseNoticeOpen) markReleaseSeen();
+  }, [releaseNoticeOpen]);
   const [tab, setTab] = useState<Tab>('pos');
   // A cash register remains mounted when navigating Home/Admin/Journal: the
   // active unsaved cart must not disappear merely because its view is hidden.
@@ -204,7 +209,6 @@ export default function App() {
     window.addEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
     return () => window.removeEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
   }, []);
-  const openDeviceSetup = useCallback(() => setDeviceSetupOpen(true), []);
 
   // The last finalized balance per location is a suggestion only. It is not
   // copied until the user actually opens the next cash session.
@@ -1114,7 +1118,7 @@ export default function App() {
                 // Passwords are stored only as protected proofs, not plain text.
                 const payload: CompleteBackup = {
                   ...coreBackup,
-                  version: 5,
+                  version: CLOSE_ARCHIVE_BACKUP_VERSION,
                   data: {
                     ...coreBackup.data,
                     transactions: cloudBookings.transactions,
@@ -1152,7 +1156,8 @@ export default function App() {
                   }
 
                   // Financial inconsistencies are rejected before any restore or cloud writes.
-                   const imported = (parsed as CompleteBackup).data!;
+                   const selectedBackup = parsed as CompleteBackup;
+                   const imported = selectedBackup.data!;
                    if (!Array.isArray(imported.transactions) || !Array.isArray(imported.cashSessions)) {
                      throw new Error('Backup enthält keine vollständigen Buchungs- und Kassensitzungslisten.');
                    }
@@ -1161,6 +1166,7 @@ export default function App() {
                      cashSessions: imported.cashSessions,
                      stornos: imported.stornos ?? [],
                    }, 'Backup-Import');
+                   await validateBackupCloseArchive(selectedBackup);
 
                    // Der Wiederherstellungsdienst gleicht die Daten bereits
                   // gezielt mit der Cloud ab. Die normale Hintergrund-
@@ -1168,7 +1174,6 @@ export default function App() {
                   // Änderungen einreihen.
                   await pauseSyncForRestore();
                   restoreSyncPaused = true;
-                  const selectedBackup = parsed as CompleteBackup;
                    const restored = (await restoreToCleanGeneration(selectedBackup)) ??
                      (await restoreBackupSafely(selectedBackup));
                   // The Cloud remains authoritative for immutable storno
@@ -1275,7 +1280,6 @@ export default function App() {
         />
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
-      <ArchivePermissionGate suspended={deviceSetupOpen} onOpenSetup={openDeviceSetup} />
       {updateCenterOpen && (
         <UpdateCenter administrators={staff.users} online={online}
           cloudStatus={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
@@ -1285,6 +1289,9 @@ export default function App() {
       {updateReport && (
         <UpdateReport check={updateReport} transactions={store.transactions} cashSessions={store.cashSessions}
           onClose={() => { clearUpdateCheck(); setUpdateReport(null); }} />
+      )}
+      {releaseNoticeOpen && !deviceSetupOpen && !updateReport && !updateCenterOpen && (
+        <ReleaseNotice onConfirm={() => { markReleaseSeen(); setReleaseNoticeOpen(false); }} />
       )}
       {deviceSetupOpen && <DeviceSetupDialog warning={pdfArchiveWarning} onComplete={() => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); }} onCancel={readDeviceSetup() ? () => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); } : undefined} />}
       <InstallPrompt />

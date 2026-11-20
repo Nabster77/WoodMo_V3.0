@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
 import { PasswordGate } from '@/components/PasswordGate';
 import { readPendingOutbox } from '@/lib/outbox';
@@ -12,6 +12,27 @@ import {
 import type { CashSession, StaffUser, Transaction } from '@/types';
 
 type CheckState = 'ok' | 'warn' | 'fail' | 'wait';
+
+export function ReleaseNotice({ onConfirm }: { onConfirm: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  return (
+    <dialog ref={dialogRef} aria-labelledby="release-notice-title" onCancel={event => event.preventDefault()}
+      className="m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-3xl border border-slate-300 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-black/60 dark:border-white/20 dark:bg-slate-900 dark:text-white">
+      <h2 id="release-notice-title" className="text-xl font-extrabold">Neu in Version {INSTALLED_BUILD.version}</h2>
+      <ul className="my-4 list-disc space-y-2 pl-5 text-sm text-slate-700 dark:text-slate-200">
+        {INSTALLED_BUILD.notes.map(note => <li key={note}>{note}</li>)}
+      </ul>
+      <button type="button" onClick={onConfirm} className="ml-auto block rounded-xl bg-blue-700 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-800">
+        OK
+      </button>
+    </dialog>
+  );
+}
 
 interface Props {
   administrators: StaffUser[];
