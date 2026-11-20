@@ -101,11 +101,16 @@ async function loadExportFolder(): Promise<FileSystemDirectoryHandle | null> {
 
 async function rememberExportFolder(folder: FileSystemDirectoryHandle): Promise<void> {
   const db = await openExportFolderDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const request = db.transaction(EXPORT_FOLDER_STORE, 'readwrite').objectStore(EXPORT_FOLDER_STORE).put(folder, EXPORT_FOLDER_KEY);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(EXPORT_FOLDER_STORE, 'readwrite');
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error('Der Browser konnte den Speicherort nicht dauerhaft speichern.'));
+      transaction.objectStore(EXPORT_FOLDER_STORE).put(folder, EXPORT_FOLDER_KEY);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 async function canWrite(folder: WritableDirectoryHandle): Promise<boolean> {
@@ -192,7 +197,7 @@ export async function configureJournalExportFolder(): Promise<FolderSetupResult>
   if (!picker) return { mode: 'downloads' };
   try {
     // Call picker directly from the button handler to preserve user activation.
-    const selected = await picker({ id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
+    const selected = await picker.call(window, { id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
     const wrongFolder = wrongArchiveFolderMessage(selected.name);
     if (wrongFolder) throw new Error(wrongFolder);
     // Android may grant only READ access at this point although readwrite was
@@ -200,9 +205,6 @@ export async function configureJournalExportFolder(): Promise<FolderSetupResult>
     // second, fresh tap must ask for write access (see grantWriteForPendingFolder).
     let permission: PermissionState | undefined;
     try { permission = await selected.queryPermission?.({ mode: 'readwrite' }); } catch { permission = undefined; }
-    if (permission !== undefined && permission !== 'granted') {
-      try { permission = await selected.requestPermission?.({ mode: 'readwrite' }); } catch { /* needs a new tap */ }
-    }
     if (permission !== undefined && permission !== 'granted') {
       pendingFolder = selected;
       return { mode: 'needs-write', folderName: selected.name };
