@@ -1274,14 +1274,14 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
         </div>
         <div className="flex gap-2">
           <button
-            onClick={onPrint}
+            onClick={onExport}
             disabled={txToday.length === 0}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             <FileDown className="h-3.5 w-3.5" /> PDF-Export
           </button>
           <button
-            onClick={onExport}
+            onClick={onPrint}
             disabled={txToday.length === 0}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40"
           >

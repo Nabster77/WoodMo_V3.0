@@ -26,7 +26,7 @@ import {
   Recycle, Banknote, CreditCard, Printer, FileDown, ClipboardCheck, CheckSquare, Square, Eye,
 } from 'lucide-react';
 
-type Period = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+type Period = 'daily' | 'weekly' | 'lastweek' | 'monthly' | 'yearly' | 'custom';
 
 type GroupMode = 'category' | 'article' | 'tax' | 'bestseller' | 'transaction' | 'dailyClose';
 type LocationFilter = 'all' | 'Friedrichshafen' | 'Bregenz';
@@ -72,6 +72,15 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   const [dailyCloseStatus, setDailyCloseStatus] = useState<DailyCloseStatus>('all');
   const [journalSort, setJournalSort] = useState<JournalSort>('newest');
 
+  // „Heute“, „Diese Woche“ usw. springen über Mitternacht von selbst um (auch wenn das Journal offen bleibt).
+  const [today, setToday] = useState(() => formatDateISO(Date.now()));
+  useEffect(() => {
+    const refresh = () => setToday(formatDateISO(Date.now()));
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
+
   const { start, end, headerLabel } = useMemo(() => {
     const now = Date.now();
     switch (period) {
@@ -84,6 +93,15 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         const kw = getWeekNumber(now);
         return { start: ws, end: we, headerLabel: `Wochenjournal - KW ${kw} (${formatDate(ws)} - ${formatDate(we2.getTime())})` };
       }
+      case 'lastweek': {
+        // Vorwoche Mo–So, wird als Wochenjournal (Ordner „Wochenjournal“) abgelegt.
+        const ws = new Date(startOfWeek(now));
+        ws.setDate(ws.getDate() - 7);
+        const sunday = new Date(ws);
+        sunday.setDate(sunday.getDate() + 6);
+        const kw = getWeekNumber(ws.getTime());
+        return { start: ws.getTime(), end: endOfDay(sunday.getTime()), headerLabel: `Wochenjournal - KW ${kw} (${formatDate(ws.getTime())} - ${formatDate(sunday.getTime())})` };
+      }
       case 'monthly': return { start: startOfMonth(now), end: endOfDay(now), headerLabel: `Monatsjournal - ${monthLabel(now)}` };
       case 'yearly': return { start: startOfYear(now), end: endOfDay(now), headerLabel: `Jahresjournal - ${yearLabel(now)}` };
       case 'custom': {
@@ -92,7 +110,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         return { start: s, end: e, headerLabel: `Zeitraum: ${formatDate(s)} bis ${formatDate(e)}` };
       }
     }
-  }, [period, customFrom, customTo]);
+  }, [period, customFrom, customTo, today]);
 
   const filteredTx = useMemo(() => {
     const search = journalSearch.trim().toLocaleLowerCase('de-DE');
@@ -173,7 +191,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
     transactions: financialTx,
     stornos: filteredStornos,
     categories,
-    fileName: buildJournalFileName(period, start, end, locationFilter),
+    fileName: buildJournalFileName(period === 'lastweek' ? 'weekly' : period, start, end, locationFilter),
     reportPeriodStart: start,
     exportedByName: currentStaff?.name,
     cashAuditRecords: cashAuditRecordsFromSessions(relevantSessions)
@@ -277,7 +295,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
           </label>
           <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300">Zeitraum
             <select value={period} onChange={(event) => setPeriod(event.target.value as Period)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-              <option value="daily">Heute</option><option value="weekly">Diese Woche</option><option value="monthly">Dieser Monat</option><option value="yearly">Dieses Jahr</option><option value="custom">Datum von / bis</option>
+              <option value="daily">Heute</option><option value="weekly">Diese Woche</option><option value="lastweek">Letzte Woche</option><option value="monthly">Dieser Monat</option><option value="yearly">Dieses Jahr</option><option value="custom">Datum von / bis</option>
             </select>
           </label>
           {groupMode === 'dailyClose' && <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300">Status
