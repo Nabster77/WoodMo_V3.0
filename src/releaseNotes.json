@@ -1,30 +1,9 @@
 {
-  "title": "Update November 2026",
+  "title": "WOODMO 3.33",
   "notes": [
-    "Startseite zeigt „Kassen-App Version 3.<PR>“, z. B. 3.28 – so sieht man sofort, ob das Update angekommen ist",
-    "Update-Zentrale: Update auch bei offener Kasse möglich – der Warenkorb wird automatisch geprüft (muss leer sein); die Kasse bleibt offen",
-    "Warenkorb-Griff (Pfeil) blendet sich nach 5 Sekunden aus und verdeckt keine Artikel mehr; schmalen Streifen am Warenkorbrand antippen = Griff wieder da",
-    "App-Symbol am Startbildschirm mit Rand: WOODMO wird auf dem Tablet nicht mehr abgeschnitten (Chrome kann einmal „App-Symbol aktualisieren?“ fragen → bestätigen)",
-    "Bargeld-Einlage ohne Begründungsfeld (wird als „Einlage“ gespeichert); Ausgaben brauchen weiter einen Grund",
-    "Neue Kasse in Schwarz-Weiß: kompakte, gleich große Kacheln, Name groß, Kennzeichnung LIKÖR / SCHNAPS",
-    "Kasse: Warengruppen als schmale Leiste zum Wischen, vorne ★ für Favoriten: Artikel aus jeder Gruppe selbst markieren („Favoriten wählen“)",
-    "Favoriten: in der ★-Ansicht über „Favoriten wählen“ direkt abwählen – abgewählte verschwinden bei „✓ Fertig“, ohne Umweg über die Warengruppen",
-    "SCHUSS: mehrere Schüsse in ein Getränk – nochmal auf SCHUSS tippen fügt den nächsten hinzu („Glühwein + Rum + Whiskey“), Preis = Getränk + Summe der Schüsse; „Ohne Schuss“ berechnet nichts",
-    "Warenkorb kompakter: SCHUSS direkt neben der Menge, Pfand-Retoure/Bonliste kleiner, Netto/MwSt/Pfand zum Aufklappen – Gesamt und Bezahlen immer sichtbar",
-    "Kasse öffnen: Standort mit schon offener Kasse antippen → sofort „bereits geöffnet – Kasse weiterführen“ (keine zweite Kasse, Gerät stellt sich auf den Standort um)",
-    "Suche, Sortierung, Kacheln verschieben und Bilder an/aus in einer Reihe",
-    "Tagesabschluss: Entnahme-Feld öffnet die Tastatur nicht mehr von selbst; Kassenbestand klar nur aus Bargeld",
-    "Tagesinfo und PDFs: „Gesamt kassiert (inkl. Pfand) = Bar + Karte“",
-    "Verwaltung: Kassen-Übersicht und Tagesinfo zeigen den ganzen Tag (alle Kassen des Tages zusammen, Bestände je Kasse); Journal-Anfangsbestand ohne Doppelzählung",
-    "Kassenrechnung: Korrektur des Anfangsbestands steht oben als eigene Zeile (Übernommen vom Vortag → Korrektur → Anfangsbestand Ist) – im Tagesabschluss, im PDF und in der Tagesinfo",
-    "Warenkorb: einklappbar, Breite mit dem Finger verschiebbar, anheften möglich, Schuss auch eingeklappt",
-    "Pfand: Mehrwertsteuer wird jetzt richtig auf das Pfand gerechnet (Journal, Tagesabschluss, PDF)",
-    "Pfand überall in Grün, Pfand-Retoure mit Zahleneingabe",
-    "Kopfzeile mit großer Uhrzeit, Hinweis „Zahlung erfolgreich“ in der Bildschirmmitte",
-    "Sync: Kassen-Konflikt wird nur noch am selben Standort gemeldet (wichtig für Friedrichshafen + Bregenz gleichzeitig)",
-    "Tagesabschluss: Eröffnungsfenster erscheint danach zuverlässig",
-    "Excel: Spalte „Kennzeichnung“, Blatt „Pfand“",
-    "Neu: diese Update-Zentrale mit Prüfliste und Prüfbericht",
-    "Supabase wird täglich wachgehalten (nur lesend)"
+    "Artikelbilder lassen sich je Warengruppe sowie für Favoriten und Suche ein- oder ausschalten.",
+    "Die App startet standardmäßig dunkel. Auf der Startseite steht die WOODMO-Signatur.",
+    "Eine offene Kasse bleibt über Mitternacht offen. Das Journal ordnet Buchungen dem richtigen Kalendertag zu.",
+    "Gebuchte Tagesabschlüsse werden mit Belegnummer und vollständigem Bericht gesichert und wiederhergestellt."
   ]
 }

@@ -938,7 +938,26 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isToday = selectedDate === formatDateISO(Date.now());
+  const [today, setToday] = useState(() => formatDateISO(Date.now()));
+  const isToday = selectedDate === today;
+
+  useEffect(() => {
+    const followCalendar = () => {
+      const next = formatDateISO(Date.now());
+      if (next === today) return;
+      setToday(next);
+      if (selectedDate === today) {
+        setSelectedDate(next);
+        setDateInput(formatDateGermanFromISO(next));
+      }
+    };
+    const timer = window.setInterval(followCalendar, 1000);
+    window.addEventListener('focus', followCalendar);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', followCalendar);
+    };
+  }, [today, selectedDate]);
 
   function handleSwitch(loc: Location) {
     if (loc === selectedLocation) return;

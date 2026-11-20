@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { openingBalanceOfDays } from '@/lib/dayOverview';
+import { loadDailyCloseArchive, sessionCloseArchiveKey } from '@/lib/dailyCloseArchive';
 import type { Category, CashSession, Product, StaffUser, Transaction } from '@/types';
 import { withCurrentCategories } from '@/lib/reportCategory';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -50,6 +51,17 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   const transactions = useMemo(() => withCurrentCategories(storedTransactions, categories, products), [storedTransactions, categories, products]);
   const [period, setPeriod] = useState<Period>('daily');
   const [groupMode, setGroupMode] = useState<GroupMode>('category');
+  const [archive, setArchive] = useState<CashSession[]>([]);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (groupMode !== 'dailyClose') return;
+    let active = true;
+    void loadDailyCloseArchive(false).then(
+      (reports) => { if (active) { setArchive(reports); setArchiveError(null); } },
+      (error: unknown) => { if (active) setArchiveError(error instanceof Error ? error.message : String(error)); },
+    );
+    return () => { active = false; };
+  }, [groupMode]);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>(defaultLocation);
   const [customFrom, setCustomFrom] = useState(formatDateISO(Date.now() - 6 * 86400000));
   const [customTo, setCustomTo] = useState(formatDateISO(Date.now()));
@@ -178,7 +190,9 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
       const receipt = formatDailyCloseReceiptNumber(receiptNumber(session) ?? undefined, session.dailyCloseReceiptLocation ?? session.location, at, session.dailyCloseReceiptYear) ?? '';
       return [receipt, session.location, session.dailyCloseFinalizedByName, session.closedByName, formatDate(at), formatDateISO(at)].filter(Boolean).join(' ').toLocaleLowerCase('de-DE');
     };
-    const matches = cashSessions.filter((session) => {
+    const archived = new Set(archive.map(sessionCloseArchiveKey));
+    const sessions = [...archive, ...cashSessions.filter(session => !archived.has(sessionCloseArchiveKey(session)))];
+    const matches = sessions.filter((session) => {
       if (!session.closed || session.discarded) return false;
       const at = session.closedAt ?? session.openedAt;
       if (at < start || at > end || (locationFilter !== 'all' && session.location !== locationFilter)) return false;
@@ -194,7 +208,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
       if (journalSort === 'receiptDesc') return (receiptNumber(b) ?? -1) - (receiptNumber(a) ?? -1) || bAt - aAt;
       return bAt - aAt;
     });
-  }, [cashSessions, start, end, locationFilter, journalSearch, dailyCloseStatus, journalSort]);
+  }, [archive, cashSessions, start, end, locationFilter, journalSearch, dailyCloseStatus, journalSort]);
   const closeReport = (session: CashSession) => closedSessionReport(session, transactions, categories, currentStaff?.name, stornos);
   const selectedCloseReports = visibleDailyCloses.filter((session) => selectedCloseIds.has(session.id)).map(closeReport);
   const toggleClose = (id: string) => setSelectedCloseIds((current) => {
@@ -214,6 +228,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   return (
     <div className="h-full overflow-y-auto overscroll-contain pb-4">
       <div className="mb-3 flex items-center justify-between gap-2">
+        {groupMode === 'dailyClose' && archiveError && <p role="alert" className="text-sm text-amber-500">{archiveError}</p>}
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{groupMode === 'dailyClose' ? 'Tagesabschlüsse' : headerLabel}</h2>
         <div className="flex gap-2">
           <button

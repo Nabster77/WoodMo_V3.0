@@ -16,7 +16,10 @@ import { DEFAULT_PFAND_SETTINGS } from '@/lib/seed';
 import { fetchAllStaffRows, pushStaffUser, type StaffRow } from '@/lib/staffDirectory';
 import type { CashSession, Category, Location, PfandSettings, Product, StaffUser, Transaction } from '@/types';
 
+import { loadDailyCloseArchive, requireCompleteCloseArchive, restoreDailyCloseArchive } from '@/lib/dailyCloseArchive';
+
 type BackupData = {
+  dailyCloseArchive?: CashSession[];
   transactions?: Transaction[];
   cashSessions?: CashSession[];
   stornos?: StornoRecord[];
@@ -40,6 +43,28 @@ export type CompleteBackup = {
   exportedAt?: string;
   data?: BackupData;
 };
+
+export const CLOSE_ARCHIVE_BACKUP_VERSION = 6;
+
+export async function validateBackupCloseArchive(backup: CompleteBackup): Promise<void> {
+  const data = backup.data;
+  if (!data) return;
+  if (data.dailyCloseArchive === undefined) {
+    if ((backup.version ?? 0) >= CLOSE_ARCHIVE_BACKUP_VERSION) {
+      throw new Error('In dieser Sicherung fehlt das Tagesabschlussarchiv.');
+    }
+    const receipts = data.serverRecovery?.receipts;
+    if (!Array.isArray(receipts) || receipts.length === 0) return;
+    const sessionsById = new Map(data.cashSessions?.map(session => [session.id, session]));
+    const archive = receipts.map(receipt => sessionsById.get(receipt?.session_id));
+    if (archive.some(session => !session)) {
+      throw new Error('Diese ältere Sicherung enthält nur die Nummern einiger Tagesabschlüsse. Bitte eine neue vollständige Sicherung mit Tagesabschlussarchiv verwenden.');
+    }
+    data.dailyCloseArchive = archive as CashSession[];
+  }
+  requireCompleteCloseArchive(data.serverRecovery ?? {}, data.dailyCloseArchive);
+  await restoreDailyCloseArchive(data.dailyCloseArchive, true);
+}
 
 export type RestoredBackup = {
   data: Required<Pick<BackupData, 'transactions' | 'cashSessions' | 'categories' | 'products' | 'pfandSettings'>> & BackupData;
@@ -71,12 +96,14 @@ function newestSessionTime(session: CashSession): number {
   );
 }
 
-export async function exportRecoveryMetadata(): Promise<Pick<BackupData, 'catalogVersions' | 'serverRecovery'>> {
+export async function exportRecoveryMetadata(): Promise<Pick<BackupData, 'catalogVersions' | 'serverRecovery' | 'dailyCloseArchive'>> {
   if (!supabase || !navigator.onLine) throw new Error('Für eine vollständige Sicherung bitte eine Verbindung zur Cloud herstellen.');
   const { data, error } = await supabase.rpc('export_pos_recovery_metadata');
   if (error) throw new Error(`Vollständige Sicherung nicht möglich: ${error.message}`);
   const state = loadJSON<{ synced: Record<string, CatalogEntry>; pending: Record<string, CatalogEntry> }>(STORAGE_KEYS.catalogSync, { synced: {}, pending: {} });
-  return { catalogVersions: { ...state.synced, ...state.pending }, serverRecovery: data };
+  const dailyCloseArchive = await loadDailyCloseArchive();
+  requireCompleteCloseArchive(data as Record<string, unknown>, dailyCloseArchive);
+  return { catalogVersions: { ...state.synced, ...state.pending }, serverRecovery: data, dailyCloseArchive };
 }
 
 function mergeById<T extends { id: string }>(cloud: T[], backup: T[]): T[] {
@@ -287,9 +314,14 @@ export async function restoreBackupSafely(backup: CompleteBackup): Promise<Resto
   }
   if (backup.data.serverRecovery) {
     if (!supabase) throw new Error('Cloud ist nicht konfiguriert.');
-    const { error } = await supabase.rpc('restore_pos_recovery_metadata', { p_metadata: backup.data.serverRecovery });
+    const metadata = backup.data.dailyCloseArchive === undefined
+      ? backup.data.serverRecovery
+      : { ...backup.data.serverRecovery, receipts: [] };
+    const { error } = await supabase.rpc('restore_pos_recovery_metadata', { p_metadata: metadata });
     if (error) throw new Error(`Sicherheitsdaten/Belegzähler konnten nicht wiederhergestellt werden: ${error.message}`);
   }
+
+  await restoreDailyCloseArchive(backup.data.dailyCloseArchive);
 
   const restoredCategories = mergeById(cloudCatalog.categories, restorableCategories).sort((a, b) => a.sortOrder - b.sortOrder);
   const restoredProducts = mergeById(cloudCatalog.products, restorableProducts).sort((a, b) => a.sortOrder - b.sortOrder);

@@ -37,14 +37,19 @@ export function buildDayOverview(
   date: string,
   location: Location,
 ): DayOverview {
+  const start = new Date(date + 'T00:00:00');
+  const next = new Date(start);
+  next.setDate(next.getDate() + 1);
   const sessions = cashSessions
-    .filter((session) => session.date === date && session.location === location && !session.discarded)
+    .filter((session) => session.location === location && !session.discarded && session.openedAt < next.getTime() && (session.closedAt ?? Infinity) >= start.getTime())
     .sort((a, b) => a.openedAt - b.openedAt);
   const seen = new Set<string>();
   const parts: DaySessionPart[] = sessions.map((session) => {
-    const own = sessionTransactions(transactions, session).filter((tx) => !seen.has(tx.id));
+    const sessionTx = sessionTransactions(transactions, session);
+    const own = sessionTx.filter((tx) =>
+      tx.timestamp >= start.getTime() && tx.timestamp < next.getTime() && !seen.has(tx.id));
     for (const tx of own) seen.add(tx.id);
-    return { session, transactions: own, cashBalance: sessionCashBalance(session, own) };
+    return { session, transactions: own, cashBalance: sessionCashBalance(session, sessionTx) };
   });
   const all = parts.flatMap((part) => part.transactions).sort((a, b) => b.timestamp - a.timestamp);
   return { parts, latest: parts[parts.length - 1] ?? null, transactions: all };
