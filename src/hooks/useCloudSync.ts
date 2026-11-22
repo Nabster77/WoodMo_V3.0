@@ -165,10 +165,21 @@ export function useCloudSync(
         const known = knownBookingReset();
         const generationChanged = latestReset.generation > known.generation;
         const resetChanged = generationChanged || latestReset.resetAt > known.resetAt;
-        if (resetChanged && (financialSnapshotRef.current.transactions.length ||
-            financialSnapshotRef.current.cashSessions.length ||
-            (await readPendingOutbox()).length)) {
-          throw new Error('Der Cloud-Kassenstand wurde zurückgesetzt. Lokale Buchungen und offene Kassen bleiben erhalten. Bitte den Kassenstand in der Verwaltung klären.');
+        if (resetChanged) {
+          // Fix 22.11.: Ein Tablet mit alten, aber vollständig übertragenen Daten
+          // (Warteschlange leer, Erst-Upload erledigt) darf den berechtigten Reset
+          // übernehmen. Seine lokalen Daten werden unten vorher dauerhaft archiviert
+          // (Quarantäne) und NICHT erneut hochgeladen; in der Cloud liegen sie in der
+          // alten Generation. Nur echte, noch nicht übertragene Daten blockieren.
+          const unsent = (await readPendingOutbox()).length;
+          const hasLocal = financialSnapshotRef.current.transactions.length > 0 ||
+            financialSnapshotRef.current.cashSessions.length > 0;
+          const fullyUploaded = loadJSON<boolean>(STORAGE_KEYS.cloudBackfilled, false);
+          if (unsent > 0 || (hasLocal && !fullyUploaded)) {
+            throw new Error(unsent > 0
+              ? `Der Cloud-Kassenstand wurde zurückgesetzt. Auf diesem Gerät warten noch ${unsent} nicht übertragene Einträge. Sie bleiben erhalten. Bitte zuerst ein Backup exportieren und den Kassenstand in der Verwaltung klären.`
+              : 'Der Cloud-Kassenstand wurde zurückgesetzt. Lokale Buchungen und offene Kassen bleiben erhalten. Bitte den Kassenstand in der Verwaltung klären.');
+          }
         }
         // Apply even when already known: it repairs stale local state written by
         // a cloud request that began before a completed reset. A new generation
