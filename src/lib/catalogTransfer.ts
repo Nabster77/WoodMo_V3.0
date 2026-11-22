@@ -80,6 +80,9 @@ function imageScore(article: string, group: string, file: string, kind: Kind = '
   // Size must match exactly, and a Likör/Schnaps image never goes to an article without that type.
   if (a.size !== f.size) return 0;
   if (f.kind && !a.kind) return 0;
+  // A bottle image (folder „Flaschen…“) never goes to an article outside a bottle group,
+  // e.g. hot drink „Kaffee“ (Getränke) never gets a Kaffee-Likör bottle.
+  if (isBottleHint(folder) && !isBottleHint(group)) return 0;
   let score = a.key === f.key ? 100 : 94;
   if (a.kind && f.kind && a.kind === f.kind) score += 4;
   if (a.size && f.size) score += 4;
