@@ -5,8 +5,10 @@ import { readFileSync } from 'node:fs';
 const home = readFileSync('src/components/WoodmoHome.tsx','utf8');
 assert.equal((home.match(/<button type="button" onClick=\{on(Cash|Admin)\}/g) ?? []).length, 2,
   'Home has exactly two main tiles.');
-assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 3,
-  'Besides the two tiles only the small Update-Zentrale link exists.');
+assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 4,
+  'Besides the two tiles only the small Update and Setup links exist.');
+assert.match(home, /onClick=\{onUpdate\}/);
+assert.match(home, /onClick=\{onSetup\}/);
 assert.match(home, /text-\[11px\] font-semibold text-slate-500/, 'Update-Zentrale link stays small and unobtrusive.');
 for (const label of ['Kasse eröffnen', 'Kasse fortsetzen', 'Verwaltung',
   'Administrator', 'Cloud / Abgleich prüfen']) {
