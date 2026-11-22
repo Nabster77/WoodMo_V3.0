@@ -404,36 +404,19 @@ export function POSScreen({
     }
   }
 
-  // Schuss-Fenster bleibt offen: jeder Klick wirkt sofort auf EIN Getränk der Zeile.
-  // Bei Menge > 1 wird dieses eine Getränk als eigene Zeile abgespalten (z. B. 5× Glühwein -> 4× ohne + 1× mit Rum).
-  function handleShotAdd(shot: ShotOption, count: number) {
-    if (shotCartIndex === null) return;
-    const index = shotCartIndex;
-    const item = cart[index];
-    if (!item || item.isPfandRetoure) return;
-    const oldShotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
-    const nextShot = applyShotChoice(item.shot, shot, count);
-    if ((nextShot?.id ?? 'none') === ((item.shot && item.shot.id !== 'none') ? item.shot.id : 'none')) return;
-    const updated: CartItem = { ...item, quantity: 1, shot: nextShot, unitPrice: Math.round((item.unitPrice - oldShotPrice + (nextShot?.price ?? 0)) * 100) / 100 };
-    if (item.quantity > 1) {
-      setCart((prev) => prev.flatMap((c, i) => i === index ? [{ ...c, quantity: c.quantity - 1 }, updated] : [c]));
-      setShotCartIndex(index + 1);
-    } else {
-      setCart((prev) => prev.map((c, i) => i === index ? updated : c));
+  function handleShotSelect(shot: ShotOption) {
+    if (shotCartIndex !== null) {
+      setCart((prev) => prev.flatMap((item, index) => {
+        if (index !== shotCartIndex || item.isPfandRetoure) return [item];
+        const oldShotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
+        // Mehrere Schüsse: jede Auswahl kommt dazu („Glühwein + Rum + Whiskey“).
+        // „Ohne Schuss“ ändert nichts, „Alle Schüsse entfernen“ setzt zurück.
+        const nextShot = applyShotChoice(item.shot, shot);
+        if ((nextShot?.id ?? 'none') === ((item.shot && item.shot.id !== 'none') ? item.shot.id : 'none')) return [item];
+        const updated = { ...item, quantity: 1, shot: nextShot, unitPrice: Math.round((item.unitPrice - oldShotPrice + (nextShot?.price ?? 0)) * 100) / 100 };
+        return item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }, updated] : [updated];
+      }));
     }
-  }
-
-  // Beim Schließen: gleiche Zeilen (Artikel, Schuss, Preis, Pfand) wieder zusammenfassen.
-  function closeShotDialog() {
-    setCart((prev) => {
-      const merged: CartItem[] = [];
-      for (const c of prev) {
-        const same = c.isPfandRetoure ? undefined : merged.find((m) => !m.isPfandRetoure && m.product.id === c.product.id &&
-          (m.shot?.id ?? 'none') === (c.shot?.id ?? 'none') && m.unitPrice === c.unitPrice && m.unitPfand === c.unitPfand);
-        if (same) same.quantity += c.quantity; else merged.push({ ...c });
-      }
-      return merged;
-    });
     setShotProduct(null);
     setShotCartIndex(null);
   }
@@ -818,7 +801,7 @@ export function POSScreen({
         }} onCancel={() => setShowCloseDialog(false)} />
       )}
       {shotProduct && (
-        <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} current={shotCartIndex !== null ? cart[shotCartIndex]?.shot ?? null : null} quantity={shotCartIndex !== null ? cart[shotCartIndex]?.quantity ?? 1 : 1} onAdd={handleShotAdd} onCancel={closeShotDialog} />
+        <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} current={shotCartIndex !== null ? cart[shotCartIndex]?.shot ?? null : null} onSelect={handleShotSelect} onCancel={() => { setShotProduct(null); setShotCartIndex(null); }} />
       )}
       {priceEntryProduct && (
         <IndividualPriceDialog

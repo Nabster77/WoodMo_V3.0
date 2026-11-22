@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { applyShotChoice, shotParts, shotCount, NO_SHOT_ID, REMOVE_ALL_SHOTS_ID } from '../src/lib/shotCombine.ts';
+import { applyShotChoice, shotParts, NO_SHOT_ID, REMOVE_ALL_SHOTS_ID } from '../src/lib/shotCombine.ts';
 
 // Mehrere Schüsse in einem Getränk (Wunsch 18.11.2026).
 const rum = { id: 'rum', name: 'Rum', price: 2.5 };
@@ -19,19 +19,8 @@ const two = applyShotChoice(one, whiskey);
 assert.deepEqual(two, { id: 'rum+whiskey', name: 'Rum + Whiskey', price: 5 });
 assert.deepEqual(shotParts(two), ['Rum', 'Whiskey']);
 const three = applyShotChoice(two, rum);
-assert.equal(three.name, '2× Rum + Whiskey', 'gleiche Schüsse werden zusammengefasst');
+assert.equal(three.name, 'Rum + Whiskey + Rum');
 assert.equal(three.price, 7.5);
-assert.deepEqual(shotParts(three), ['Rum', 'Rum', 'Whiskey']);
-assert.deepEqual(shotParts({ id: 'x', name: 'Rum + Whiskey', price: 5 }), ['Rum', 'Whiskey'], 'alte Namen bleiben lesbar');
-
-// XXL-SCHUSS: mehrere auf einmal, auch zusätzlich zu schon gewählten.
-const xxl = applyShotChoice(null, rum, 3);
-assert.deepEqual(xxl, { id: 'rum+rum+rum', name: '3× Rum', price: 7.5 });
-const xxlPlus = applyShotChoice(applyShotChoice(null, rum), rum, 2);
-assert.deepEqual(xxlPlus, { id: 'rum+rum+rum', name: '3× Rum', price: 7.5 }, '1× und XXL addieren sich');
-assert.equal(applyShotChoice(one, rum, 0), one, 'Menge 0 bucht nichts');
-assert.equal(shotCount(xxlPlus, 'Rum'), 3);
-assert.equal(applyShotChoice(null, rum, 2).price, 5);
 
 // Alle entfernen.
 assert.equal(applyShotChoice(three, removeAll), null);
@@ -45,14 +34,10 @@ assert.equal(Math.round((4.2 + two.price) * 100) / 100, 9.2);
 const checkout = readFileSync(new URL('../src/lib/checkoutTransactions.ts', import.meta.url), 'utf8');
 assert.match(checkout, /`\$\{item\.product\.name\} \+ \$\{item\.shot\.name\}`/, 'Bon: „Glühwein + Rum + Whiskey“');
 const pos = readFileSync(new URL('../src/components/POS/POSScreen.tsx', import.meta.url), 'utf8');
-assert.match(pos, /const nextShot = applyShotChoice\(item\.shot, shot, count\);/);
-assert.match(pos, /function closeShotDialog/, 'gleiche Zeilen werden beim Schließen zusammengefasst');
+assert.match(pos, /const nextShot = applyShotChoice\(item\.shot, shot\);/);
 assert.match(pos, /current=\{shotCartIndex !== null \? cart\[shotCartIndex\]\?\.shot \?\? null : null\}/);
 const dialog = readFileSync(new URL('../src/components/POS/ShotSelectionDialog.tsx', import.meta.url), 'utf8');
-assert.doesNotMatch(dialog, /Ohne Schuss/, 'ohne SCHUSS-Button wird nichts hinzugefügt');
-assert.match(dialog, /Extraschuss möglich/);
-assert.match(dialog, /1× SCHUSS/);
-assert.match(dialog, /XXL-SCHUSS/);
+assert.match(dialog, /Kein weiterer Schuss/);
 assert.match(dialog, /Alle Schüsse entfernen/);
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 assert.match(types, /shotName\?: string;/, 'Bon-Feld unverändert');
