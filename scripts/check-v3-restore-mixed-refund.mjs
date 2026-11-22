@@ -66,3 +66,5 @@ console.log('RESTORE: gemischte Bar-Bons mit Pfandrückgabe zurückspielbar, Feh
 const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 assert.match(appSrc, /Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud\. Ein Import ist nicht nötig\./);
 assert.match(appSrc, /byId\(cloudNow\.transactions\) === byId\(imported\.transactions\)/);
+assert.match(appSrc, /In der Cloud sind neuere Daten als in diesem Backup/);
+assert.match(appSrc, /1\. Zuerst das aktuelle Backup sichern \(Backup exportieren\)\.\\n2\. Buchungen zurücksetzen\.\\n3\. Danach dieses Backup importieren\./);

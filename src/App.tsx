@@ -1313,6 +1313,17 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                        alert('Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud. Ein Import ist nicht nötig.');
                        return;
                      }
+                     // Cloud hat Buchungen: ein Import ist erst nach dem Zurücksetzen möglich.
+                     if (cloudNow.transactions.length > 0 || cloudNow.cashSessions.length > 0) {
+                       const cloudIds = new Set(cloudNow.transactions.map(tx => tx.id));
+                       const newer = imported.transactions.every(tx => cloudIds.has(tx.id)) &&
+                         cloudNow.transactions.length > imported.transactions.length;
+                       alert((newer
+                         ? 'In der Cloud sind neuere Daten als in diesem Backup (' + cloudNow.transactions.length + ' statt ' + imported.transactions.length + ' Buchungen).'
+                         : 'In der Cloud sind andere Buchungen als in diesem Backup.') +
+                         '\n\nSo geht es:\n1. Zuerst das aktuelle Backup sichern (Backup exportieren).\n2. Buchungen zurücksetzen.\n3. Danach dieses Backup importieren.');
+                       return;
+                     }
                    }
 
                    // Der Wiederherstellungsdienst gleicht die Daten bereits
