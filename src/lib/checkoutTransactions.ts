@@ -8,12 +8,15 @@ import { pfandReturnTaxRate, taxRateForProduct } from '@/lib/tax';
  * Regel (Betreiber-Vorgabe 14.11.2026):
  * - Bar: Ware und Pfand-Retoure werden verrechnet, eine Barbuchung (wie bisher).
  * - Karte OHNE Pfand-Retoure: eine Kartenbuchung (wie bisher).
- * - Karte MIT Pfand-Retoure: aufgeteilt in
- *     1) Kartenbuchung: nur Ware inkl. Pfand der Ware (läuft übers Konto),
- *     2) Barbuchung „Pfandausgabe“: nur die Pfand-Retoure, wird bar aus der
- *        Kasse ausgezahlt und mindert den Kassenbestand.
- *   Beide Buchungen tragen dieselbe paymentSplitId, damit sie im Journal als
- *   ein Kundenvorgang erkennbar sind.
+ * - Karte MIT Pfand-Retoure (Betreiber-Vorgabe 22.11.2026): zurückgegebene
+ *   Becher werden zuerst mit dem Pfand der neu gekauften Ware verrechnet
+ *   (1 Kaffee + 1 Becher zurück = Karte nur Kaffeepreis, Pfand-Saldo 0).
+ *   Nur zurückgegebene Becher, die das Pfand der Ware übersteigen, werden bar
+ *   ausgezahlt:
+ *     1) Kartenbuchung: Ware inkl. Pfand + verrechnete Retoure (nie < 0 €),
+ *     2) Barbuchung „Pfandausgabe“: nur der Überschuss, mindert den Kassenbestand.
+ *   Beide Buchungen tragen dieselbe paymentSplitId. Ist alles verrechnet,
+ *   gibt es nur die Kartenbuchung. Die Karte erhöht nie den Bargeldbestand.
  * - Nur Pfand-Retoure: eine Barbuchung „Pfandausgabe“ (wie bisher).
  *
  * Pfand-Umsatzsteuer (ab 17.11.2026): Das Pfand teilt den Steuersatz des
@@ -87,11 +90,37 @@ export function checkoutTotals(items: readonly CartItem[], location: Location): 
   };
 }
 
-/** True when a card payment must pay out the Pfand-Retoure in cash. */
+const toCents = (value: number) => Math.round(value * 100);
+
+/**
+ * Card + Pfand-Retoure: returned cups are offset against the Pfand of the goods
+ * on the same receipt first (whole cups only); the rest is paid out in cash.
+ */
+export function splitCardRetoure(items: readonly CartItem[]): { covered: CartItem[]; remaining: CartItem[] } {
+  let capacity = items.filter((item) => !item.isPfandRetoure)
+    .reduce((sum, item) => sum + toCents(item.unitPfand * item.quantity), 0);
+  const covered: CartItem[] = [];
+  const remaining: CartItem[] = [];
+  for (const item of items.filter((line) => line.isPfandRetoure)) {
+    const unit = Math.abs(toCents(item.unitPrice));
+    const count = unit > 0 ? Math.min(item.quantity, Math.floor(capacity / unit)) : 0;
+    capacity -= count * unit;
+    if (count > 0) covered.push({ ...item, quantity: count });
+    if (item.quantity - count > 0) remaining.push({ ...item, quantity: item.quantity - count });
+  }
+  return { covered, remaining };
+}
+
+/** Cash paid out by the drawer for a card payment (only cups not offset). */
+export function cardPfandCashPayout(items: readonly CartItem[]): number {
+  return -splitCardRetoure(items).remaining.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+}
+
+/** True when a card payment must pay out (part of) the Pfand-Retoure in cash. */
 export function isCardWithCashPfandPayout(items: readonly CartItem[], paymentMethod: PaymentMethod | null): boolean {
   return paymentMethod === 'card' &&
-    items.some((item) => item.isPfandRetoure) &&
-    items.some((item) => !item.isPfandRetoure);
+    items.some((item) => !item.isPfandRetoure) &&
+    splitCardRetoure(items).remaining.length > 0;
 }
 
 function retoureItem(item: CartItem, location: Location, pfandTaxByRate: Record<number, number>): TransactionItem {
@@ -167,23 +196,27 @@ export function buildCheckoutTransactions(options: BuildOptions): Transaction[] 
   if (items.length === 0) throw new Error('Leerer Bon kann nicht gebucht werden.');
 
   const goodsLines = items.filter((item) => !item.isPfandRetoure);
-  const retoureLines = items.filter((item) => item.isPfandRetoure);
 
   if (isCardWithCashPfandPayout(items, paymentMethod)) {
+    const { covered, remaining: retoureLines } = splitCardRetoure(items);
+    const cardTotals = checkoutTotals([...goodsLines, ...covered], location);
     const splitId = 'split-' + makeId();
     const taxByRate: Record<number, number> = {};
     const cardPfandTax: Record<number, number> = {};
-    const cardItems = goodsLines.map((item) => goodsItem(item, location, taxByRate, cardPfandTax));
+    const cardItems = [
+      ...goodsLines.map((item) => goodsItem(item, location, taxByRate, cardPfandTax)),
+      ...covered.map((item) => retoureItem(item, location, cardPfandTax)),
+    ];
     const card: Transaction & { paymentSplitId: string; paymentSplitRole: 'card-goods' } = {
       id: makeId(),
       timestamp: now,
       items: cardItems,
-      subtotal: totals.subtotal,
+      subtotal: cardTotals.subtotal,
       taxByRate,
-      totalNet: totals.totalNet,
-      totalTax: totals.totalTax,
-      totalPfand: totals.totalPfand,
-      total: totals.goodsTotal,
+      totalNet: cardTotals.totalNet,
+      totalTax: cardTotals.totalTax,
+      totalPfand: cardTotals.totalPfand + cardTotals.pfandRetoure,
+      total: cardTotals.total,
       pfandTaxByRate: cardPfandTax,
       pfandNet: sumNet(cardItems),
       paymentMethod: 'card',

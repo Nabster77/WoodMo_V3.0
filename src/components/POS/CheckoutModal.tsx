@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CartItem, Transaction, PaymentMethod, Location } from '@/types';
 import { formatCurrency } from '@/lib/format';
-import { buildCheckoutTransactions, checkoutTotals, isCardWithCashPfandPayout } from '@/lib/checkoutTransactions';
+import { buildCheckoutTransactions, cardPfandCashPayout, checkoutTotals, isCardWithCashPfandPayout } from '@/lib/checkoutTransactions';
 import { X, Check, Receipt, Banknote, CreditCard, Coins, Recycle } from 'lucide-react';
 
 export type CheckoutSaveResult = 'queued-online' | 'queued-offline' | 'test';
@@ -26,10 +26,13 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel, c
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { total, goodsTotal, pfandRetoure, isPfandOnly, totalPfand, taxLines } = checkoutTotals(items, location);
+  const { total, pfandRetoure, isPfandOnly, totalPfand, taxLines } = checkoutTotals(items, location);
   // Card + Pfand-Retoure: goods on card, Pfand-Retoure paid out in cash.
+  // Returned cups are first offset against the Pfand of the new drinks;
+  // only the excess is paid out in cash (operator rule 22.11.2026).
   const splitPayout = isCardWithCashPfandPayout(items, paymentMethod);
-  const cashPayout = -pfandRetoure;
+  const cashPayout = splitPayout ? cardPfandCashPayout(items) : -pfandRetoure;
+  const cardAmount = splitPayout ? total + cashPayout : total;
   // "Gegeben" is optional (operator request 15.11.2026): an empty field means
   // the customer paid exactly. Only a typed amount is checked for change/too little.
   const givenEntered = givenAmount.trim() !== '';
@@ -110,7 +113,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel, c
           </div>
           <div className="flex items-baseline justify-between border-t-2 border-gray-300 pt-3 dark:border-gray-600">
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{splitPayout ? 'Per Karte' : 'Zu zahlen'}</span>
-            <span className={`text-3xl font-bold ${(splitPayout ? goodsTotal : total) < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(splitPayout ? goodsTotal : total)}</span>
+            <span className={`text-3xl font-bold ${cardAmount < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>{formatCurrency(cardAmount)}</span>
           </div>
           {splitPayout && (
             <div role="status" className="rounded-xl border border-green-500/60 bg-green-50 p-3 text-sm dark:bg-green-900/20">
@@ -119,7 +122,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel, c
                 <span className="text-xl">{formatCurrency(cashPayout)}</span>
               </div>
               <p className="mt-1 text-xs text-green-800 dark:text-green-200">
-                Ware wird per Karte gebucht. Die Pfand-Retoure wird bar aus der Kasse ausgezahlt und mindert den Kassenbestand (eigener Beleg „Pfandausgabe“).
+                Zurückgegebene Becher sind mit dem Pfand der neuen Getränke verrechnet. Nur der Überschuss wird bar aus der Kasse ausgezahlt (eigener Beleg „Pfandausgabe“).
               </p>
             </div>
           )}
