@@ -15,9 +15,11 @@ interface Props {
    * `hint` repeats what the cashier must still hand out (change, Pfand). */
   onPaid: (result: CheckoutSaveResult, hint?: string) => void;
   onCancel: () => void;
+  /** Current expected cash in the drawer; payouts may never make it negative. */
+  cashAvailable?: number;
 }
 
-export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }: Props) {
+export function CheckoutModal({ items, location, onComplete, onPaid, onCancel, cashAvailable }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [givenAmount, setGivenAmount] = useState('');
   const [paid, setPaid] = useState(false);
@@ -42,7 +44,10 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
       : cashPayment && givenEntered && change > 0.004
         ? `Rückgeld: ${formatCurrency(change)}`
         : undefined;
-  const canPay = !saving && !paid && (isPfandOnly || (!!paymentMethod && !(paymentMethod === 'cash' && given < total)));
+  // Cash leaving the drawer with this receipt (Pfand payout or negative cash total).
+  const cashOut = splitPayout ? cashPayout : (isPfandOnly || paymentMethod === 'cash') && total < 0 ? -total : 0;
+  const cashShort = cashAvailable !== undefined && cashOut > 0.004 && cashAvailable - cashOut < -0.004;
+  const canPay = !saving && !paid && !cashShort && (isPfandOnly || (!!paymentMethod && !(paymentMethod === 'cash' && given < total)));
 
     async function handleConfirm() {
     if (saving || paid) return;
@@ -172,6 +177,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel }:
           )}
 
           </>)}
+                    {cashShort && <p role="alert" className="rounded-xl border border-red-500 p-2 text-sm text-red-600 dark:text-red-300">Nicht genug Bargeld in der Kasse: Bestand {formatCurrency(cashAvailable ?? 0)}, Auszahlung {formatCurrency(cashOut)}. Bitte zuerst eine Einlage buchen.</p>}
                     {saveError && <p role="alert" className="rounded-xl border border-red-500 p-2 text-sm text-red-600 dark:text-red-300">Buchung nicht gespeichert: {saveError}</p>}
           <button
             onClick={() => void handleConfirm()}

@@ -68,24 +68,28 @@ function parseName(raw: string, hint = ''): NameInfo {
 }
 const isBottleHint = (v: string) => /flasche/i.test(v);
 /** Highest score wins; 0 = not the same product. */
-function imageScore(article: string, group: string, file: string): number {
+function imageScore(article: string, group: string, file: string, kind: Kind = ''): number {
   const folder = file.includes('/') ? file.split('/').slice(0, -1).join('/') : '';
   const a = parseName(article, group);
+  if (!a.kind && kind) a.kind = kind;
   const explicitFile = parseName(imageStem(file));
   const f = parseName(imageStem(file), explicitFile.kind ? '' : folder);
   if (!nearlySame(a.key, f.key)) return 0;
   if (a.kind && f.kind && a.kind !== f.kind) return 0;
-  if (a.size && f.size && a.size !== f.size) return 0;
+  // Different article: "Kaffee" (Getränke) is not "Kaffee klein (L)" (Flaschen).
+  // Size must match exactly, and a Likör/Schnaps image never goes to an article without that type.
+  if (a.size !== f.size) return 0;
+  if (f.kind && !a.kind) return 0;
   let score = a.key === f.key ? 100 : 94;
   if (a.kind && f.kind && a.kind === f.kind) score += 4;
-  if (a.size && f.size) score += 4; else if (a.size || f.size) score -= 5;
+  if (a.size && f.size) score += 4;
   if (isBottleHint(group) === isBottleHint(folder)) score += isBottleHint(group) ? 10 : 0; else score -= 10;
   const groupStem = normalizeName(group.replace(/\(.*\)/, ''));
   if (folder && groupStem && normalizeName(folder).includes(groupStem)) score += 3;
   return score;
 }
-function bestImage(article: string, group: string, archive: ImageEntry[]): { file?: ImageEntry; ambiguous: ImageEntry[] } {
-  const scored = archive.map(file => ({ file, score: imageScore(article, group, file.path) })).filter(x => x.score > 0)
+function bestImage(article: string, group: string, archive: ImageEntry[], kind: Kind = ''): { file?: ImageEntry; ambiguous: ImageEntry[] } {
+  const scored = archive.map(file => ({ file, score: imageScore(article, group, file.path, kind) })).filter(x => x.score > 0)
     .sort((x, y) => y.score - x.score || x.file.path.localeCompare(y.file.path, 'de'));
   if (!scored.length) return { ambiguous: [] };
   const top = scored.filter(x => x.score === scored[0].score);
@@ -303,7 +307,7 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
         // Images from the ZIP always win over existing images.
         let image: string | undefined;
         if (archive.length) {
-          const found = bestImage(name, group, archive);
+          const found = bestImage(name, group, archive, p.spiritType ?? '');
           if (found.ambiguous.length) {
             plan.warnings.push(`${name}: mehrere gleich gute ZIP-Bilder gefunden (${found.ambiguous.map(f => f.path).join(', ')}). Bild nicht zugeordnet; bitte Bildnamen eindeutig machen.`);
           } else if (found.file) {

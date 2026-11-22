@@ -814,7 +814,7 @@ export function POSScreen({
         />
       )}
       {showCheckout && cart.length > 0 && (
-        <CheckoutModal items={cart} location={currentLocation} onComplete={handleCheckoutComplete} onPaid={finishCheckout} onCancel={closeCheckout} />
+        <CheckoutModal items={cart} location={currentLocation} cashAvailable={activeSession ? currentCashBalance : undefined} onComplete={handleCheckoutComplete} onPaid={finishCheckout} onCancel={closeCheckout} />
       )}
       {checkoutNotice && (
         <div key={checkoutNotice.id} role="status" aria-live="polite"
