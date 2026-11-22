@@ -86,6 +86,9 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
       }
     }
     state.initialized = true;
+    // The local catalog now mirrors the cloud; never compare it again with the
+    // pre-download state, which could upload outdated values.
+    capturedInitialCatalog = true;
     persist();
     if (effective.length > 0) deps.applyRows(effective, pendingKeys, replace);
   }
@@ -162,8 +165,9 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
 
   async function step(): Promise<boolean> {
     if (!state.initialized) {
-      // Existing devices may have a folder and local data from before catalog sync.
-      initializeFromCloud(await fetchCatalogRows(), false);
+      // A device without catalog sync state takes the cloud catalog as it is
+      // ("Cloud übernehmen"): demo or stale local articles are neither kept nor uploaded.
+      initializeFromCloud(await fetchCatalogRows(), true);
       if (!Object.keys(state.pending).length) return true;
     }
     if (!capturedInitialCatalog) {

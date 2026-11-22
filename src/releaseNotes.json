@@ -1,5 +1,5 @@
 {
-  "title": "WOODMO 3.33.1",
+  "title": "WOODMO Update: Journal, Favoriten, Update-Ablauf",
   "notes": [
     "Journalausgabe bündelt Standort, Zeitraum und Auswertung. Die Datumseingabe unterstützt Punkt, Komma und acht Ziffern.",
     "Favoritenkacheln lassen sich mit Maus und Touch verschieben. Ihre Reihenfolge wird separat gespeichert.",
@@ -8,6 +8,5 @@
     "Kachelreihenfolge, Favoriten und Bildschalter pro Warengruppe bleiben erhalten. Neue Artikel stehen am Ende ihrer Warengruppe.",
     "Offene Übertragungen erhalten zusätzlich eine Wiederherstellungskopie im gewählten Kassenordner.",
     "Manuelle Cloud-Abgleiche laufen über „Synchronisieren“."
-  ],
-  "version": "3.33.1"
+  ]
 }

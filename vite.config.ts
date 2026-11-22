@@ -48,13 +48,36 @@ async function woodmoWindows() {
   const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   return windows.filter(client => client.url.startsWith(self.registration.scope));
 }
+// Marker: the active worker already understands approved updates.
+const woodmoGuardMarker = new URL('.woodmo-update-guard', self.registration.scope).href;
+// Devices still running a version before approved updates (<= 3.33) cannot approve.
+// For that one switch, behave like the previous auto-update and reload the open app once.
+let woodmoLegacySwitch = false;
 self.addEventListener('install', event => {
   if (!self.registration.active) return;
   event.waitUntil((async () => {
+    if (!await caches.match(woodmoGuardMarker, { cacheName: 'woodmo-update-approval-v1' })) {
+      woodmoLegacySwitch = true;
+      await self.skipWaiting();
+      return;
+    }
     const record = await caches.match(woodmoApproval, { cacheName: 'woodmo-update-approval-v1' });
     if (!record || await record.text() !== woodmoTarget || (await woodmoWindows()).length > 1) {
       throw new Error('WOODMO update requires approval in the only open app window');
     }
+  })());
+});
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open('woodmo-update-approval-v1');
+      await cache.put(woodmoGuardMarker, new Response('1'));
+      if (!woodmoLegacySwitch) return;
+      await self.clients.claim();
+      for (const client of await woodmoWindows()) {
+        try { await client.navigate(client.url); } catch { /* reopened later */ }
+      }
+    } catch { /* never block activation */ }
   })());
 });
 self.addEventListener('message', event => {
