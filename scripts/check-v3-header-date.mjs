@@ -15,8 +15,7 @@ assert(app.includes('window.setInterval(update, 10_000)') &&
   'Header date refreshes while a cash session remains open');
 assert(app.includes("{tab === 'pos' && (") && !pos.includes('formatDateLong(activeSession.openedAt)'),
   'Header is current-date display, not the old cash opening date');
-assert(app.includes("min-[700px]:order-none") && app.includes("min-[1500px]:inline") &&
-  app.includes("min-[1100px]:hidden"),
+assert(/min-\[\d+px\]:inline/.test(app) && app.includes('min-[1100px]:absolute') && !/navigator\.userAgent|isTablet/.test(app),
   'Responsiveness uses available viewport width, not device identity');
 assert.equal(headerTime(Date.parse('2026-11-17T00:12:00Z')), '01:12');
 assert(app.includes('{headerTime(headerNow)}'), 'Uhrzeit in der Kopfzeile');

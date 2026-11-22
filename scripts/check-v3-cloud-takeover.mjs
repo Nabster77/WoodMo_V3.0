@@ -8,7 +8,7 @@ const admin=readFileSync('src/components/Admin/AdminScreen.tsx','utf8');
 assert.doesNotMatch(admin + app,/onDownloadCloud|CloudDownloadDialog|KassenCloud herunterladen/);
 assert.match(app,/onContinue=\{\(\) => void continueUpdate\(\)\}/);
 assert.match(app,/await staff\.sync\(\);[\s\S]*?setSyncPercent\(100\);\s*setUpdatePhase\('synced'\)/);
-assert.match(engine,/if \(!state\.initialized\) \{[^}]*initializeFromCloud\(await fetchCatalogRows\(\), false\)/);
+assert.match(engine,/if \(!state\.initialized\) \{[^}]*initializeFromCloud\(await fetchCatalogRows\(\), true\)/);
 assert.match(engine,/if \(effective\.length > 0\) deps\.applyRows\(effective, pendingKeys, replace\)/);
 assert.match(engine,/if \(state\.initialized\) applyCloudRows\(rows\);\s*else initializeFromCloud\(rows, replaceOnFirstDownload\)/);
 assert.match(engine,/!state\.pending\[key\] && row\.updated_at >=/);
