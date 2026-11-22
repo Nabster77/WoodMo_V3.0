@@ -1645,6 +1645,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
   const [confirmed, setConfirmed] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const checkRef = useRef(onCheck);
   checkRef.current = onCheck;
 
@@ -1670,6 +1671,17 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
     setError(null);
     try {
             await onExport();
+      setNotice(null);
+      // An open cash register does not block the backup itself (22.11.2026):
+      // the file is complete. Only the reset needs every register closed, so
+      // there is no reset proof for this backup.
+      if (!testMode && report && !report.resetAllowed) {
+        setBackupRequested(false);
+        setSavedBackup(false);
+        setExportedSignature(null);
+        setNotice('Backup gespeichert. Zurücksetzen ist erst möglich, wenn alle Kassen abgeschlossen sind. Danach hier ein neues Backup erstellen.');
+        return;
+      }
       // Compare the ledger after export to the safety-checked source. Any
       // intervening cloud change invalidates this backup proof.
       if (!testMode) {
@@ -1790,6 +1802,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
           <p className="mb-3 text-xs text-amber-700">Im Testmodus werden nur lokale Testdaten entfernt.</p>
         )}
         {error && <p role="alert" className="mb-3 rounded-xl border border-red-300 p-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {notice && <p role="status" className="mb-3 rounded-xl border border-emerald-400/60 p-2 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
         <div className="flex flex-col gap-2">
           {onExport && <button type="button" disabled={busy || checking || !canBackup}
             onClick={() => void saveBackup()}

@@ -68,3 +68,8 @@ assert.match(appSrc, /Das Backup ist 1:1 identisch mit dem aktuellen Stand in de
 assert.match(appSrc, /byId\(cloudNow\.transactions\) === byId\(imported\.transactions\)/);
 assert.match(appSrc, /In der Cloud sind neuere Daten als in diesem Backup/);
 assert.match(appSrc, /1\. Zuerst das aktuelle Backup sichern \(Backup exportieren\)\.\\n2\. Buchungen zurücksetzen\.\\n3\. Danach dieses Backup importieren\./);
+// Restore-Dialog: echte Zeilenumbrüche, kein „\n“ im Text (22.11.2026).
+assert.doesNotMatch(readFileSync(new URL('../src/lib/restoreToCleanGeneration.ts', import.meta.url), 'utf8'), /\\\\n/);
+// Backup im Reset-Dialog auch bei offener Kasse: Hinweis statt Fehler, Reset bleibt gesperrt.
+const adminSrc = readFileSync(new URL('../src/components/Admin/AdminScreen.tsx', import.meta.url), 'utf8');
+assert.match(adminSrc, /if \(!testMode && report && !report\.resetAllowed\) \{[\s\S]*?setNotice\('Backup gespeichert\. Zurücksetzen ist erst möglich, wenn alle Kassen abgeschlossen sind/);
