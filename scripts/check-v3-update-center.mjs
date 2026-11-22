@@ -34,3 +34,12 @@ assert.match(vite, /cache\.put\(woodmoGuardMarker[\s\S]*?if \(!woodmoLegacySwitc
 assert.doesNotMatch(read('src/releaseNotes.json'), /"version"/, 'Versionsnummer kommt aus der PR-Nummer (3.<PR>)');
 
 console.log('UPDATES: Hintergrundprüfung, bestätigte Aktivierung und Cloud-Abgleich geprüft.');
+// Abgebrochenes Setup: nichts wird abgeglichen oder aktiviert; nach Neustart beginnt das Setup erneut.
+assert.match(app, /if \(!initialSetupPending\(\) && readDeviceSetup\(\)\?\.archiveMode === 'folder'/);
+assert.match(app, /setInitialSetupPending\(true\);\s*if \(canOpenSetup\) setUpdatePhase\('folder'\);/);
+assert.match(app, /await activatePublishedUpdate\(candidate\);\s*setInitialSetupPending\(false\);/);
+assert.match(app, /if \(updatePhase === 'folder'\) setUpdatePhase\('prepared'\);/, 'Abbrechen kehrt nur zurück');
+// Manueller PDF-Export nennt immer den Speicherort.
+const pdfFile = read('src/lib/journalPdfFile.ts');
+assert.match(pdfFile, /alert\('PDF gespeichert:\\n' \+ savedAt\)/);
+assert.match(pdfFile, /\[folder\.name, archiveRootName\(archiveDate\(data\)\), \.\.\.archiveSubfolders\(data\), saved\]\.join\(' › '\)/);

@@ -4,7 +4,7 @@ import { buildJournalHTML, type JournalReportData } from '@/lib/journalPdf';
 import { getWeekNumber } from '@/lib/format';
 import type { Location } from '@/types';
 import { colorNegativeMoney } from '@/lib/movementStyle';
-import { archiveDate, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
+import { archiveDate, archiveSubfolders, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
 import { ensureReportFolder, ensureYearStructure, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
 import { BACKUP_FOLDER } from '@/lib/archiveRoot';
 import { readDeviceSetup } from '@/lib/deviceSetup';
@@ -250,14 +250,16 @@ export async function confirmJournalExportFolder(folder: FileSystemDirectoryHand
  * (siehe canWrite / localArchiveFolder / saveManualPdfToConfiguredArchive).
  */
 
-async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<void> {
+/** Returns the saved location, e.g. "WOODMO › Kasse 2026 › Tagesjournal › Datei.pdf". */
+async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<string> {
   if (data.documentStatus === 'Endgültig abgeschlossen' && data.reportPeriodStart == null) {
     throw new Error('Für einen endgültigen Tagesabschluss fehlt das originale Berichtsdatum.');
   }
   const now = Date.now();
   const target = await ensureReportFolder(folder, data, now);
   // Never overwrite: an existing name gets a copy "Name (1).pdf".
-  await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
+  const saved = await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
+  return [folder.name, archiveRootName(archiveDate(data)), ...archiveSubfolders(data), saved].join(' › ');
 }
 
 type ArchiveTarget = { mode: 'downloads' } | { mode: 'fallback' } | { mode: 'folder'; folder: FileSystemDirectoryHandle };
@@ -620,13 +622,16 @@ async function saveManualPdfToConfiguredArchive(target: ArchiveTarget, data: Jou
     return;
   }
   const selected = target.folder;
+  let savedAt: string;
   try {
-    await saveIntoJournalFolder(selected, data, blob);
+    savedAt = await saveIntoJournalFolder(selected, data, blob);
   } catch (error) {
     if (error instanceof PdfArchiveSetupRequired) throw error;
     console.warn('Der eingestellte PDF-Ordner kann nicht beschrieben werden.', error);
     return requirePdfArchiveSetup('Der PDF-Speicherordner oder ein benötigter Unterordner ist nicht beschreibbar. Bitte den Speicherort im Geräte-Setup überprüfen.');
   }
+  // Manual export: always say where the file went.
+  alert('PDF gespeichert:\n' + savedAt);
 }
 
 function showPdfExportError(error: unknown): void {

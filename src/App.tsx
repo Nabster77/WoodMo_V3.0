@@ -16,7 +16,7 @@ import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
 import { InitialSyncDialog, type UpdatePhase } from '@/components/InitialSyncDialog';
-import { readDeviceSetup } from '@/lib/deviceSetup';
+import { initialSetupPending, readDeviceSetup, setInitialSetupPending } from '@/lib/deviceSetup';
 import { activatePublishedUpdate, activationVerified, approvedActivation, preparePublishedUpdate, publishedUpdate, type PublishedUpdate } from '@/lib/appVersion';
 import { checkStartupData, startupCashDigest } from '@/lib/startupDataCheck';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
@@ -214,9 +214,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     if (updateBusy.current) return;
     setUpdateError(null);
     setUpdatePhase('folder-check');
-    if (readDeviceSetup()?.archiveMode === 'folder' && await archiveFolderStatus() === 'ok') {
+    // An interrupted setup (cancelled or app closed) always starts again with
+    // the setup step; nothing is synced or activated before it is completed.
+    if (!initialSetupPending() && readDeviceSetup()?.archiveMode === 'folder' && await archiveFolderStatus() === 'ok') {
       await syncBeforeUpdate();
     } else {
+      setInitialSetupPending(true);
       if (canOpenSetup) setUpdatePhase('folder');
       else {
         setUpdateError('Ein Administrator muss den Kassenordner einrichten.');
@@ -263,6 +266,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
         throw new Error('Der Kassenstand hat sich seit dem Abgleich geändert. Bitte erneut synchronisieren.');
       }
       await activatePublishedUpdate(candidate);
+      setInitialSetupPending(false);
       setUpdatePhase('reload');
       window.location.reload();
     } catch (error) {
