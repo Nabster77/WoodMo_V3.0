@@ -13,3 +13,7 @@ const rules = read('src/lib/checkoutTransactions.ts');
 assert.match(rules, /Karte MIT Pfand-Retoure \(Betreiber-Vorgabe 22\.11\.2026\)/);
 assert.match(rules, /export function splitCardRetoure/);
 console.log('PFAND-AUSZAHLUNG: nie mehr Bargeld auszahlen, als in der Kasse ist.');
+// Erfolgsmeldung nach Zahlung: klein, unten, ca. 2 s, blockiert nichts (22.11.2026).
+assert.match(pos, /const visibleMs = checkoutNotice\.tone === 'success' \? 2000 : 4500;/);
+assert.match(pos, /pointer-events-none fixed bottom-4 left-1\/2[^`]*rounded-full[^`]*text-sm/);
+assert.match(pos, /✓ Zahlung erfolgreich/);

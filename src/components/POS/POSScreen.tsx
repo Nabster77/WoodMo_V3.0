@@ -111,8 +111,8 @@ export function POSScreen({
   useEffect(() => {
     if (!checkoutNotice) return;
     setCheckoutNoticeFading(false);
-    // Lang genug zum Lesen am Tablet (Wunsch 16.11.2026); mit Betrag etwas länger.
-    const visibleMs = checkoutNotice.tone === 'success' ? (checkoutNotice.detail ? 3500 : 2200) : 4500;
+    // Erfolg: kleine Meldung, nach ca. 2 s weg (Wunsch 22.11.2026). Offline-Hinweis länger.
+    const visibleMs = checkoutNotice.tone === 'success' ? 2000 : 4500;
     const fade = window.setTimeout(() => setCheckoutNoticeFading(true), visibleMs);
     const hide = window.setTimeout(() => setCheckoutNotice(null), visibleMs + 700);
     return () => { window.clearTimeout(fade); window.clearTimeout(hide); };
@@ -816,17 +816,19 @@ export function POSScreen({
       {showCheckout && cart.length > 0 && (
         <CheckoutModal items={cart} location={currentLocation} cashAvailable={activeSession ? currentCashBalance : undefined} onComplete={handleCheckoutComplete} onPaid={finishCheckout} onCancel={closeCheckout} />
       )}
-      {checkoutNotice && (
+      {checkoutNotice && (checkoutNotice.tone === 'success' ? (
+        // Kleine, dezente Erfolgsmeldung unten; blockiert nichts (pointer-events-none).
         <div key={checkoutNotice.id} role="status" aria-live="polite"
-          className={`pointer-events-none fixed left-1/2 top-1/2 z-40 w-[min(calc(100vw-2rem),36rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 px-5 py-4 text-center shadow-2xl transition-opacity duration-700 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'} ${
-            checkoutNotice.tone === 'success'
-              ? 'border-green-400/70 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
-              : 'border-amber-400/70 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100'
-          }`}>
+          className={`pointer-events-none fixed bottom-4 left-1/2 z-40 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border border-green-500/60 bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-opacity duration-500 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'}`}>
+          ✓ Zahlung erfolgreich{checkoutNotice.detail ? ` · ${checkoutNotice.detail}` : ''}
+        </div>
+      ) : (
+        <div key={checkoutNotice.id} role="status" aria-live="polite"
+          className={`pointer-events-none fixed left-1/2 top-1/2 z-40 w-[min(calc(100vw-2rem),36rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 border-amber-400/70 bg-amber-50 px-5 py-4 text-center text-amber-900 shadow-2xl transition-opacity duration-700 dark:bg-amber-950 dark:text-amber-100 ${checkoutNoticeFading ? 'opacity-0' : 'opacity-100'}`}>
           <p className="text-lg font-bold leading-snug sm:text-xl">{checkoutNotice.title}</p>
           {checkoutNotice.detail && <p className="mt-1 text-2xl font-extrabold leading-tight sm:text-3xl">{checkoutNotice.detail}</p>}
         </div>
-      )}
+      ))}
     </div>
   );
 }
