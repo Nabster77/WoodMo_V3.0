@@ -307,13 +307,19 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
           if (!/^(https?:\/\/|\/[^/])/.test(imageUrl)) throw new Error('Bild muss eine HTTP(S)-URL oder ein lokaler Asset-Pfad sein.');
           if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) p.imageUrl = imageUrl;
         }
-        // Images from the ZIP always win over existing images.
+        // ZIP images fill missing images. An existing real image is only replaced by a file
+        // whose name matches the article exactly (no typo tolerance) – and the preview says so.
         let image: string | undefined;
         if (archive.length) {
           const found = bestImage(name, group, archive, p.spiritType ?? '');
+          const hasRealImage = !!p.imageUrl && !/[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl);
+          const exact = !!found.file && parseName(name, group).key === parseName(imageStem(found.file.path)).key;
           if (found.ambiguous.length) {
             plan.warnings.push(`${name}: mehrere gleich gute ZIP-Bilder gefunden (${found.ambiguous.map(f => f.path).join(', ')}). Bild nicht zugeordnet; bitte Bildnamen eindeutig machen.`);
+          } else if (found.file && hasRealImage && !exact) {
+            plan.warnings.push(`${name}: vorhandenes Bild bleibt. ZIP-Datei ${found.file.path} passt nur ähnlich, nicht exakt.`);
           } else if (found.file) {
+            if (hasRealImage) plan.warnings.push(`${name}: vorhandenes Bild wird durch ${found.file.path} ersetzt.`);
             plan.images[p.id] = found.file;
             image = found.file.path;
           } else if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) {
