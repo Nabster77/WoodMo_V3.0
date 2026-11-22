@@ -17,7 +17,7 @@ import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
 import { InitialSyncDialog, type UpdatePhase } from '@/components/InitialSyncDialog';
 import { initialSetupPending, readDeviceSetup, setInitialSetupPending } from '@/lib/deviceSetup';
-import { activatePublishedUpdate, activationVerified, approvedActivation, preparePublishedUpdate, publishedUpdate, type PublishedUpdate } from '@/lib/appVersion';
+import { APP_VERSION, activatePublishedUpdate, activationVerified, approvedActivation, preflightPublishedUpdate, preparePublishedUpdate, publishedUpdate, type PublishedUpdate } from '@/lib/appVersion';
 import { checkStartupData, startupCashDigest } from '@/lib/startupDataCheck';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
 import { CloudPasswordPanel } from '@/components/Admin/CloudPasswordPanel';
@@ -176,20 +176,59 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   );
   const stornoLedger = useStornoLedger(testMode, online);
 
+  // Published updates are detected in the background (start, every 15 min,
+  // when the app comes back to the foreground or online). Nothing is installed:
+  // the running version stays active until "Jetzt installieren" is confirmed.
+  const [updateReady, setUpdateReady] = useState(false);
+  const updateDeferred = useRef(false);
+  const candidateRef = useRef<PublishedUpdate | null>(null);
+  const checkForUpdate = useCallback(async (offer: boolean) => {
+    const update = await publishedUpdate();
+    if (!update) return null;
+    const known = candidateRef.current;
+    if (!known || known.commit !== update.commit || known.builtAt !== update.builtAt) {
+      candidateRef.current = update;
+      setCandidate(update);
+      setUpdateReady(false);
+      // Download check only (HTTP cache); the active app files stay untouched.
+      void preflightPublishedUpdate(update).then(ok => { if (candidateRef.current === update) setUpdateReady(ok); });
+    }
+    if (offer) setUpdatePhase(phase => phase ?? 'offer');
+    return update;
+  }, []);
+
   useEffect(() => {
     const activation = approvedActivation();
     if (activation) {
       if (!activationVerified(activation)) setUpdatePhase('reload');
       return;
     }
-    let active = true;
-    void publishedUpdate().then(update => {
-      if (!active || !update) return;
-      setCandidate(update);
-      setUpdatePhase('offer');
-    }).catch(() => undefined); // Normal startup and offline sync never wait for version.json.
-    return () => { active = false; };
-  }, []);
+    const check = () => {
+      if (document.visibilityState === 'hidden') return;
+      // Offer automatically only until the user chose "Später installieren".
+      void checkForUpdate(!updateDeferred.current).catch(() => undefined); // offline: keep the running app
+    };
+    check();
+    const timer = window.setInterval(check, 15 * 60_000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('online', check);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('online', check);
+    };
+  }, [checkForUpdate]);
+
+  async function openUpdateFromHome() {
+    updateDeferred.current = false;
+    try {
+      const update = candidateRef.current ?? await checkForUpdate(false);
+      if (update) setUpdatePhase('offer');
+      else alert(`Version ${APP_VERSION} ist aktuell.`);
+    } catch (error) {
+      alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
+    }
+  }
 
   async function prepareUpdate() {
     if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
@@ -927,6 +966,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
             testMode={testMode}
             onSetup={canOpenSetup ? () => setDeviceSetupOpen(true) : undefined}
+            updateWaiting={candidate?.version}
+            onUpdate={!currentStaff ? () => void openUpdateFromHome() : undefined}
           />
         )}
         {posVisited && (
@@ -1369,10 +1410,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
       {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
-        <InitialSyncDialog phase={updatePhase} version={candidate?.version} error={updateError} percent={syncPercent}
+        <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
+          notes={candidate?.notes} ready={updateReady} error={updateError} percent={syncPercent}
           onPrepare={() => void prepareUpdate()} onContinue={() => void continueUpdate()}
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
-          onDismiss={() => setUpdatePhase(null)} onReload={() => window.location.reload()} />}
+          onDismiss={() => { updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
       {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
         firstSetup={updatePhase === 'folder'}
         onContinue={() => void syncBeforeUpdate()}

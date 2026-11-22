@@ -87,6 +87,16 @@ export async function preparePublishedUpdate(candidate: PublishedUpdate): Promis
   }
 }
 
+/** Background check that every file of the waiting version can be loaded. Never activates anything. */
+export async function preflightPublishedUpdate(candidate: PublishedUpdate): Promise<boolean> {
+  try {
+    await preparePublishedUpdate(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function activatePublishedUpdate(candidate: PublishedUpdate): Promise<void> {
   const latest = await publishedUpdate();
   if (!latest || buildId(latest) !== buildId(candidate)) throw new Error('Eine andere Version wurde veröffentlicht. Bitte beginnen Sie mit der Update-Prüfung erneut.');
