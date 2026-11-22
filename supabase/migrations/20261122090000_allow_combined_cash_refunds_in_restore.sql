@@ -170,7 +170,7 @@ BEGIN
        v_transaction->>'location' NOT IN('Friedrichshafen','Bregenz') OR
        jsonb_typeof(v_transaction->'items')<>'array' OR
        jsonb_typeof(v_transaction->'taxByRate')<>'object' THEN
-      RAISE EXCEPTION 'Ungültiger Originalbon im Backup.';
+      RAISE EXCEPTION 'Ungültiger Originalbon im Backup (Beleg %).', coalesce(v_transaction->>'restoreSourceId', v_transaction->>'id', 'ohne ID');
     END IF;
     SELECT value INTO v_parent FROM jsonb_array_elements(v_sessions)
       WHERE value->>'id'=v_transaction->>'cashSessionId';
