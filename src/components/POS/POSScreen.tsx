@@ -187,6 +187,8 @@ export function POSScreen({
   // Griff blendet sich nach 5 Sekunden aus (deckt sonst Artikelnamen ab). Ein Antippen
   // des schmalen Streifens am Warenkorbrand holt ihn wieder für 5 Sekunden.
   const HANDLE_VISIBLE_MS = 5000;
+  // Mindestbreite, bei der Name, SCHUSS, Menge und Betrag noch in eine Zeile passen.
+  const CART_MIN_ROW_WIDTH = 360;
   const [handleVisible, setHandleVisible] = useState(true);
   const handleTimer = useRef<number | null>(null);
   const showHandle = useCallback(() => {
@@ -215,7 +217,19 @@ export function POSScreen({
     cartDrag.current = null;
     if (!drag) return;
     showHandle();
-    if (drag.moved) { setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; }); return; }
+    if (drag.moved) {
+      // Zu schmal für eine einzeilige Warenkorbzeile -> vorhandener Zuklappmodus statt Umbruch.
+      const width = cartPanelRef.current?.getBoundingClientRect().width ?? CART_MIN_ROW_WIDTH;
+      if (width < CART_MIN_ROW_WIDTH) {
+        setCartWidth(CART_MIN_ROW_WIDTH);
+        saveJSON(CART_WIDTH_KEY, CART_MIN_ROW_WIDTH);
+        setCartCollapsed(true);
+        saveJSON(CART_COLLAPSED_KEY, true);
+        return;
+      }
+      setCartWidth((value) => { saveJSON(CART_WIDTH_KEY, value); return value; });
+      return;
+    }
     toggleCart();
   };
   // Bilder an/aus gilt für die gerade gewählte Warengruppe (bzw. ★-Ansicht), nicht mehr für alle.
@@ -430,6 +444,10 @@ export function POSScreen({
         .map((c, i) => i === index ? { ...c, quantity: c.quantity - 1 } : c)
         .filter((c) => c.quantity > 0),
     );
+  }
+  function setQuantity(index: number, quantity: number) {
+    if (!Number.isInteger(quantity) || quantity < 1) return;
+    setCart((prev) => prev.map((c, i) => i === index ? { ...c, quantity } : c));
   }
   function removeItem(index: number) {
     setCart((prev) => prev.filter((_, i) => i !== index));
@@ -724,7 +742,7 @@ export function POSScreen({
               <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Noch keine Artikel im Warenkorb</p>
             )}
             {cart.map((item, index) => (
-              <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
+              <CartItemRow key={index} item={item} location={currentLocation} onInc={() => inc(index)} onDec={() => dec(index)} onSetQuantity={(quantity) => setQuantity(index, quantity)} onRemove={() => removeItem(index)} onEditShot={item.product.isPfandArticle || item.product.hasShot ? () => { setShotCartIndex(index); setShotProduct(item.product); } : undefined} />
             ))}
           </div>
           )}

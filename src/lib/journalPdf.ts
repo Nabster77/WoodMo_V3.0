@@ -196,7 +196,9 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
   for (const tx of txs) {
     for (const item of tx.items) {
       if (item.isPfandRetoure) continue;
-      const key = sort ? `${item.productId}-${item.name}` : `${item.productId}-${item.price}`;
+      // Name gehört immer zum Schlüssel: „Glühwein + Rum“ und „Glühwein + Whiskey“ (gleicher Preis)
+      // bleiben getrennte Zeilen, damit Schusssorte und Anzahl im Journal erkennbar sind.
+      const key = sort ? `${item.productId}-${item.name}` : `${item.productId}-${item.price}-${item.name}`;
       const variable = (pricesByProduct.get(item.productId)?.size ?? 0) > 1;
       const label = !sort && variable ? `${item.name} (${formatCurrency(item.price)})` : item.name;
       const isTaxFree = isTaxFreeItem(item);

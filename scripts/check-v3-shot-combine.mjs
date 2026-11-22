@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { applyShotChoice, shotParts, NO_SHOT_ID, REMOVE_ALL_SHOTS_ID } from '../src/lib/shotCombine.ts';
+import { applyShotChoice, shotParts, shotSummary, NO_SHOT_ID, REMOVE_ALL_SHOTS_ID } from '../src/lib/shotCombine.ts';
 
 // Mehrere Schüsse in einem Getränk (Wunsch 18.11.2026).
 const rum = { id: 'rum', name: 'Rum', price: 2.5 };
@@ -19,7 +19,12 @@ const two = applyShotChoice(one, whiskey);
 assert.deepEqual(two, { id: 'rum+whiskey', name: 'Rum + Whiskey', price: 5 });
 assert.deepEqual(shotParts(two), ['Rum', 'Whiskey']);
 const three = applyShotChoice(two, rum);
-assert.equal(three.name, 'Rum + Whiskey + Rum');
+assert.equal(three.name, '2× Rum + Whiskey', 'Sorte und Anzahl auf Bon/Journal');
+assert.deepEqual(shotParts(three), ['Rum', 'Rum', 'Whiskey']);
+assert.deepEqual(shotParts({ id: 'x', name: 'Rum + Rum', price: 5 }), ['Rum', 'Rum'], 'alte Bons lesbar');
+assert.deepEqual(shotSummary(one, 3), { total: 3, label: 'Rum' }, 'Warenkorb: + 3× Schuss Rum');
+assert.deepEqual(shotSummary(two, 2), { total: 4, label: '2× Rum, 2× Whiskey' });
+assert.equal(shotSummary(null, 3), null);
 assert.equal(three.price, 7.5);
 
 // Alle entfernen.
@@ -37,10 +42,14 @@ const pos = readFileSync(new URL('../src/components/POS/POSScreen.tsx', import.m
 assert.match(pos, /const nextShot = applyShotChoice\(item\.shot, shot\);/);
 assert.match(pos, /current=\{shotCartIndex !== null \? cart\[shotCartIndex\]\?\.shot \?\? null : null\}/);
 const dialog = readFileSync(new URL('../src/components/POS/ShotSelectionDialog.tsx', import.meta.url), 'utf8');
-assert.match(dialog, /Kein weiterer Schuss/);
+assert.doesNotMatch(dialog, /Ohne Schuss|Kein weiterer Schuss/, '„Ohne Schuss“ entfernt');
+assert.match(dialog, /Schussauswahl \{location\}/);
 assert.match(dialog, /Alle Schüsse entfernen/);
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 assert.match(types, /shotName\?: string;/, 'Bon-Feld unverändert');
 const row = readFileSync(new URL('../src/components/POS/CartItemRow.tsx', import.meta.url), 'utf8');
-assert.match(row, /\+ \{formatShortEuro\(item\.unitPfand\)\} Pfand/, 'Warenkorb: „+ 3 € Pfand“ bleibt sichtbar');
+assert.match(row, />\+ Pfand</, 'Warenkorb: kurz „+ Pfand“');
+assert.match(row, /\+ \{shots\.total\}× Schuss \{shots\.label\}/, 'Warenkorb: „+ 3× Schuss Rum“');
+const journal = readFileSync(new URL('../src/lib/journalPdf.ts', import.meta.url), 'utf8');
+assert.match(journal, /`\$\{item\.productId\}-\$\{item\.price\}-\$\{item\.name\}`/, 'Journal: Schusssorten nicht zusammengelegt');
 console.log('check-v3-shot-combine: OK');
