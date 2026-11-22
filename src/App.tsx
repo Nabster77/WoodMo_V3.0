@@ -346,6 +346,28 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     throw new Error(problem);
   }
 
+  // Fix 22.11.: Neues/zurückgesetztes Gerät ohne Kassenordner bekommt das
+  // Ordner-Setup auch ohne Update (vorher nur im Update-Ablauf). Nur für Admins,
+  // nur auf dem Startbildschirm, ändert keine Daten. Abbruch -> beim nächsten Start erneut.
+  const [freshSetup, setFreshSetup] = useState(false);
+  const freshSetupShown = useRef(false);
+  useEffect(() => {
+    if (freshSetupShown.current || !canOpenSetup || !homeVisible || currentStaff || updatePhase !== null || deviceSetupOpen) return;
+    if (readDeviceSetup() && !initialSetupPending()) return;
+    freshSetupShown.current = true;
+    setInitialSetupPending(true);
+    setFreshSetup(true);
+    setDeviceSetupOpen(true);
+  }, [canOpenSetup, homeVisible, currentStaff, updatePhase, deviceSetupOpen]);
+
+  async function syncAfterFreshSetup() {
+    setFreshSetup(false);
+    setDeviceSetupOpen(false);
+    setInitialSetupPending(false);
+    const result = await syncNow();
+    if (!result.ok) alert('Ordner gespeichert. Cloud-Abgleich: ' + (result.error || 'nicht abgeschlossen. Bitte „Sync Cloud“ tippen.'));
+  }
+
   // Any PDF export on this device can request reconfiguration. This includes
   // journal exports from another computer restoring a cloud booking history.
   useEffect(() => {
@@ -1444,8 +1466,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
           onDismiss={() => { updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
       {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
-        firstSetup={updatePhase === 'folder'}
-        onContinue={() => void syncBeforeUpdate()}
+        firstSetup={updatePhase === 'folder' || freshSetup}
+        onContinue={() => void (freshSetup && updatePhase !== 'folder' ? syncAfterFreshSetup() : syncBeforeUpdate())}
         onComplete={() => {
           setPdfArchiveWarning(null);
           void backUpPendingOutbox().catch(() => undefined);
@@ -1453,6 +1475,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
         onClose={() => {
           setPdfArchiveWarning(null);
           setDeviceSetupOpen(false);
+          setFreshSetup(false);
           if (updatePhase === 'folder') setUpdatePhase('prepared');
         }} />}
       <InstallPrompt />
