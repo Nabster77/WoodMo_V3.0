@@ -1298,6 +1298,23 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                    }, 'Backup-Import');
                    await validateBackupCloseArchive(selectedBackup);
 
+                   // Backup 1:1 gleich dem aktuellen Cloud-Stand → nichts zu tun (Wunsch 22.11.2026).
+                   {
+                     const current = await fetchLatestBookingReset();
+                     const currentGeneration = current?.generation ?? 0;
+                     const cloudNow = await fetchCloudData(null, currentGeneration);
+                     const stornosNow = await loadCloudStornos(currentGeneration);
+                     const byId = <T extends { id: string }>(rows: readonly T[]) =>
+                       JSON.stringify([...rows].sort((a, b) => a.id.localeCompare(b.id)));
+                     if (cloudNow.transactions.length > 0 &&
+                         byId(cloudNow.transactions) === byId(imported.transactions) &&
+                         byId(cloudNow.cashSessions) === byId(imported.cashSessions) &&
+                         byId(stornosNow) === byId(imported.stornos ?? [])) {
+                       alert('Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud. Ein Import ist nicht nötig.');
+                       return;
+                     }
+                   }
+
                    // Der Wiederherstellungsdienst gleicht die Daten bereits
                   // gezielt mit der Cloud ab. Die normale Hintergrund-
                   // synchronisation darf dabei nicht parallel weitere

@@ -62,3 +62,7 @@ assert.deepEqual(inspectBackupIntegrity({ cashSessions: [session], stornos: [], 
 assert.match(inspectBackupIntegrity({ cashSessions: [session], stornos: [], transactions: [tx('kaputt', cases[2][0])] }).join(), /kaputt.*nicht zurückspielbar/);
 
 console.log('RESTORE: gemischte Bar-Bons mit Pfandrückgabe zurückspielbar, Fehlbons weiterhin abgelehnt.');
+// Backup 1:1 gleich dem Cloud-Stand → Hinweis statt Import (22.11.2026).
+const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+assert.match(appSrc, /Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud\. Ein Import ist nicht nötig\./);
+assert.match(appSrc, /byId\(cloudNow\.transactions\) === byId\(imported\.transactions\)/);
