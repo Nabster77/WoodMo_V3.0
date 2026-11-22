@@ -2,6 +2,7 @@
 // müssen zurückspielbar sein (Bregenz 21.11.2026: -1,00 / -1,80 / -3,00 €).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { isRestorableNegativeReceipt, inspectBackupIntegrity } from '../src/lib/backupIntegrity.ts';
 
 const sql = readFileSync(new URL('../supabase/migrations/20261122090000_allow_combined_cash_refunds_in_restore.sql', import.meta.url), 'utf8');
 assert.match(sql, /CREATE OR REPLACE FUNCTION woodmo_private\.valid_restore_cash_refund\(p_receipt jsonb\)/);
@@ -46,4 +47,18 @@ assert.equal(valid({ ...base, items: [{ productId: 'p3', quantity: 1, price: 6, 
 assert.equal(valid({ ...base, items: [retoure(2)], total: -5, subtotal: 0, totalPfand: -6, totalNet: 0, totalTax: 0 }), false);
 assert.equal(valid({ ...base, paymentMethod: 'card', items: [retoure(2)], total: -6, subtotal: 0, totalPfand: -6, totalNet: 0, totalTax: 0 }), false);
 assert.equal(valid({ ...base, items: [{ productId: 'p1', quantity: 1, price: -5, pfand: 0 }], total: -5, subtotal: -5, totalPfand: 0, totalNet: -5, totalTax: 0 }), false);
+// Die App prüft vor Export/Import mit derselben Regel (sonst wäre ein Reset riskant).
+const cases = [
+  [{ ...base, items: [retoure(2)], total: -6, subtotal: 0, totalPfand: -6, totalNet: 0, totalTax: 0 }, true],
+  [{ ...base, items: [{ productId: 'p2', quantity: 1, price: 4.2, pfand: 3, taxRate: 20, taxAmount: 0.7 }, retoure(3)], total: -1.7999999999999998, subtotal: 4.2, totalPfand: -6, totalNet: 3.5000000000000004, totalTax: 0.6999999999999997 }, true],
+  [{ ...base, items: [retoure(2)], total: -5, subtotal: 0, totalPfand: -6, totalNet: 0, totalTax: 0 }, false],
+  [{ ...base, paymentMethod: 'card', items: [retoure(2)], total: -6, subtotal: 0, totalPfand: -6, totalNet: 0, totalTax: 0 }, false],
+];
+for (const [tx, expected] of cases) assert.equal(isRestorableNegativeReceipt(tx), expected);
+assert.equal(valid.toString().length > 0, true);
+const session = { id: 's1', location: 'Bregenz', openedAt: 1, openingBalance: 100, closed: true, closedAt: 2 };
+const tx = (id, extra) => ({ id, location: 'Bregenz', timestamp: 10, cashSessionId: 's1', ...extra });
+assert.deepEqual(inspectBackupIntegrity({ cashSessions: [session], stornos: [], transactions: [tx('ok', cases[1][0])] }), []);
+assert.match(inspectBackupIntegrity({ cashSessions: [session], stornos: [], transactions: [tx('kaputt', cases[2][0])] }).join(), /kaputt.*nicht zurückspielbar/);
+
 console.log('RESTORE: gemischte Bar-Bons mit Pfandrückgabe zurückspielbar, Fehlbons weiterhin abgelehnt.');
