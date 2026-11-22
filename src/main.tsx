@@ -20,7 +20,7 @@ void navigator.storage?.persist?.().catch(() => false);
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <CloudLoginGate>
-      <App />
+      {adminStartup => <App adminStartup={adminStartup} />}
     </CloudLoginGate>
   </StrictMode>,
 );

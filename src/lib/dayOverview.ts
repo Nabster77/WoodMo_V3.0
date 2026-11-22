@@ -25,10 +25,14 @@ export interface DayOverview {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export function sessionCashBalance(session: CashSession, sessionTx: readonly Transaction[]): number {
-  return round2(session.openingBalance +
-    session.entries.reduce((sum, entry) => sum + (entry.type === 'deposit' ? entry.amount : -entry.amount), 0) +
-    sessionTx.filter((tx) => tx.paymentMethod === 'cash').reduce((sum, tx) => sum + tx.total, 0));
+export function sessionCashBalance(session: CashSession, sessionTx: readonly Transaction[], before = Infinity): number {
+  const laterCorrections = session.corrections.filter((correction) => correction.timestamp >= before)
+    .reduce((sum, correction) => sum + correction.newAmount - correction.oldAmount, 0);
+  const entries = session.entries.filter((entry) => entry.timestamp < before)
+    .reduce((sum, entry) => sum + (entry.type === 'deposit' ? entry.amount : -entry.amount), 0);
+  const sales = sessionTx.filter((tx) => tx.paymentMethod === 'cash' && tx.timestamp < before)
+    .reduce((sum, tx) => sum + tx.total, 0);
+  return round2(session.openingBalance - laterCorrections + entries + sales);
 }
 
 export function buildDayOverview(
@@ -49,7 +53,7 @@ export function buildDayOverview(
     const own = sessionTx.filter((tx) =>
       tx.timestamp >= start.getTime() && tx.timestamp < next.getTime() && !seen.has(tx.id));
     for (const tx of own) seen.add(tx.id);
-    return { session, transactions: own, cashBalance: sessionCashBalance(session, sessionTx) };
+    return { session, transactions: own, cashBalance: sessionCashBalance(session, sessionTx, next.getTime()) };
   });
   const all = parts.flatMap((part) => part.transactions).sort((a, b) => b.timestamp - a.timestamp);
   return { parts, latest: parts[parts.length - 1] ?? null, transactions: all };

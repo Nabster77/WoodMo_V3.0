@@ -23,6 +23,9 @@ import { parsePfandAmount } from '@/lib/pfandValidation';
 import { parsePriceInput } from '@/lib/priceInput';
 import { ShotManager } from '@/components/Admin/ShotManager';
 import { StaffManager } from '@/components/Admin/StaffManager';
+import { ReleaseSummary } from '@/components/ReleaseSummary';
+import { APP_RELEASE_NOTES, APP_VERSION } from '@/lib/appVersion';
+import { loadJSON, saveJSON } from '@/lib/storage';
 
 interface Props {
   onPrepareCatalogImport: () => Promise<CatalogImportSession>;
@@ -70,13 +73,14 @@ interface Props {
   administratorTools?: ReactNode;
   currentStaff?: StaffUser | null;
   menuOpen: boolean;
+  onOpenMenu: () => void;
   onCloseMenu: () => void;
   onOpenJournal: () => void;
   onAdminSectionChange: (section: string) => void;
   onShotDraftDirtyChange?: (dirty: boolean) => void;
 }
 
-type AdminDataProps = Omit<Props, 'menuOpen' | 'onCloseMenu' | 'onOpenJournal' | 'onAdminSectionChange' | 'onShotDraftDirtyChange'>;
+type AdminDataProps = Omit<Props, 'menuOpen' | 'onOpenMenu' | 'onCloseMenu' | 'onOpenJournal' | 'onAdminSectionChange' | 'onShotDraftDirtyChange'>;
 
 const COLOR_OPTIONS = [
   { label: 'Blau', value: 'from-cyan-500 to-blue-600' },
@@ -98,6 +102,8 @@ const COLOR_OPTIONS = [
 ];
 
 const LOCATIONS: Location[] = ['Friedrichshafen', 'Bregenz'];
+const READ_RELEASE_KEY = 'woodmo_admin_read_release_v1';
+const RELEASE_ID = JSON.stringify([APP_VERSION, APP_RELEASE_NOTES]);
 
 const ADMIN_SECTION_TITLES = {
   sessions: 'Kassen-Übersicht',
@@ -108,8 +114,8 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
-  const [tab, setTab] = useState<'sessions' | 'categories' | 'products' | 'shots' | 'staff'>('sessions');
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+  const [tab, setTab] = useState<keyof typeof ADMIN_SECTION_TITLES>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
   const canLeaveShots = () => {
@@ -141,6 +147,15 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   const activeAdminMenuItem = 'border-blue-500 bg-blue-600/30 text-white';
   const adminMenuHeading = 'mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-emerald-300';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
+  const [showReleaseInfo, setShowReleaseInfo] = useState(false);
+  const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
+  const unreadRelease = APP_RELEASE_NOTES.length > 0 && readRelease !== RELEASE_ID;
+  function closeReleaseInfo() {
+    saveJSON(READ_RELEASE_KEY, RELEASE_ID);
+    setReadRelease(RELEASE_ID);
+    setShowReleaseInfo(false);
+    onOpenMenu();
+  }
   // Kassen-Übersicht/Tagesinfo: Bons zusammengelegter Warengruppen der heutigen Gruppe zuordnen (nur Anzeige).
   const overviewTransactions = useMemo(
     () => withCurrentCategories(props.transactions, props.categories, props.products),
@@ -151,12 +166,13 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   // A selected menu entry, including a modal, is always named in the shared
   // header. Closing that modal restores the previously active admin section.
   useEffect(() => {
-    const activeTitle = showCatalogTransfer ? 'Excel-Import / Export'
+    const activeTitle = showReleaseInfo ? 'Info'
+      : showCatalogTransfer ? 'Excel-Import / Export'
       : showImport ? 'Backup importieren'
       : showReset ? 'Buchungen zurücksetzen'
       : ADMIN_SECTION_TITLES[tab];
     onAdminSectionChange(activeTitle);
-  }, [tab, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
+  }, [tab, showReleaseInfo, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
 
   return (
     <div className="flex h-full flex-col">
@@ -211,6 +227,14 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             <section aria-labelledby="woodmo-app-settings" className="mb-5">
               <h3 id="woodmo-app-settings" className={adminMenuHeading}>App-Einstellungen</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button type="button" className={adminMenuItem} aria-haspopup="dialog"
+                  onClick={() => openAdminAction(() => setShowReleaseInfo(true))}>
+                  <Info className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true" /> Info
+                  {unreadRelease && <>
+                    <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
+                    <span className="sr-only">Neue Versionshinweise</span>
+                  </>}
+                </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
                     <Settings className="h-5 w-5 shrink-0 text-emerald-300" /> Setup / PDF-Ordner
@@ -274,6 +298,21 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
               : props.onCreateStaff && props.onUpdateStaff && props.onSetStaffPassword && props.onDeleteStaff ? <div className="space-y-4"><StaffManager users={props.staffUsers ?? []} online={props.staffOnline ?? navigator.onLine} onCreate={props.onCreateStaff} onUpdate={props.onUpdateStaff} onSetPassword={props.onSetStaffPassword} onDelete={props.onDeleteStaff} />{props.administratorTools}</div> : null}
       </div>
+      {showReleaseInfo && (
+        <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]"
+          onClick={closeReleaseInfo} onKeyDown={event => { if (event.key === 'Escape') closeReleaseInfo(); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="woodmo-version-info"
+            className="w-full max-w-md space-y-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            onClick={event => event.stopPropagation()}>
+            <h2 id="woodmo-version-info" className="text-xl font-bold">Info</h2>
+            <ReleaseSummary />
+            <button type="button" autoFocus onClick={closeReleaseInfo}
+              className="ml-auto block min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white dark:bg-white dark:text-slate-900">
+              Schließen
+            </button>
+          </section>
+        </div>
+      )}
       {showCatalogTransfer && <CatalogTransferDialog
         catalog={{categories: props.categories, products: props.products, pfandSettings: props.pfandSettings, shotOptions: props.shotOptions}}
         testMode={testMode} onPrepare={props.onPrepareCatalogImport} onCommit={props.onCommitCatalogImport}

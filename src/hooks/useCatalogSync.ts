@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createCatalogEngine, type ConflictChoice } from '@/lib/catalogEngine';
+import { createCatalogEngine } from '@/lib/catalogEngine';
 import { stableStringify, type CatalogRow } from '@/lib/catalogSync';
 import type { Category, PfandSettings, Product, ShotOption } from '@/types';
 
@@ -9,11 +9,11 @@ interface CatalogSyncOptions {
   pfandSettings: PfandSettings;
   shotOptions: ShotOption[];
   testMode: boolean;
+  offerInitialDownload: boolean;
   applyRows: (rows: CatalogRow[], skipKeys: Set<string>, replaceLocal?: boolean) => void;
 }
 
-export function useCatalogSync({ categories, products, pfandSettings, shotOptions, testMode, applyRows }: CatalogSyncOptions) {
-  const [conflict, setConflict] = useState<CatalogRow[] | null>(null);
+export function useCatalogSync({ categories, products, pfandSettings, shotOptions, testMode, offerInitialDownload, applyRows }: CatalogSyncOptions) {
   const [syncStatus, setSyncStatus] = useState<'pending' | 'syncing' | 'saved' | 'error'>('pending');
   const revision = useRef(0);
   const lastCatalogSnapshot = useRef<string | null>(null);
@@ -29,7 +29,6 @@ export function useCatalogSync({ categories, products, pfandSettings, shotOption
     createCatalogEngine({
       getLocal: () => localRef.current,
       applyRows: (rows, skipKeys, replaceLocal) => applyRef.current(rows, skipKeys, replaceLocal),
-      setConflict,
       isEnabled: () => !testModeRef.current,
     }),
   );
@@ -48,6 +47,7 @@ export function useCatalogSync({ categories, products, pfandSettings, shotOption
   }, [engine]);
 
   useEffect(() => {
+    if (offerInitialDownload) return;
     // React can replace arrays with identical data after a cloud pull. Only a
     // real catalog content change should put the status back into pending.
     const snapshot = stableStringify({ categories, products, pfandSettings, shotOptions });
@@ -62,10 +62,10 @@ export function useCatalogSync({ categories, products, pfandSettings, shotOption
       if (revision.current === current) void syncCatalog(firstRender);
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [engine, categories, products, pfandSettings, shotOptions, testMode, syncCatalog]);
+  }, [engine, categories, products, pfandSettings, shotOptions, testMode, offerInitialDownload, syncCatalog]);
 
   useEffect(() => {
-    if (testMode) return;
+    if (testMode || offerInitialDownload) return;
     // Retry pending uploads after reconnect and periodically when the app stays open.
     const retry = () => { void syncCatalog(true); };
     window.addEventListener('online', retry);
@@ -74,8 +74,13 @@ export function useCatalogSync({ categories, products, pfandSettings, shotOption
       window.removeEventListener('online', retry);
       window.clearInterval(interval);
     };
-  }, [syncCatalog, testMode]);
-  const resolveConflict = useCallback((choice: ConflictChoice) => engine.resolveConflict(choice), [engine]);
-
-  return { conflict, syncStatus, syncCatalog, resolveConflict, prepareImport: engine.prepareImport, commitImport: engine.commitImport };
+  }, [syncCatalog, testMode, offerInitialDownload]);
+  async function downloadCatalog() {
+    const fullySynced = await engine.downloadCatalog(offerInitialDownload);
+    setSyncStatus(fullySynced ? 'saved' : 'pending');
+  }
+  return {
+    downloadCatalog,
+    syncStatus, syncCatalog, prepareImport: engine.prepareImport, commitImport: engine.commitImport,
+  };
 }

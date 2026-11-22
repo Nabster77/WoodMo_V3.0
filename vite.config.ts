@@ -6,10 +6,10 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const base = process.env.VITE_DEPLOY_BASE ?? '/';
+const testReplay = process.env.GITHUB_REPOSITORY === 'TESTwoodmo/testwoodmo.github.io' && process.env.WOODMO_TEST_REPLAY === '1';
+const workerScript = testReplay ? 'sw-release.js' : 'sw.js';
 
-// Versionskennung für die Update-Zentrale: Commit + Bauzeit. Wird in die App
-// eingebaut und zusätzlich als version.json (nicht im Offline-Speicher) abgelegt,
-// damit die App online erkennen kann, ob eine neuere Version bereitliegt.
+// Kennung des veröffentlichten Builds für die Startseite und GitHub-Pages-Prüfung.
 function gitCommit(): string {
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
   try { return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return 'lokal'; }
@@ -24,7 +24,9 @@ function appVersion(): string {
   } catch { return '3.0'; }
 }
 const releaseNotes = JSON.parse(readFileSync(new URL('./src/releaseNotes.json', import.meta.url), 'utf8'));
-const WOODMO_BUILD = { version: appVersion(), commit: gitCommit(), builtAt: new Date().toISOString(), title: releaseNotes.title, notes: releaseNotes.notes };
+const WOODMO_BUILD = { version: releaseNotes.version ?? appVersion(), commit: gitCommit(), builtAt: new Date().toISOString(), title: releaseNotes.title, notes: releaseNotes.notes };
+const workerBuild = `${WOODMO_BUILD.commit}:${WOODMO_BUILD.builtAt}`;
+const workerGuard = `woodmo-update-${WOODMO_BUILD.commit}-${Date.parse(WOODMO_BUILD.builtAt)}.js`;
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -36,12 +38,40 @@ export default defineConfig({
     react(),
     {
       name: 'woodmo-version-json',
-      generateBundle() {
-        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(WOODMO_BUILD, null, 2) });
+      generateBundle(_options, bundle) {
+        const files = Object.keys(bundle).filter(name => /\.(js|css)$/.test(name));
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ ...WOODMO_BUILD, files, workerGuard, workerScript }, null, 2) });
+        this.emitFile({ type: 'asset', fileName: workerGuard, source: `
+const woodmoTarget = ${JSON.stringify(workerBuild)};
+const woodmoApproval = new URL('.woodmo-update-approval', self.registration.scope).href;
+async function woodmoWindows() {
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  return windows.filter(client => client.url.startsWith(self.registration.scope));
+}
+self.addEventListener('install', event => {
+  if (!self.registration.active) return;
+  event.waitUntil((async () => {
+    const record = await caches.match(woodmoApproval, { cacheName: 'woodmo-update-approval-v1' });
+    if (!record || await record.text() !== woodmoTarget || (await woodmoWindows()).length > 1) {
+      throw new Error('WOODMO update requires approval in the only open app window');
+    }
+  })());
+});
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'WOODMO_APPROVED_UPDATE' || !event.ports[0]) return;
+  event.waitUntil((async () => {
+    const ok = event.data.build === woodmoTarget && (await woodmoWindows()).length <= 1;
+    if (ok) await self.skipWaiting();
+    event.ports[0].postMessage(ok);
+  })());
+});
+` });
       },
     },
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      filename: workerScript,
+      ...(testReplay ? { injectRegister: null } : {}),
       includeAssets: ['woodmo-v3-logo.png', 'woodmo-v3-logo.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'WOODMO Kassen-App Version 3.0',
@@ -64,13 +94,13 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: [workerGuard],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
         navigateFallback: `${base}index.html`,
+        ...(testReplay ? { navigateFallbackDenylist: [/^\/update-test(?:-start)?\.html(?:\?|$)/] } : {}),
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
-        // Lädt eine offene ältere App nach dem Update einmal selbst neu (siehe public/sw-reload.js).
-        importScripts: ['sw-reload.js'],
+        clientsClaim: false,
+        skipWaiting: false,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/storage/v1/object/public/article-images/'),

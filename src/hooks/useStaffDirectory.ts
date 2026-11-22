@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { StaffRole, StaffSecurityQuestion, StaffUser } from '@/types';
 import { configureStaffSecurity, createPasswordProof, loadStaffUsers, makeStaffUser, pullStaffUsers, pushStaffUser, removeAllStaffUsers, removeStaffUser, resetStaffPasswordWithSecurity, saveStaffUsers } from '@/lib/staffDirectory';
 
-export function useStaffDirectory() {
+export function useStaffDirectory(startupPending = false) {
   const [users, setUsers] = useState<StaffUser[]>(loadStaffUsers);
 
   const replaceLocal = useCallback((next: StaffUser[]) => {
@@ -15,8 +15,8 @@ export function useStaffDirectory() {
   const sync = useCallback(async () => replaceLocal(await pullStaffUsers()), [replaceLocal]);
 
   useEffect(() => {
-    if (navigator.onLine) void sync().catch(() => undefined);
-  }, [sync]);
+    if (!startupPending && navigator.onLine) void sync().catch(() => undefined);
+  }, [sync, startupPending]);
 
   const create = useCallback(async (name: string, role: StaffRole, initialPassword?: string, securityQuestion?: StaffSecurityQuestion | null, securityAnswer?: string) => {
     if (!name.trim()) throw new Error('Bitte einen Namen eingeben.');

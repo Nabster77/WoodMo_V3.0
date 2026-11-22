@@ -28,12 +28,12 @@ function migrateProduct(p: Product & { taxRate?: number }): Product {
 export function useStore() {
   const [categories, setCategories] = useState<Category[]>(() => {
     const stored = loadJSON<Category[] | null>(STORAGE_KEYS.categories, null);
-    if (stored && stored.length > 0 && stored.every((c) => typeof c.sortOrder === 'number')) return normalizeCategories(stored);
+    if (stored && stored.every((c) => typeof c.sortOrder === 'number')) return normalizeCategories(stored);
     return normalizeCategories(seedCategories);
   });
   const [products, setProducts] = useState<Product[]>(() => {
     const stored = loadJSON<Product[] | null>(STORAGE_KEYS.products, null);
-    if (stored && stored.length > 0 && stored.every((p) => p.prices && typeof p.prices === 'object' && p.pfand && typeof p.pfand === 'object')) {
+    if (stored && stored.every((p) => p.prices && typeof p.prices === 'object' && p.pfand && typeof p.pfand === 'object')) {
       const migrated = stored.map(migrateProduct);
       if (migrated.some((p, i) => p !== stored[i])) saveJSON(STORAGE_KEYS.products, migrated);
       return migrated;
@@ -121,7 +121,7 @@ export function useStore() {
 
   // Product CRUD
   const addProduct = useCallback((data: Omit<Product, 'id'>) => {
-    setProducts((ps) => [...ps, { ...data, id: uid('p') }]);
+    setProducts((ps) => [...ps, { ...data, id: uid('p'), sortOrder: Math.max(-1, ...ps.map(p => p.sortOrder)) + 1 }]);
   }, []);
 
   const updateProduct = useCallback((id: string, data: Partial<Omit<Product, 'id'>>) => {

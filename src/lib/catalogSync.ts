@@ -17,6 +17,35 @@ export interface CatalogEntry {
   id: string;
   json: string | null;
   updatedAt: number;
+  /** Original cloud payload when a new product was appended locally. */
+  cloudJson?: string;
+}
+
+/** Keep each group's existing positions when a product is received for the first time. */
+export function projectProductOrder(rows: CatalogRow[], products: Product[], synced: CatalogSyncState['synced'], preserveSavedOrder: boolean): CatalogRow[] {
+  const local = new Map(products.map(product => [product.id, product]));
+  const tails = new Map<string, number>();
+  for (const product of products) tails.set(product.categoryId, Math.max(tails.get(product.categoryId) ?? -1, product.sortOrder));
+  const incoming = rows.filter(row => row.kind === 'product' && !row.deleted)
+    .sort((a, b) => (a.data as Product).sortOrder - (b.data as Product).sortOrder || a.id.localeCompare(b.id));
+  const projected = new Map<string, CatalogRow>();
+  for (const row of incoming) {
+    const product = row.data as Product;
+    const saved = local.get(row.id);
+    const known = synced[keyOf('product', row.id)];
+    const original = known?.cloudJson ? JSON.parse(known.cloudJson) as Product : null;
+    const tail = tails.get(product.categoryId);
+    let order = product.sortOrder;
+    if (saved?.categoryId === product.categoryId &&
+        (preserveSavedOrder || (original?.categoryId === product.categoryId && original.sortOrder === order))) {
+      order = saved.sortOrder;
+    } else if ((!saved || saved.categoryId !== product.categoryId) && tail !== undefined) {
+      order = Math.max(order, tail + 1);
+    }
+    tails.set(product.categoryId, Math.max(tail ?? -1, order));
+    if (order !== product.sortOrder) projected.set(row.id, { ...row, data: { ...product, sortOrder: order } });
+  }
+  return rows.map(row => row.kind === 'product' && !row.deleted ? projected.get(row.id) ?? row : row);
 }
 
 export interface CatalogSyncState {

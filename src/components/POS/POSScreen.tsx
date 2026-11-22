@@ -78,7 +78,6 @@ interface Props {
   /** Gerät auf den Standort einer dort offenen Kasse umstellen (weiterführen statt neu eröffnen). */
   onContinueSessionAt?: (location: Location) => void;
   /** Meldet die Anzahl Artikel im Warenkorb (Update-Zentrale prüft „Warenkorb ist leer“). */
-  onCartCountChange?: (count: number) => void;
 }
 
 const PFAND_RETOURE_PRODUCT: Product = {
@@ -97,11 +96,10 @@ const PFAND_RETOURE_PRODUCT: Product = {
 export function POSScreen({
   categories, products, shotOptions, activeSession, onCheckout,
   onOpenCash, onCorrectOpening, onCashEntry, onCloseCash, transactions, stornos, stornoStatus, stornoError, stornoServiceReady, testMode, onCommitStorno, onMoveProduct,
-  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openSessionsByLocation, onContinueSessionAt, onCartCountChange,
+  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openSessionsByLocation, onContinueSessionAt,
 }: Props) {
   const [activeCat, setActiveCat] = useState<string>(categories[0]?.id ?? '');
   const [cart, setCart] = useState<CartItem[]>([]);
-  useEffect(() => { onCartCountChange?.(cart.reduce((sum, item) => sum + Math.abs(item.quantity), 0)); }, [cart, onCartCountChange]);
   const [search, setSearch] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutCommitted, setCheckoutCommitted] = useState(false);
@@ -143,8 +141,17 @@ export function POSScreen({
   const [dragMode, setDragMode] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
     const stored = loadJSON<unknown>(FAVORITES_KEY, []);
-    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
+    return Array.isArray(stored) ? [...new Set(stored.filter((id): id is string => typeof id === 'string'))] : [];
   });
+  useEffect(() => {
+    const availableIds = new Set(products.map(product => product.id));
+    setFavoriteIds(ids => {
+      const retained = ids.filter(id => availableIds.has(id));
+      if (retained.length === ids.length) return ids;
+      saveJSON(FAVORITES_KEY, retained);
+      return retained;
+    });
+  }, [products]);
   const [favoriteEdit, setFavoriteEdit] = useState(false);
   // Favoriten direkt in der ★-Ansicht abwählen: Während „Favoriten wählen“ bleiben die
   // Artikel sichtbar (☆ = wird entfernt, nochmal antippen = bleibt). Erst bei „✓ Fertig“
@@ -221,6 +228,56 @@ export function POSScreen({
   });
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const touchDrag = useRef<{ pointerId: number; productId: string } | null>(null);
+
+  function resetProductDrag() {
+    touchDrag.current = null;
+    setDragSource(null);
+    setDragOver(null);
+  }
+
+  function touchProductAt(event: ReactPointerEvent<HTMLDivElement>) {
+    const tile = document.elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-product-drag-id]');
+    return tile && event.currentTarget.contains(tile) ? tile.dataset.productDragId : undefined;
+  }
+
+  function startTouchProductDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragMode || favoriteEdit || event.pointerType !== 'touch' || !event.isPrimary) return;
+    const productId = touchProductAt(event);
+    if (!productId) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    touchDrag.current = { pointerId: event.pointerId, productId };
+    setDragSource(productId);
+  }
+
+  function moveVisibleProduct(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    if (!favoritesActive) {
+      onMoveProduct?.(sourceId, targetId);
+      return;
+    }
+
+    setFavoriteIds(ids => {
+      const source = ids.indexOf(sourceId);
+      const target = ids.indexOf(targetId);
+      if (source < 0 || target < 0) return ids;
+      const next = [...ids];
+      next.splice(source, 1);
+      next.splice(target, 0, sourceId);
+      saveJSON(FAVORITES_KEY, next);
+      return next;
+    });
+  }
+
+  function finishTouchProductDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = touchDrag.current;
+    if (drag?.pointerId !== event.pointerId) return;
+    const targetId = touchProductAt(event);
+    if (targetId) moveVisibleProduct(drag.productId, targetId);
+    resetProductDrag();
+  }
 
   const currentCashBalance = useMemo(() => {
     if (!activeSession) return 0;
@@ -236,7 +293,7 @@ export function POSScreen({
   const requestDailyClose = useCallback(async () => {
     if (!activeSession) return;
     const unused = !activeSession.entries.length && !activeSession.corrections.length &&
-      !transactions.some((tx) => tx.location === activeSession.location && tx.timestamp >= activeSession.openedAt);
+      sessionTransactions(transactions, activeSession).length === 0;
     // Preserve the original rule: no official close for an empty, unfunded till.
     if (!unused || activeSession.openingBalance !== 0) {
       setShowCloseDialog(true);
@@ -289,7 +346,7 @@ export function POSScreen({
     if (search.trim()) {
       list = list.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
     } else if (activeCat === FAVORITES_ID) {
-      // Nur die von Hand markierten Favoriten, in der Reihenfolge der Markierung.
+      // Markierte Favoriten in ihrer gespeicherten Reihenfolge.
       // Beim Bearbeiten bleiben auch gerade abgewählte sichtbar (bis „✓ Fertig“).
       const shownIds = favoriteEdit && favoriteEditShown
         ? [...favoriteEditShown, ...favoriteIds.filter((id) => !favoriteEditShown.includes(id))]
@@ -446,7 +503,7 @@ export function POSScreen({
             </button>
             {shownCategories.map((cat) => (
               <button key={cat.id} type="button" role="tab" aria-selected={activeCat === cat.id && !search}
-                onClick={() => { setActiveCat(cat.id); setSearch(''); }}
+                onClick={() => { setActiveCat(cat.id); setSearch(''); setDragMode(false); resetProductDrag(); }}
                 className={`flex h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-xl px-4 text-sm font-bold shadow-sm transition active:scale-[0.98] sm:text-base ${activeCat === cat.id && !search ? 'woodmo-cat-active bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}>
                 <DynamicIcon name={cat.icon} className="h-4 w-4 shrink-0" />
                 <span>{cat.name}</span>
@@ -464,16 +521,13 @@ export function POSScreen({
             <select aria-label="Kassenartikel sortieren" value={sortMode}
               onChange={event => { setSortMode(event.target.value as 'manual' | 'asc' | 'desc'); setDragMode(false); }}
               className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-              <option value="manual">{favoritesActive ? 'Wie markiert' : 'Eigene Reihenfolge'}</option>
+              <option value="manual">Eigene Reihenfolge</option>
               <option value="asc">Aufsteigend (A–Z)</option>
               <option value="desc">Absteigend (Z–A)</option>
             </select>
-            <button type="button" aria-pressed={favoriteEdit}
+            <button type="button" aria-pressed={favoriteEdit} disabled={!favoriteEdit && favoritesActive && visibleProducts.length === 0}
               onClick={() => {
                 if (!favoriteEdit) {
-                  // In der ★-Ansicht: direkt dort abwählen. Nur wenn noch keine Favoriten da sind,
-                  // geht es zur ersten Warengruppe, um welche zu markieren.
-                  if (favoritesActive && favoriteIds.length === 0 && shownCategories[0]) setActiveCat(shownCategories[0].id);
                   setFavoriteEditShown([...favoriteIds]);
                 } else {
                   setFavoriteEditShown(null);
@@ -481,14 +535,14 @@ export function POSScreen({
                 setFavoriteEdit((v) => !v); setDragMode(false);
               }}
               title="Artikel als Favorit markieren oder entfernen"
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${favoriteEdit
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition disabled:opacity-50 ${favoriteEdit
                 ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
                 : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
-              <Star className="h-3.5 w-3.5" /> {favoriteEdit ? '✓ Fertig' : 'Favoriten wählen'}
+              <Star className="h-3.5 w-3.5" /> {favoriteEdit ? '✓ Fertig' : favoritesActive ? 'Favoriten abwählen' : 'Favoriten wählen'}
             </button>
-            {visibleProducts.length > 1 && !search.trim() && !favoritesActive && !favoriteEdit && (
+            {visibleProducts.length > 1 && !search.trim() && !favoriteEdit && (
               <button type="button" aria-pressed={dragMode}
-                onClick={() => { if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
+                onClick={() => { resetProductDrag(); if (!dragMode) setSortMode('manual'); setDragMode(v => !v); }}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
                   dragMode
                     ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
@@ -506,10 +560,10 @@ export function POSScreen({
             {search.trim() && <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Suchergebnisse für „{search}“</span>}
           </div>
           {favoriteEdit && (
-            <p role="status" className="mb-2 shrink-0 rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-200">
+            <p role="status" className="mb-2 w-fit max-w-full shrink-0 rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-200">
               {favoritesActive
-                ? '★ Artikel antippen = aus den Favoriten entfernen (☆) oder behalten (★). Es wird nichts verkauft. Danach „✓ Fertig“.'
-                : '★ Artikel antippen = als Favorit markieren oder entfernen (in jeder Warengruppe). Es wird nichts verkauft. Danach „✓ Fertig“.'}
+                ? '★ Antippen zum Abwählen.'
+                : '★ Antippen zum Markieren.'}
             </p>
           )}
 
@@ -517,10 +571,18 @@ export function POSScreen({
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleProducts.length === 0 ? (
               <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-                <p className="max-w-sm text-center text-sm">{favoritesActive ? 'Noch keine Favoriten. Auf „Favoriten wählen“ tippen und in den Warengruppen Artikel markieren.' : 'Keine Artikel gefunden'}</p>
+                <p className="max-w-sm text-center text-sm">{favoritesActive ? 'Noch keine Favoriten. In einer Warengruppe „Favoriten wählen“ antippen.' : 'Keine Artikel gefunden'}</p>
               </div>
             ) : (
-              <div className={showImages
+              <div onPointerDown={startTouchProductDrag}
+                onPointerMove={(event) => {
+                  if (touchDrag.current?.pointerId === event.pointerId) setDragOver(touchProductAt(event) ?? null);
+                }}
+                onPointerUp={finishTouchProductDrag}
+                onLostPointerCapture={(event) => {
+                  if (touchDrag.current?.pointerId === event.pointerId) resetProductDrag();
+                }}
+                className={showImages
                 ? 'grid grid-cols-2 gap-2 min-[1040px]:grid-cols-3 min-[1420px]:grid-cols-4 min-[1740px]:grid-cols-5'
                 : 'grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-1.5'}>
                 {visibleProducts.map((product) => (
@@ -534,13 +596,11 @@ export function POSScreen({
                     dragMode={dragMode && !favoriteEdit}
                     onDragStart={(id) => setDragSource(id)}
                     onDragOver={(id) => setDragOver(id)}
-                    onDrop={() => {
-                      if (dragSource && dragOver && dragSource !== dragOver) {
-                        onMoveProduct?.(dragSource, dragOver);
-                      }
-                      setDragSource(null);
-                      setDragOver(null);
+                    onDrop={(targetId) => {
+                      if (dragSource) moveVisibleProduct(dragSource, targetId);
+                      resetProductDrag();
                     }}
+                    onDragEnd={resetProductDrag}
                     isDraggedOver={dragOver === product.id}
                     isDragging={dragSource === product.id}
                   />
