@@ -96,6 +96,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const [deviceSetupOpen, setDeviceSetupOpen] = useState(false);
   const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
   const [candidate, setCandidate] = useState<PublishedUpdate | null>(null);
+  const [autoInstallPending, setAutoInstallPending] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [syncPercent, setSyncPercent] = useState(0);
   const updateBusy = useRef(false);
@@ -194,7 +195,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       // Download check only (HTTP cache); the active app files stay untouched.
       void preflightPublishedUpdate(update).then(ok => { if (candidateRef.current === update) setUpdateReady(ok); });
     }
-    if (offer) setUpdatePhase(phase => phase ?? 'offer');
+    // 23.11.: Beim Start (und bei Rückkehr in die App) installiert die App ein Update
+    // selbst, ohne Fenster. Das Fenster erscheint nur, wenn etwas fehlt (Kasse offen, offline …).
+    if (offer) setAutoInstallPending(true);
     return update;
   }, []);
 
@@ -244,6 +247,14 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     else if (updatePhase === 'sync-error' || updatePhase === 'offer' || updatePhase === null) autoUpdate.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
   }, [updatePhase, updateError, homeVisible, currentStaff]);
+  useEffect(() => {
+    if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
+    if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
+    setAutoInstallPending(false);
+    autoUpdate.current = true;
+    void prepareUpdate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
+  }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
 
   // Sicherheitsprüfung 23.11.: Update nur, wenn in der Cloud ALLE Kassen endgültig
   // abgeschlossen sind. Ohne Cloud-Antwort gilt das Update als nicht freigegeben.
