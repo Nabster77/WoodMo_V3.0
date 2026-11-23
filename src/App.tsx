@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { fetchCatalogRows } from '@/lib/catalogCloud';
 import { fetchCloudData } from '@/lib/cloudPull';
 import { fetchLatestBookingReset } from '@/lib/bookingReset';
+import { checkRegistersClosedInCloud, type RegisterStatus } from '@/lib/registerStatus';
 import { pfandCloudMatches } from '@/lib/pfandValidation';
 import type { PfandSettings } from '@/types';
 import type { Location, StaffUser } from '@/types';
@@ -244,6 +245,22 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
   }, [updatePhase, updateError, homeVisible, currentStaff]);
 
+  // Sicherheitsprüfung 23.11.: Update nur, wenn in der Cloud ALLE Kassen endgültig
+  // abgeschlossen sind. Ohne Cloud-Antwort gilt das Update als nicht freigegeben.
+  const [registerStatus, setRegisterStatus] = useState<RegisterStatus | null>(null);
+  useEffect(() => {
+    if (updatePhase !== 'offer' || testMode) return;
+    let active = true;
+    setRegisterStatus(null);
+    void checkRegistersClosedInCloud().then((status) => { if (active) setRegisterStatus(status); });
+    return () => { active = false; };
+  }, [updatePhase, testMode]);
+  async function requireRegistersClosed() {
+    const status = await checkRegistersClosedInCloud();
+    setRegisterStatus(status);
+    if (!status.ready) throw new Error('Update noch nicht freigegeben: ' + status.lines.join(' '));
+  }
+
   async function prepareUpdate() {
     if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
     updateBusy.current = true;
@@ -251,6 +268,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setUpdatePhase('preparing');
     try {
       if (!supabase || testMode) throw new Error('Der Cloud-Abgleich für das Update benötigt den aktiven Modus.');
+      await requireRegistersClosed();
       await checkStartupData();
       await preparePublishedUpdate(candidate);
       setUpdatePhase('prepared');
@@ -317,6 +335,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setUpdateError(null);
     setUpdatePhase('activating');
     try {
+      await requireRegistersClosed();
       if ((await readPendingOutbox()).length || await startupCashDigest() !== syncedCashDigest.current) {
         syncedCashDigest.current = null;
         throw new Error('Der Kassenstand hat sich seit dem Abgleich geändert. Bitte erneut synchronisieren.');
@@ -1479,7 +1498,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
       {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
         <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
-          notes={candidate?.notes} ready={updateReady} error={updateError} percent={syncPercent}
+          notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
           onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
           onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
