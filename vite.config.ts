@@ -53,10 +53,22 @@ const woodmoGuardMarker = new URL('.woodmo-update-guard', self.registration.scop
 // Devices still running a version before approved updates (<= 3.33) cannot approve.
 // For that one switch, behave like the previous auto-update and reload the open app once.
 let woodmoLegacySwitch = false;
+// 23.11.: Freigabepflicht nur, wenn der AKTIVE Update-Dienst selbst Freigaben kennt und
+// antwortet. Ein liegengebliebenes Kennzeichen (z. B. nach Rückkehr auf 3.33) blockiert nicht mehr.
+function woodmoActiveIsGuarded() {
+  const active = self.registration.active;
+  if (!active) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(false), 5000);
+    channel.port1.onmessage = event => { clearTimeout(timer); resolve(event.data === 'WOODMO_GUARD_OK'); };
+    try { active.postMessage({ type: 'WOODMO_GUARD_PING' }, [channel.port2]); } catch { clearTimeout(timer); resolve(false); }
+  });
+}
 self.addEventListener('install', event => {
   if (!self.registration.active) return;
   event.waitUntil((async () => {
-    if (!await caches.match(woodmoGuardMarker, { cacheName: 'woodmo-update-approval-v1' })) {
+    if (!await woodmoActiveIsGuarded()) {
       woodmoLegacySwitch = true;
       await self.skipWaiting();
       return;
@@ -81,6 +93,7 @@ self.addEventListener('activate', event => {
   })());
 });
 self.addEventListener('message', event => {
+  if (event.data?.type === 'WOODMO_GUARD_PING' && event.ports[0]) { event.ports[0].postMessage('WOODMO_GUARD_OK'); return; }
   if (event.data?.type !== 'WOODMO_APPROVED_UPDATE' || !event.ports[0]) return;
   event.waitUntil((async () => {
     const ok = event.data.build === woodmoTarget && (await woodmoWindows()).length <= 1;

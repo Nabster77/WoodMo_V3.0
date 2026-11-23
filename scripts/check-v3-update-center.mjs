@@ -29,7 +29,8 @@ assert.match(vite, /name: 'WOODMO Kassen-App Version 3\.0'/);
 
 // Live tablets on 3.33 have no approval step: the first switch must still install and reload once.
 assert.match(vite, /woodmoGuardMarker/);
-assert.match(vite, /if \(!await caches\.match\(woodmoGuardMarker[\s\S]*?woodmoLegacySwitch = true;\s*await self\.skipWaiting\(\);/);
+assert.match(vite, /if \(!await woodmoActiveIsGuarded\(\)\) \{\s*woodmoLegacySwitch = true;\s*await self\.skipWaiting\(\);/, '3.33 und altes Kennzeichen: automatischer Wechsel');
+assert.match(vite, /WOODMO_GUARD_PING[\s\S]*?postMessage\('WOODMO_GUARD_OK'\)/, 'neue Dienste antworten auf die Abfrage');
 assert.match(vite, /cache\.put\(woodmoGuardMarker[\s\S]*?if \(!woodmoLegacySwitch\) return;[\s\S]*?client\.navigate\(client\.url\)/);
 assert.doesNotMatch(read('src/releaseNotes.json'), /"version"/, 'Versionsnummer kommt aus der PR-Nummer (3.<PR>)');
 
