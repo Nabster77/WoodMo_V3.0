@@ -873,7 +873,6 @@ function IndividualPriceDialog({ product, onConfirm, onCancel }: {
         </div>
         <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{product.name}</p>
         <input
-          autoFocus
           value={priceInput}
           onChange={(e) => setPriceInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && confirm()}

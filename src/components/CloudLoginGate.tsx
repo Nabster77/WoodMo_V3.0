@@ -94,7 +94,6 @@ function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            autoFocus
             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-slate-900 dark:focus:border-white focus:outline-none focus:ring-2 focus:ring-slate-400/40 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           />
         </label>
