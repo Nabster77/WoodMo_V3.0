@@ -293,7 +293,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
+        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} stornos={props.stornos} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
           : tab === 'categories' ? <CategoryManager {...props} />
             : tab === 'products' ? <ProductManager {...props} testMode={testMode} />
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
@@ -964,8 +964,9 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
 
 // ---- Live Session Overview ----
 
-function LiveSessionOverview({ transactions, cashSessions, categories, activeSession, selectedLocation, onSwitchLocation, exportedByName }: {
+function LiveSessionOverview({ transactions, cashSessions, stornos, categories, activeSession, selectedLocation, onSwitchLocation, exportedByName }: {
   transactions: Transaction[];
+  stornos: StornoRecord[];
   cashSessions: CashSession[];
   categories: Category[];
   activeSession: CashSession | null;
@@ -1031,7 +1032,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
     return LOCATIONS.map((loc) => {
       // Ganzer Tag: Umsatz aller Kassensitzungen dieses Tages zusammen.
       // Status und Kassenbestand kommen von der neuesten Sitzung.
-      const day = buildDayOverview(cashSessions, transactions, selectedDate, loc);
+      const day = buildDayOverview(cashSessions, transactions, selectedDate, loc, stornos);
       const session = day.latest?.session ?? null;
       const txToday = day.transactions;
       const taxByRateMap = mergeTaxByRate(txToday);
@@ -1049,7 +1050,7 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
 
       return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance };
     });
-  }, [transactions, cashSessions, selectedDate]);
+  }, [transactions, cashSessions, selectedDate, stornos]);
 
   function reportForLocation(loc: Location, txToday: Transaction[]) {
     return buildDailyReport(
