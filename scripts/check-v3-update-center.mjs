@@ -34,8 +34,9 @@ assert.match(vite, /cache\.put\(woodmoGuardMarker[\s\S]*?if \(!woodmoLegacySwitc
 assert.doesNotMatch(read('src/releaseNotes.json'), /"version"/, 'Versionsnummer kommt aus der PR-Nummer (3.<PR>)');
 
 console.log('UPDATES: Hintergrundprüfung, bestätigte Aktivierung und Cloud-Abgleich geprüft.');
-// Abgebrochenes Setup: nichts wird abgeglichen oder aktiviert; nach Neustart beginnt das Setup erneut.
-assert.match(app, /if \(!initialSetupPending\(\) && readDeviceSetup\(\)\?\.archiveMode === 'folder'/);
+// Gespeicherter Ordner wird verwendet (23.11.); nur ohne/fehlenden Ordner kommt die Abfrage.
+assert.match(app, /if \(readDeviceSetup\(\)\?\.archiveMode === 'folder' && await archiveFolderStatus\(\) !== 'missing'\)/);
+assert.match(read('src/components/DeviceSetupDialog.tsx'), /\{selection \? 'Bestätigen' : 'Ordner wählen'\}/, 'eine Schaltfläche: Ordner wählen -> Bestätigen');
 assert.match(app, /setInitialSetupPending\(true\);\s*if \(canOpenSetup\) setUpdatePhase\('folder'\);/);
 assert.match(app, /await activatePublishedUpdate\(candidate\);\s*setInitialSetupPending\(false\);/);
 assert.match(app, /if \(updatePhase === 'folder'\) setUpdatePhase\('prepared'\);/, 'Abbrechen kehrt nur zurück');

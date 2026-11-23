@@ -111,7 +111,16 @@ export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, 
           </button>}
           {folderOptionsOpen && <div className="space-y-2">
             <p className="text-sm">{firstSetup ? 'Bitte wählen Sie den Ordner, in dem Ihre Kassendaten abgelegt werden.' : 'Wählen Sie den Ordner, in dem Sie die Kassendateien ablegen möchten.'}</p>
-            {pickerSupported
+            {firstSetup && pickerSupported
+              // Erststart (23.11.): nur EINE Schaltfläche – erst „Ordner wählen“, nach der Auswahl „Bestätigen“.
+              ? <button type="button" disabled={busy}
+                  onClick={() => void (selection ? saveLocation(selection) : chooseFolder())}
+                  className={selection
+                    ? 'flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50'
+                    : action}>
+                  <FolderOpen size={18} aria-hidden="true" /> {selection ? 'Bestätigen' : 'Ordner wählen'}
+                </button>
+              : pickerSupported
               ? <button type="button" className={action} disabled={busy} onClick={() => void chooseFolder()}>
                   <FolderOpen size={18} aria-hidden="true" /> Ordner auswählen
                 </button>
@@ -120,7 +129,7 @@ export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, 
               Ausgewählter Ordner <strong className="block [overflow-wrap:anywhere]">{selection.name}</strong>
             </p>}
             {selection && <p className="text-xs text-slate-600 dark:text-slate-300">Chrome stellt hier den Ordnernamen bereit. Laufwerk und vollständiger Systempfad sind im Auswahlfenster sichtbar, soweit das Betriebssystem sie anzeigt.</p>}
-            <div className="flex flex-wrap gap-2">
+            {!(firstSetup && pickerSupported) && <div className="flex flex-wrap gap-2">
               <button type="button" className={action} disabled={busy} onClick={() => {
                 setSelection(null); setError(null); setFolderOptionsOpen(false);
                 if (firstSetup) onClose();
@@ -128,7 +137,7 @@ export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, 
               <button type="button" className={action} disabled={busy || !selection} onClick={() => {
                 if (selection) void saveLocation(selection);
               }}>OK</button>
-            </div>
+            </div>}
           </div>}
         </section>
         {error && <p role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{error}</p>}

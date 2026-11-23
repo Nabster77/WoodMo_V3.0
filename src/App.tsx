@@ -16,7 +16,7 @@ import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
 import { InitialSyncDialog, type UpdatePhase } from '@/components/InitialSyncDialog';
-import { initialSetupPending, readDeviceSetup, setInitialSetupPending } from '@/lib/deviceSetup';
+import { readDeviceSetup, setInitialSetupPending } from '@/lib/deviceSetup';
 import { APP_VERSION, activatePublishedUpdate, activationVerified, approvedActivation, preflightPublishedUpdate, preparePublishedUpdate, publishedUpdate, type PublishedUpdate } from '@/lib/appVersion';
 import { checkStartupData, startupCashDigest } from '@/lib/startupDataCheck';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
@@ -255,7 +255,10 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setUpdatePhase('folder-check');
     // An interrupted setup (cancelled or app closed) always starts again with
     // the setup step; nothing is synced or activated before it is completed.
-    if (!initialSetupPending() && readDeviceSetup()?.archiveMode === 'folder' && await archiveFolderStatus() === 'ok') {
+    // Fix 23.11.: Ein gespeicherter Ordner (z. B. „Kasse 2026“) wird verwendet, die Abfrage entfällt.
+    // Nur wenn kein Ordner gespeichert ist oder er fehlt, muss einer gewählt werden.
+    if (readDeviceSetup()?.archiveMode === 'folder' && await archiveFolderStatus() !== 'missing') {
+      setInitialSetupPending(false);
       await syncBeforeUpdate();
     } else {
       setInitialSetupPending(true);
@@ -353,7 +356,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const freshSetupShown = useRef(false);
   useEffect(() => {
     if (freshSetupShown.current || !canOpenSetup || !homeVisible || currentStaff || updatePhase !== null || deviceSetupOpen) return;
-    if (readDeviceSetup() && !initialSetupPending()) return;
+    // Nur ohne gespeicherten Speicherort fragen (23.11.).
+    if (readDeviceSetup()) { setInitialSetupPending(false); return; }
     freshSetupShown.current = true;
     setInitialSetupPending(true);
     setFreshSetup(true);
