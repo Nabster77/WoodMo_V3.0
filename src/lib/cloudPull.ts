@@ -32,7 +32,7 @@ async function fetchTransactions(sinceTimestamp: number | null, generation: numb
   }
 }
 
-async function fetchCashSessions(generation: number): Promise<CashSession[]> {
+export async function fetchCashSessions(generation: number): Promise<CashSession[]> {
   if (!supabase) throw new Error('Cloud ist nicht konfiguriert.');
   const rows: CashSession[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {

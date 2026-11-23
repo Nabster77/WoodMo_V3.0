@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient';
 import { canClearResetQuarantine, isStaleOutboxEntry, summarizeResetQuarantine, type ResetQuarantineEntry } from '@/lib/resetQuarantine';
+import { mirrorOfflineEntries } from '@/lib/offlineBackup';
 
 const DB_NAME = 'tablet-kasse-sync';
 const STORE = 'outbox';
@@ -15,6 +16,7 @@ export interface OutboxEntry {
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let flushing: Promise<number> | null = null;
 // During a remote generation switch, new queue writes from a late React
 // effect must also be archived. The fence prevents an in-flight checkout from
 // re-adding obsolete receipts after the first quarantine transaction commits.
@@ -71,6 +73,16 @@ export async function enqueueEntries(entries: OutboxEntry[]): Promise<void> {
   }
   await transactionDone(tx);
   if (hasStale) window.dispatchEvent(new Event(RESET_QUARANTINE_EVENT));
+  void mirrorPendingEntries(entries.filter(entry => !hasStale || !isStaleOutboxEntry(entry, fence)));
+}
+
+async function mirrorPendingEntries(entries: readonly OutboxEntry[]): Promise<void> {
+  try { await mirrorOfflineEntries(entries); }
+  catch { /* The durable browser queue remains available if the folder fails. */ }
+}
+
+export async function backUpPendingOutbox(): Promise<void> {
+  await mirrorPendingEntries(await readPendingOutbox());
 }
 
 // A confirmed backup restore replaces the booking snapshot.  Queued changes
@@ -213,7 +225,17 @@ export async function clearResetQuarantine(exportedKeys: readonly string[]): Pro
 
 // Uploads the oldest queued entries and removes them once the cloud has them.
 // Returns how many queue entries were processed; throws when the upload fails.
-export async function flushOutbox(): Promise<number> {
+export function flushOutbox(): Promise<number> {
+  if (!flushing) {
+    const upload = navigator.locks
+      ? navigator.locks.request('woodmo-outbox-upload', uploadQueuedBatch)
+      : uploadQueuedBatch();
+    flushing = upload.finally(() => { flushing = null; });
+  }
+  return flushing;
+}
+
+async function uploadQueuedBatch(): Promise<number> {
   if (!supabase) return 0;
   const db = await openDb();
 
@@ -226,6 +248,7 @@ export async function flushOutbox(): Promise<number> {
   const keys = keysRequest.result;
   const entries = entriesRequest.result as OutboxEntry[];
   if (keys.length === 0) return 0;
+  await mirrorPendingEntries(entries);
 
   const latestByTable = new Map<CloudTable, Map<string, OutboxEntry['row']>>();
   for (const entry of entries) {
@@ -286,14 +309,17 @@ export async function flushOutbox(): Promise<number> {
   for (const table of ['pos_cash_sessions', 'pos_transactions'] as const) {
     const rows = latestByTable.get(table);
     if (!rows?.size) continue;
-    const { error } = await supabase.from(table).upsert([...rows.values()], { onConflict: 'id' });
+    const { data, error } = await supabase.from(table).upsert([...rows.values()], { onConflict: 'id' }).select('id');
     if (error) throw error;
+    const confirmed = new Set(data?.map(row => row.id));
+    if ([...rows.keys()].some(id => !confirmed.has(id))) {
+      throw new Error('Die KassenCloud hat nicht alle übertragenen Vorgänge bestätigt.');
+    }
+    const deleteTx = db.transaction(STORE, 'readwrite');
+    const deleteStore = deleteTx.objectStore(STORE);
+    entries.forEach((entry, index) => { if (entry.table === table) deleteStore.delete(keys[index]); });
+    await transactionDone(deleteTx);
   }
-
-  const deleteTx = db.transaction(STORE, 'readwrite');
-  const deleteStore = deleteTx.objectStore(STORE);
-  for (const key of keys) deleteStore.delete(key);
-  await transactionDone(deleteTx);
 
   return keys.length;
 }

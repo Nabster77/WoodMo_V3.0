@@ -27,19 +27,18 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-async function isReachable(): Promise<boolean> {
+export async function isReachable(): Promise<boolean> {
   if (!navigator.onLine) return false;
   if (!SUPABASE_URL) return true;
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-      method: 'HEAD',
+    const response = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/settings`, {
       cache: 'no-store',
       signal: controller.signal,
       headers: { apikey: SUPABASE_ANON_KEY },
     });
-    // Any HTTP answer below 500 proves the server is reachable; the ping endpoint answers 401 without a session.
+    // A reachable server can still reject a credential; the sync reports that separately.
     return response.status < 500;
   } catch {
     return false;
@@ -91,9 +90,11 @@ export function useCloudSync(
   mergeCloudData: (cloud: CloudData) => void,
   syncCatalog: () => Promise<CatalogSyncResult>,
   applyCloudBookingReset: (cutoff: number, generationChanged?: boolean) => void,
+  firstSetup: boolean,
 ): {
   online: boolean;
-  syncNow: () => Promise<SyncResult>;
+  syncNow: (duringStartup?: boolean) => Promise<SyncResult>;
+  downloadBookings: () => Promise<void>;
   pauseSyncForRestore: () => Promise<void>;
   resumeSyncAfterRestore: () => void;
 } {
@@ -111,7 +112,46 @@ export function useCloudSync(
   const onReconnectSyncedRef = useRef(onReconnectSynced);
   onReconnectSyncedRef.current = onReconnectSynced;
 
-  const flush = useCallback((): Promise<SyncResult> => {
+  const pullBookings = useCallback(async (preserveExistingSessions = false) => {
+    const generation = knownBookingReset().generation;
+    // A full pull includes receipts uploaded by another device after an offline period.
+    const cloud = await fetchCloudData(null, generation);
+    const pending = await readPendingOutbox();
+    if (cloud.generation !== knownBookingReset().generation || restorePausedRef.current || rebaseAfterRestoreRef.current) {
+      throw new Error('Der Kassenstand hat sich geändert. Bitte den Download erneut starten.');
+    }
+    const pendingSessionIds = pending.filter(entry => entry.table === 'pos_cash_sessions' &&
+      entry.row.booking_generation === generation).map(entry => entry.row.id);
+    if (preserveExistingSessions) {
+      pendingSessionIds.push(...financialSnapshotRef.current.cashSessions.map(session => session.id));
+    }
+    mergeCloudData({ ...cloud, pendingSessionIds });
+    if (cloud.newestTransactionTimestamp !== null) {
+      newestPulledRef.current = Math.max(newestPulledRef.current ?? 0, cloud.newestTransactionTimestamp);
+    }
+  }, [mergeCloudData]);
+
+  const downloadBookings = useCallback(async () => {
+    if (testMode || !supabase) throw new Error('KassenCloud ist nicht verfügbar.');
+    const latestReset = await fetchLatestBookingReset();
+    const known = knownBookingReset();
+    if (latestReset && (latestReset.generation > known.generation || latestReset.resetAt > known.resetAt)) {
+      if (!firstSetup || financialSnapshotRef.current.transactions.length || financialSnapshotRef.current.cashSessions.length ||
+        (await readPendingOutbox()).length > 0) {
+        throw new Error('Der Kassenstand wird noch abgeglichen. Bitte den Download später erneut starten.');
+      }
+      rememberBookingReset(latestReset);
+    }
+    // A clean device is downloading rows that the cloud already has. Do not
+    // treat them as legacy offline bookings that need an initial upload.
+    if (firstSetup && !financialSnapshotRef.current.transactions.length && !financialSnapshotRef.current.cashSessions.length) {
+      saveJSON(STORAGE_KEYS.cloudBackfilled, true);
+    }
+    await pullBookings();
+  }, [testMode, firstSetup, pullBookings]);
+
+  const flush = useCallback((duringStartup = false): Promise<SyncResult> => {
+    if (firstSetup && !duringStartup) return Promise.resolve({ ok: false, error: 'Bitte zuerst das Geräte-Setup abschließen.' });
     if (!supabase) return Promise.resolve({ ok: false, error: 'Cloud ist nicht konfiguriert.' });
     if (restorePausedRef.current || rebaseAfterRestoreRef.current) {
       return Promise.resolve({ ok: true });
@@ -124,6 +164,23 @@ export function useCloudSync(
       if (latestReset !== null) {
         const known = knownBookingReset();
         const generationChanged = latestReset.generation > known.generation;
+        const resetChanged = generationChanged || latestReset.resetAt > known.resetAt;
+        if (resetChanged) {
+          // Fix 22.11.: Ein Tablet mit alten, aber vollständig übertragenen Daten
+          // (Warteschlange leer, Erst-Upload erledigt) darf den berechtigten Reset
+          // übernehmen. Seine lokalen Daten werden unten vorher dauerhaft archiviert
+          // (Quarantäne) und NICHT erneut hochgeladen; in der Cloud liegen sie in der
+          // alten Generation. Nur echte, noch nicht übertragene Daten blockieren.
+          const unsent = (await readPendingOutbox()).length;
+          const hasLocal = financialSnapshotRef.current.transactions.length > 0 ||
+            financialSnapshotRef.current.cashSessions.length > 0;
+          const fullyUploaded = loadJSON<boolean>(STORAGE_KEYS.cloudBackfilled, false);
+          if (unsent > 0 || (hasLocal && !fullyUploaded)) {
+            throw new Error(unsent > 0
+              ? `Der Cloud-Kassenstand wurde zurückgesetzt. Auf diesem Gerät warten noch ${unsent} nicht übertragene Einträge. Sie bleiben erhalten. Bitte zuerst ein Backup exportieren und den Kassenstand in der Verwaltung klären.`
+              : 'Der Cloud-Kassenstand wurde zurückgesetzt. Lokale Buchungen und offene Kassen bleiben erhalten. Bitte den Kassenstand in der Verwaltung klären.');
+          }
+        }
         // Apply even when already known: it repairs stale local state written by
         // a cloud request that began before a completed reset. A new generation
         // clears every local booking, including entries created offline after the
@@ -147,25 +204,7 @@ export function useCloudSync(
         }
         newestPulledRef.current = null;
       }
-      }, async () => {
-      if (testMode) return;
-      const generation = knownBookingReset().generation;
-      // Fetch the *entire* active generation. A timestamp cursor with only a
-      // 60-second overlap misses offline receipts uploaded hours or days late.
-      const cloud = await fetchCloudData(null, generation);
-      // A reset may have completed while this request was in flight. Such a
-      // response must never be merged back into local state.
-      if (cloud.generation !== knownBookingReset().generation) return;
-      // Do not replace a locally changed session that is still awaiting cloud
-      // acknowledgement with an older cloud snapshot.
-      const pending = await readPendingOutbox();
-      const pendingSessionIds = pending.filter(entry => entry.table === 'pos_cash_sessions' &&
-        entry.row.booking_generation === generation).map(entry => entry.row.id);
-      mergeCloudData({ ...cloud, pendingSessionIds });
-      if (cloud.newestTransactionTimestamp !== null) {
-        newestPulledRef.current = Math.max(newestPulledRef.current ?? 0, cloud.newestTransactionTimestamp);
-      }
-      });
+      }, () => testMode ? Promise.resolve() : pullBookings(duringStartup));
       if (!bookingResult.ok) return bookingResult;
       if (!catalogResult.ok) {
         return { ok: false, error: `Artikel-Synchronisierung: ${catalogResult.error ?? 'Unbekannter Fehler.'}` };
@@ -184,7 +223,7 @@ export function useCloudSync(
       inFlightRef.current = null;
     });
     return inFlightRef.current;
-  }, [testMode, mergeCloudData, applyCloudBookingReset]);
+  }, [testMode, firstSetup, pullBookings, syncCatalog, applyCloudBookingReset]);
 
   const pauseSyncForRestore = useCallback(async () => {
     restorePausedRef.current = true;
@@ -216,6 +255,7 @@ export function useCloudSync(
   }, []);
 
   useEffect(() => {
+    if (firstSetup) return;
     if (!online) {
       offlineSinceRef.current = true;
       return;
@@ -236,10 +276,10 @@ export function useCloudSync(
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [online, flush, syncCatalog]);
+  }, [online, flush, syncCatalog, firstSetup]);
 
   useEffect(() => {
-    if (testMode || !supabase) return;
+    if (firstSetup || testMode || !supabase) return;
 
     if (restorePausedRef.current || rebaseAfterRestoreRef.current) {
       snapshotRef.current = snapshotOf(transactions, cashSessions);
@@ -254,7 +294,7 @@ export function useCloudSync(
       const everything = [...transactions.map(transactionEntry), ...cashSessions.map(sessionEntry)];
       enqueueEntries(everything)
         .then(() => saveJSON(STORAGE_KEYS.cloudBackfilled, true))
-        .then(flush)
+        .then(() => flush())
         .catch((err) => console.error('Cloud-Übertragung der bestehenden Daten fehlgeschlagen.', err));
       return;
     }
@@ -266,9 +306,9 @@ export function useCloudSync(
     const entries = [...newTransactions.map(transactionEntry), ...changedSessions.map(sessionEntry)];
     if (entries.length === 0) return;
     enqueueEntries(entries)
-      .then(flush)
+      .then(() => flush())
       .catch((err) => console.error('Speichern in der Warteschlange fehlgeschlagen.', err));
-  }, [transactions, cashSessions, testMode, flush]);
+  }, [transactions, cashSessions, testMode, firstSetup, flush]);
 
-  return { online, syncNow: flush, pauseSyncForRestore, resumeSyncAfterRestore };
+  return { online, syncNow: flush, downloadBookings, pauseSyncForRestore, resumeSyncAfterRestore };
 }

@@ -6,6 +6,7 @@ import {
   computePending,
   keyOf,
   rowToEntry,
+  projectProductOrder,
   type CatalogEntry,
   type CatalogRow,
   type CatalogSyncState,
@@ -13,8 +14,7 @@ import {
 } from '@/lib/catalogSync';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
-
-export type ConflictChoice = 'cloud' | 'local';
+import type { Product } from '@/types';
 
 export type CatalogImportSession = { base: LocalCatalog; cloud: CatalogRow[] };
 
@@ -23,7 +23,7 @@ export interface CatalogEngine {
   commitImport: (session: CatalogImportSession, next: LocalCatalog) => Promise<void>;
   sync: () => Promise<CatalogSyncResult>;
   localChanged: () => void;
-  resolveConflict: (choice: ConflictChoice) => void;
+  downloadCatalog: (replaceOnFirstDownload: boolean) => Promise<boolean>;
 }
 
 export interface CatalogSyncResult {
@@ -42,7 +42,6 @@ function errorMessage(error: unknown): string {
 export interface CatalogEngineDeps {
   getLocal: () => LocalCatalog;
   applyRows: (rows: CatalogRow[], skipKeys: Set<string>, replaceLocal?: boolean) => void;
-  setConflict: (rows: CatalogRow[] | null) => void;
   isEnabled: () => boolean;
 }
 
@@ -65,26 +64,63 @@ function differsFromCloud(local: Map<string, CatalogEntry>, rows: CatalogRow[]):
 export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
   const state = loadState();
   let importing = false;
-  let conflictRows: CatalogRow[] | null = null;
   let inFlight: Promise<CatalogSyncResult> | null = null;
+  let capturedInitialCatalog = false;
 
   const persist = () => saveJSON(STORAGE_KEYS.catalogSync, state);
 
-  function initialize(choice: ConflictChoice, rows: CatalogRow[]) {
-    state.synced = Object.fromEntries(rows.map((r) => [keyOf(r.kind, r.id), rowToEntry(r)]));
-    state.pending = {};
-    const local = buildLocalEntries(deps.getLocal(), Date.now());
-    // CLOUD TAKEOVER must not enqueue demo/local-only entries for upload.
-    // 'Cloud übernehmen' means a true authoritative copy, not a merge.
-    if (choice === 'local') {
-      for (const [key, entry] of local) {
-        const remote = state.synced[key];
-        if (!remote || remote.json !== entry.json) state.pending[key] = entry;
+  function initializeFromCloud(rows: CatalogRow[], replaceLocal: boolean) {
+    const local = deps.getLocal();
+    saveJSON(`${STORAGE_KEYS.catalogBackupPrefix}${Date.now()}`, local);
+    const pendingKeys = new Set(Object.keys(state.pending));
+    const replace = replaceLocal && pendingKeys.size === 0;
+    const effective = replace ? rows : projectProductOrder(rows, local.products, {}, true);
+    state.synced = Object.fromEntries(effective.map((row, i) => [
+      keyOf(row.kind, row.id), effectiveEntry(row, rows[i]),
+    ]));
+    // Keep defaults for settings absent from the cloud, or all local defaults
+    // when the cloud is empty, without marking those defaults for upload.
+    for (const [key, entry] of buildLocalEntries(local, Date.now())) {
+      if ((!replace && !state.synced[key]) || rows.length === 0 || (entry.kind === 'setting' && !state.synced[key]?.json)) {
+        state.synced[key] = entry;
       }
     }
     state.initialized = true;
+    // The local catalog now mirrors the cloud; never compare it again with the
+    // pre-download state, which could upload outdated values.
+    capturedInitialCatalog = true;
     persist();
-    if (rows.length > 0) deps.applyRows(rows, new Set(Object.keys(state.pending)), choice === 'cloud');
+    if (effective.length > 0) deps.applyRows(effective, pendingKeys, replace);
+  }
+
+  function effectiveEntry(row: CatalogRow, original: CatalogRow): CatalogEntry {
+    const entry = rowToEntry(row);
+    return row !== original ? { ...entry, cloudJson: rowToEntry(original).json ?? undefined } : entry;
+  }
+
+  function reconcileProductOrder(cloud: CatalogRow[]) {
+    for (const row of cloud) {
+      if (row.kind !== 'product') continue;
+      const key = keyOf('product', row.id);
+      const base = state.synced[key];
+      const pending = state.pending[key];
+      if (!base?.json || !pending?.json || row.updated_at < base.updatedAt) continue;
+      const { sortOrder: baseOrder, ...baseFields } = JSON.parse(base.json) as Product;
+      const { sortOrder: localOrder, ...localFields } = JSON.parse(pending.json) as Product;
+      if (localOrder === baseOrder || stableStringify(baseFields) !== stableStringify(localFields)) continue;
+
+      const remote = row.data as Product;
+      const previousRemoteOrder = base.cloudJson ? (JSON.parse(base.cloudJson) as Product).sortOrder : baseOrder;
+      const remoteMoved = remote.categoryId !== baseFields.categoryId || remote.sortOrder !== previousRemoteOrder;
+      if (row.deleted || remote.categoryId !== baseFields.categoryId || (remoteMoved && row.updated_at > pending.updatedAt)) {
+        delete state.pending[key];
+      } else {
+        const json = stableStringify({ ...remote, sortOrder: localOrder });
+        if (json === rowToEntry(row).json) delete state.pending[key];
+        else state.pending[key] = { ...pending, json, updatedAt: Math.max(pending.updatedAt, row.updated_at + 1) };
+      }
+    }
+    persist();
   }
 
   async function pushPending() {
@@ -108,35 +144,46 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
     persist();
   }
 
-  async function pullRows() {
-    const rows = await fetchCatalogRows();
-    let storeChanged = false;
-    for (const row of rows) {
+  function applyCloudRows(rows: CatalogRow[]) {
+    const local = deps.getLocal();
+    const localEntries = buildLocalEntries(local, Date.now());
+    const accepted = rows.filter(row => {
       const key = keyOf(row.kind, row.id);
-      if (state.pending[key]) continue;
-      const next = rowToEntry(row);
-      if (state.synced[key]?.json !== next.json) storeChanged = true;
+      return !state.pending[key] && row.updated_at >= (state.synced[key]?.updatedAt ?? 0);
+    });
+    const effective = projectProductOrder(accepted, local.products, state.synced, false);
+    let storeChanged = false;
+    effective.forEach((row, i) => {
+      const key = keyOf(row.kind, row.id);
+      const next = effectiveEntry(row, accepted[i]);
+      if ((localEntries.get(key)?.json ?? null) !== next.json) storeChanged = true;
       state.synced[key] = next;
-    }
+    });
     persist();
-    if (storeChanged) deps.applyRows(rows, new Set(Object.keys(state.pending)));
+    if (storeChanged) deps.applyRows(effective, new Set(Object.keys(state.pending)));
   }
 
   async function step(): Promise<boolean> {
     if (!state.initialized) {
-      if (conflictRows) return false;
-      const rows = await fetchCatalogRows();
-      const local = deps.getLocal();
-      saveJSON(`${STORAGE_KEYS.catalogBackupPrefix}${Date.now()}`, local);
-      if (rows.length > 0 && differsFromCloud(buildLocalEntries(local, Date.now()), rows)) {
-        conflictRows = rows;
-        deps.setConflict(rows);
-        return false;
-      }
-      initialize('local', rows);
+      // A device without catalog sync state takes the cloud catalog as it is
+      // ("Cloud übernehmen"): demo or stale local articles are neither kept nor uploaded.
+      initializeFromCloud(await fetchCatalogRows(), true);
+      if (!Object.keys(state.pending).length) return true;
     }
-    await pushPending();
-    await pullRows();
+    if (!capturedInitialCatalog) {
+      capturedInitialCatalog = true;
+      if (computePending(buildLocalEntries(deps.getLocal(), Date.now()), state, Date.now())) persist();
+    }
+    const cloud = await fetchCatalogRows();
+    if (Object.keys(state.pending).length) {
+      reconcileProductOrder(cloud);
+      if (Object.keys(state.pending).length) {
+        await pushPending();
+        applyCloudRows(await fetchCatalogRows());
+        return true;
+      }
+    }
+    applyCloudRows(cloud);
     return true;
   }
 
@@ -144,7 +191,7 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
     if (importing) return Promise.resolve({ ok: false, error: 'Katalogimport läuft.' });
     if (!deps.isEnabled() || !supabase) return Promise.resolve({ ok: false, error: 'Artikel-Synchronisierung ist nicht konfiguriert.' });
     inFlight ??= step()
-      .then((complete) => complete ? ({ ok: true }) : ({ ok: false, error: 'Bitte zuerst den Katalogkonflikt auflösen.' }))
+      .then((complete) => complete ? ({ ok: true }) : ({ ok: false, error: 'Bitte zuerst die Daten aus der KassenCloud herunterladen.' }))
       .catch((err) => {
         console.warn('Artikel-Synchronisierung pausiert, neuer Versuch folgt automatisch.', err);
         return { ok: false, error: errorMessage(err) };
@@ -163,19 +210,25 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
     }
   }
 
-  function resolveConflict(choice: ConflictChoice) {
-    if (!conflictRows) return;
-    const rows = conflictRows;
-    conflictRows = null;
-    deps.setConflict(null);
-    initialize(choice, rows);
-    void sync();
+  async function downloadCatalog(replaceOnFirstDownload: boolean) {
+    if (!deps.isEnabled() || !supabase) throw new Error('KassenCloud ist nicht verfügbar.');
+    if (importing) throw new Error('Es läuft bereits eine Datenübernahme.');
+    importing = true;
+    try {
+      if (inFlight) await inFlight;
+      const rows = await fetchCatalogRows();
+      if (state.initialized) applyCloudRows(rows);
+      else initializeFromCloud(rows, replaceOnFirstDownload);
+      return Object.keys(state.pending).length === 0;
+    } finally {
+      importing = false;
+    }
   }
 
   async function prepareImport(): Promise<CatalogImportSession> {
     const result = await sync();
     if (!result.ok) throw new Error(result.error);
-    if (!state.initialized || conflictRows || Object.keys(state.pending).length) throw new Error('Bitte zuerst alle Katalogänderungen synchronisieren.');
+    if (!state.initialized || Object.keys(state.pending).length) throw new Error('Bitte zuerst alle Katalogänderungen synchronisieren.');
     const cloud = await fetchCatalogRows();
     const base = structuredClone(deps.getLocal());
     if (differsFromCloud(buildLocalEntries(base, Date.now()), cloud)) throw new Error('Katalog wird aktualisiert. Bitte Vorschau erneut erstellen, sobald die Synchronisierung abgeschlossen ist.');
@@ -188,7 +241,7 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
     importing = true;
     try {
       if (inFlight) await inFlight;
-      if (stableStringify(deps.getLocal()) !== stableStringify(session.base) || Object.keys(state.pending).length || conflictRows) {
+      if (stableStringify(deps.getLocal()) !== stableStringify(session.base) || Object.keys(state.pending).length) {
         throw new Error('Lokaler Katalog wurde seit der Vorschau geändert. Bitte Vorschau neu erstellen.');
       }
       const before = buildLocalEntries(session.base, 0);
@@ -215,5 +268,5 @@ export function createCatalogEngine(deps: CatalogEngineDeps): CatalogEngine {
       if (tombstones.length) { try { await pushPending(); } catch (err) { console.warn('Löschungen werden später synchronisiert.', err); } }
     } finally { importing = false; }
   }
-  return { sync, localChanged, resolveConflict, prepareImport, commitImport };
+  return { sync, localChanged, downloadCatalog, prepareImport, commitImport };
 }

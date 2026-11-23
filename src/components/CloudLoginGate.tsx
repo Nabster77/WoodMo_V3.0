@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 const ACCOUNT_DOMAIN = 'kasse.local';
 
 interface Props {
-  children: ReactNode;
+  children: (adminStartup: boolean) => ReactNode;
 }
 
 export function CloudLoginGate({ children }: Props) {
@@ -27,7 +27,7 @@ export function CloudLoginGate({ children }: Props) {
     };
   }, []);
 
-  if (!supabase) return children;
+  if (!supabase) return children(false);
   if (session === undefined) {
     return (
       <div className="flex h-dvh items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -36,7 +36,7 @@ export function CloudLoginGate({ children }: Props) {
     );
   }
   if (!session) return <LoginForm />;
-  return children;
+  return <div className="contents" key={session.user.id}>{children(session.user.email?.toLowerCase() === `admin@${ACCOUNT_DOMAIN}`)}</div>;
 }
 
 function LoginForm() {
@@ -71,7 +71,7 @@ function LoginForm() {
       >
         <div className="space-y-1 text-center">
           <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Tablet-Kasse anmelden</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Die Anmeldung ist für die Cloud-Synchronisation nötig.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Melden Sie sich bei der KassenCloud an.</p>
         </div>
 
         <label className="block space-y-1">

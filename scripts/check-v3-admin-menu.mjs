@@ -35,7 +35,7 @@ assert.match(app, /menuOpen && \(tab !== 'admin' \|\| !adminUnlocked\)/,
 assert.match(app, /adminUnlocked \? \(/,
   'Menu actions must remain protected behind the administrator login.');
 
-assert.match(admin, /useState<'sessions' \| 'categories' \| 'products' \| 'shots' \| 'staff'>\('sessions'\)/,
+assert.match(admin, /useState<keyof typeof ADMIN_SECTION_TITLES>\('sessions'\)/,
   'The administrative entry view must remain cash overview.');
 for (const title of ['Kassen-Übersicht', 'Warengruppen', 'Artikel', 'SCHUSS', 'Benutzer']) {
   assert(admin.includes(title), `Missing a user-visible admin section title: ${title}`);
@@ -71,3 +71,4 @@ assert.match(brand, /woodmo-brand-ok/);
 assert.match(brand, /woodmo-brand-error/);
 
 console.log('V3-VERWALTUNG: kompaktes Header-Menue, Rollenfreigabe, Bereiche, App-Einstellungen, Import/Export, sichere Bestaetigungen und Cloud-Halo kontrolliert.');
+assert.match(admin, /const ADMIN_SECTION_TITLES = \{\s*sessions: [^\n]+\s*categories: [^\n]+\s*products: [^\n]+\s*shots: [^\n]+\s*staff: [^\n]+\s*\} as const;/, 'Verwaltungsbereiche unverändert: Kassen-Übersicht, Warengruppen, Artikel, SCHUSS, Benutzer');

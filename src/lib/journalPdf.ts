@@ -1,3 +1,4 @@
+import { compareJournalRows, compareJournalTransactions, type JournalSort } from '@/lib/journalOrdering';
 import { movementBadgeHTML } from '@/lib/movementStyle';
 import type { Category, Transaction, Location } from '@/types';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -17,6 +18,7 @@ export interface JournalReportData {
   fileName: string;
   /** Date the report covers, independently of the date it is exported. */
   reportPeriodStart?: number;
+  journalView?: { mode: 'category' | 'article' | 'tax' | 'bestseller' | 'transaction'; sort: JournalSort; search: string };
   /** Person, die den Export bzw. Druck ausgelöst hat. */
   exportedByName?: string;
   cashAuditRecords?: CashAuditRecord[];
@@ -100,7 +102,7 @@ const LOCATION_META: Record<Location, { sub: string; color: string; bar: string 
   Bregenz: { sub: 'Bregenz', color: '#0f766e', bar: '#0d9488' },
 };
 
-function computeStats(txs: Transaction[]): LocationStats {
+export function computeJournalStats(txs: Transaction[]): LocationStats {
   let total = 0, totalNet = 0, pfandTax = 0, pfandCollected = 0, pfandReturned = 0, count = 0, stornoCount = 0;
   const taxByRate: Record<number, number> = {};
   for (const t of txs) {
@@ -161,7 +163,7 @@ export function calculateYearlyPfandOverview(
   };
 }
 
-function categoryRows(txs: Transaction[], categories: Category[]): string {
+function categoryRows(txs: Transaction[], categories: Category[], sort?: JournalSort): string {
   const map = new Map<string, { name: string; total: number; count: number; pfand: number }>();
   for (const tx of txs) {
     for (const item of tx.items) {
@@ -175,12 +177,12 @@ function categoryRows(txs: Transaction[], categories: Category[]): string {
       g.pfand += item.pfand;
     }
   }
-  return [...map.values()].sort((a, b) => b.total - a.total)
+  return [...map.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total)
     .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right">${pfandSaldoCell(g.pfand)}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
 }
 
-function articleRows(txs: Transaction[]): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number }> } {
+function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number }> } {
   const pricesByProduct = new Map<string, Set<number>>();
   for (const tx of txs) {
     for (const item of tx.items) {
@@ -194,9 +196,11 @@ function articleRows(txs: Transaction[]): { rows: string; bestRows: string; artM
   for (const tx of txs) {
     for (const item of tx.items) {
       if (item.isPfandRetoure) continue;
-      const key = `${item.productId}-${item.price}`;
+      // Name gehört immer zum Schlüssel: „Glühwein + Rum“ und „Glühwein + Whiskey“ (gleicher Preis)
+      // bleiben getrennte Zeilen, damit Schusssorte und Anzahl im Journal erkennbar sind.
+      const key = sort ? `${item.productId}-${item.name}` : `${item.productId}-${item.price}-${item.name}`;
       const variable = (pricesByProduct.get(item.productId)?.size ?? 0) > 1;
-      const label = variable ? `${item.name} (${formatCurrency(item.price)})` : item.name;
+      const label = !sort && variable ? `${item.name} (${formatCurrency(item.price)})` : item.name;
       const isTaxFree = isTaxFreeItem(item);
       if (!artMap.has(key)) artMap.set(key, { name: label, count: 0, total: 0, taxRate: isTaxFree ? 0 : item.taxRate });
       const g = artMap.get(key)!;
@@ -204,16 +208,17 @@ function articleRows(txs: Transaction[]): { rows: string; bestRows: string; artM
       g.total += item.price * item.quantity;
     }
   }
-  const rows = [...artMap.values()].sort((a, b) => b.total - a.total)
+  const ordered = [...artMap.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total);
+  const rows = ordered
     .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
-  const bestRows = [...artMap.values()].filter((g) => g.total > 0).sort((a, b) => b.count - a.count).slice(0, 10)
+  const bestRows = (sort ? ordered : [...artMap.values()].filter(g => g.total > 0).sort((a, b) => b.count - a.count).slice(0, 10))
     .map((g, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   return { rows, bestRows, artMap };
 }
 
-function taxCards(txs: Transaction[]): { cards: string; columns: number } {
+function taxCards(txs: Transaction[], sort?: JournalSort): { cards: string; columns: number } {
   const empty = () => ({ gross: 0, net: 0, tax: 0, count: 0, pfandGross: 0, pfandNet: 0, pfandTax: 0 });
   const taxData = new Map<number, ReturnType<typeof empty>>();
   for (const tx of txs) {
@@ -232,7 +237,11 @@ function taxCards(txs: Transaction[]): { cards: string; columns: number } {
       taxData.set(rate, g);
     }
   }
-  const sortedRates = [...taxData.keys()].sort((a, b) => a - b);
+  const sortedRates = [...taxData.keys()].sort((a, b) => {
+    if (sort === 'amountHigh') return taxData.get(b)!.gross - taxData.get(a)!.gross;
+    if (sort === 'amountLow') return taxData.get(a)!.gross - taxData.get(b)!.gross;
+    return sort === 'nameDesc' ? b - a : a - b;
+  });
   const cards = sortedRates.map((rate) => {
     const d = taxData.get(rate)!;
     return `<div class="tax-card"><h3>MwSt ${rate}%</h3>
@@ -249,8 +258,8 @@ function taxCards(txs: Transaction[]): { cards: string; columns: number } {
   return { cards, columns: sortedRates.length > 0 ? sortedRates.length : 2 };
 }
 
-function transactionRows(txs: Transaction[]): string {
-  return [...txs].sort((a, b) => a.timestamp - b.timestamp)
+function transactionRows(txs: Transaction[], sort?: JournalSort): string {
+  return [...txs].sort((a, b) => sort ? compareJournalTransactions(a, b, sort) : a.timestamp - b.timestamp)
     .map((tx, i) => {
       const txTax = [...getTaxByRate(tx).values()].reduce((s, v) => s + v, 0);
       const reversing = (tx as Partial<StornoJournalTransaction>).isStornoProjection === true;
@@ -264,9 +273,9 @@ function transactionRows(txs: Transaction[]): string {
     .join('');
 }
 
-function transactionSection(txs: Transaction[], title: string, color?: string): string {
+function transactionSection(txs: Transaction[], title: string, color?: string, sort?: JournalSort): string {
   return `<section class="report-table-section table-block">
-    <table class="transaction-table"><thead>${tableTitleRow(title, color)}<tr><th>#</th><th>Datum</th><th>Uhrzeit</th><th>Mitarbeiter</th><th>Vorgang</th><th>Artikel</th><th style="text-align:right">Betrag</th><th style="text-align:right">MwSt</th></tr></thead><tbody>${transactionRows(txs)}</tbody></table>
+    <table class="transaction-table"><thead>${tableTitleRow(title, color)}<tr><th>#</th><th>Datum</th><th>Uhrzeit</th><th>Mitarbeiter</th><th>Vorgang</th><th>Artikel</th><th style="text-align:right">Betrag</th><th style="text-align:right">MwSt</th></tr></thead><tbody>${transactionRows(txs, sort)}</tbody></table>
   </section>`;
 }
 
@@ -459,7 +468,7 @@ function tableBlock(title: string, table: string, color?: string): string {
 
 function locationSection(loc: Location, txs: Transaction[], categories: Category[], auditRecords: CashAuditRecord[], staffTimeRecords: StaffTimeRecord[] = [], dailyCloseCash?: JournalReportData['dailyCloseCash']): string {
   const meta = LOCATION_META[loc];
-  const s = computeStats(txs);
+  const s = computeJournalStats(txs);
   const cats = categoryRows(txs, categories);
   const { rows: arts, bestRows } = articleRows(txs);
   const { cards: taxCds, columns } = taxCards(txs);
@@ -530,6 +539,29 @@ function combinedSection(transactions: Transaction[], categories: Category[], st
   </div>`;
 }
 
+function selectedJournalSection(data: JournalReportData, view: NonNullable<JournalReportData['journalView']>, accent: string): string {
+  const { transactions, categories } = data;
+  const { mode, sort, search } = view;
+  let section: string;
+  if (mode === 'transaction') {
+    section = transactionSection(transactions, `Einzel-Bons (${transactions.length})`, accent, sort);
+  } else if (mode === 'tax') {
+    const { cards, columns } = taxCards(transactions, sort);
+    section = `<h2>MwSt-Klassen</h2><div class="tax-section" style="grid-template-columns: repeat(${columns}, 1fr)">${cards || 'Keine steuerpflichtigen Umsätze'}</div>`;
+  } else if (mode === 'category') {
+    section = tableBlock('Warengruppen', `<table><thead><tr><th>Gruppe</th><th>Menge</th><th>Pfand</th><th>Umsatz</th></tr></thead><tbody>${categoryRows(transactions, categories, sort)}</tbody></table>`, accent);
+  } else {
+    const { rows, bestRows } = articleRows(transactions, sort);
+    section = mode === 'bestseller'
+      ? tableBlock('Bestseller', `<table><thead><tr><th>#</th><th>Artikel</th><th>Menge</th><th>Umsatz</th></tr></thead><tbody>${bestRows}</tbody></table>`, accent)
+      : tableBlock('Einzelartikel', `<table class="article-table"><thead><tr><th>Artikel</th><th>MwSt</th><th>Menge</th><th>Umsatz</th></tr></thead><tbody>${rows}</tbody></table>`, accent);
+  }
+  return `${search ? `<p class="audit-note">Suche: ${escapeHtml(search)}</p>` : ''}
+    ${summaryCards(computeJournalStats(transactions), accent)}
+    ${transactions.length ? section : '<p class="empty">Keine Verkäufe im gewählten Zeitraum.</p>'}
+    ${auditSection(data.cashAuditRecords ?? [])}`;
+}
+
 export function buildJournalHTML(data: JournalReportData): string {
   const { headerLabel, location, transactions, stornos = [], categories, fileName, exportedByName, cashAuditRecords = [], staffTimeRecords = [], documentTitle = 'Kassenjournal', documentStatus, receiptNumber, cashSessionPeriod, dailyCloseCash, yearlyPfandOverview } = data;
   const generatedAt = new Date().toLocaleString('de-DE');
@@ -540,14 +572,16 @@ export function buildJournalHTML(data: JournalReportData): string {
   const isBoth = location.includes('Beide') || location.includes('Kasse 1 + Kasse 2') || location.toLowerCase().includes('alle');
 
   let body: string;
-  if (isBoth) {
+  if (data.journalView) {
+    body = selectedJournalSection(data, data.journalView, reportAccent);
+  } else if (isBoth) {
     const fhTx = transactions.filter((t) => t.location === 'Friedrichshafen');
     const bgTx = transactions.filter((t) => t.location === 'Bregenz');
-    const totalStats = computeStats(transactions);
+    const totalStats = computeJournalStats(transactions);
 
     // Location comparison summary at the very top
-    const fhStats = computeStats(fhTx);
-    const bgStats = computeStats(bgTx);
+    const fhStats = computeJournalStats(fhTx);
+    const bgStats = computeJournalStats(bgTx);
     const compareRow = (label: string, fh: string, bg: string, total: string) =>
       `<tr><td>${label}</td><td style="text-align:right"><b>${fh}</b></td><td style="text-align:right"><b>${bg}</b></td><td style="text-align:right"><b>${total}</b></td></tr>`;
 

@@ -1,10 +1,14 @@
 {
-  "title": "WOODMO 3.33",
+  "title": "WOODMO Update: Journal, Favoriten, Update-Ablauf",
   "notes": [
-    "Artikelbilder lassen sich je Warengruppe sowie für Favoriten und Suche ein- oder ausschalten.",
-    "Die App startet standardmäßig dunkel. Auf der Startseite steht die WOODMO-Signatur.",
-    "Eine offene Kasse bleibt über Mitternacht offen. Das Journal ordnet Buchungen dem richtigen Kalendertag zu.",
-    "Gebuchte Tagesabschlüsse werden mit Belegnummer und vollständigem Bericht gesichert und wiederhergestellt.",
-    "Das Journal bietet „Letzte Woche“. In der Kassenübersicht führen PDF-Export und Drucken zur jeweils richtigen Aktion."
+    "Journal: „Filter“ bündelt Standort (auch alle Standorte), Zeitraum und Auswertung. Datum per ‹ ›, Kalender oder Wischen; „Letzter Umsatztag“.",
+    "Kassen-Übersicht zeigt zuerst den ausgewählten Standort (umschaltbar auf alle) mit derselben Datumsnavigation.",
+    "Warenkorb kompakt: „+ Pfand“, „+ n× Schuss Sorte“; Schussauswahl nennt den Standort; Bon und Journal zeigen Schusssorte und Anzahl.",
+    "Favoritenkacheln lassen sich mit Maus und Touch verschieben. Ihre Reihenfolge wird separat gespeichert.",
+    "Beim Start prüft die App im Hintergrund auf Updates und gleicht die Kassendaten automatisch ab.",
+    "Updates werden nach Ordnerprüfung, erfolgreicher Cloud-Synchronisierung und Bestätigung aktiviert.",
+    "Kachelreihenfolge, Favoriten und Bildschalter pro Warengruppe bleiben erhalten. Neue Artikel stehen am Ende ihrer Warengruppe.",
+    "Offene Übertragungen erhalten zusätzlich eine Wiederherstellungskopie im gewählten Kassenordner.",
+    "Manuelle Cloud-Abgleiche laufen über „Synchronisieren“."
   ]
 }

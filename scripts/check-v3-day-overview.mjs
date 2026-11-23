@@ -43,6 +43,10 @@ const single = buildDayOverview([A], txs, '2026-11-17', 'Bregenz');
 assert.equal(single.parts.length, 1);
 assert.deepEqual(single.transactions.map((t) => t.id), ['legacy', 't3', 't2', 't1']);
 assert.equal(sessionCashBalance(A, single.parts[0].transactions), single.parts[0].cashBalance);
+// Bar-Storno senkt den Kassenbestand wie in Kasse und Tagesabschluss (23.11.).
+assert.equal(sessionCashBalance(A, single.parts[0].transactions, Infinity, [{ cashSessionId: A.id, cashEffect: -7.2, timestamp: 1 }]),
+  Math.round((single.parts[0].cashBalance - 7.2) * 100) / 100);
+assert.equal(sessionCashBalance(A, single.parts[0].transactions, Infinity, [{ cashSessionId: 'andere', cashEffect: -7.2, timestamp: 1 }]), single.parts[0].cashBalance);
 
 // Ohne Sitzung: leer.
 const none = buildDayOverview(sessions, txs, '2026-11-18', 'Bregenz');
@@ -51,7 +55,7 @@ assert.equal(none.transactions.length, 0);
 
 // Verwaltung nutzt den ganzen Tag für Karte, Tagesinfo und PDF.
 const admin = readFileSync(new URL('../src/components/Admin/AdminScreen.tsx', import.meta.url), 'utf8');
-assert.match(admin, /buildDayOverview\(cashSessions, transactions, selectedDate, loc\)/);
+assert.match(admin, /buildDayOverview\(cashSessions, transactions, selectedDate, loc, stornos\)/, 'Kassen-Übersicht zählt Bar-Stornos mit');
 assert.match(admin, /Umsatz des Tages \(ohne Pfand\)/);
 assert.doesNotMatch(admin, /Umsatz dieser Kassensitzung/);
 assert.match(admin, /day\.parts\.map\(\(part\) => part\.session\)/, 'PDF bekommt alle Sitzungen des Tages');

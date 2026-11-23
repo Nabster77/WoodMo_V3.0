@@ -14,7 +14,8 @@ interface Props {
   dragMode?: boolean;
   onDragStart?: (id: string) => void;
   onDragOver?: (id: string) => void;
-  onDrop?: () => void;
+  onDrop?: (id: string) => void;
+  onDragEnd?: () => void;
   isDraggedOver?: boolean;
   isDragging?: boolean;
   /** Kompakt-Ansicht ohne Bild (Umschalter "Bilder an/aus" in der Kasse). */
@@ -37,7 +38,7 @@ export function SpiritBadge({ kind, className = 'rounded px-1.5 py-0.5 text-[10p
 
 export function ProductTile({
   product, location, onAdd, disabled,
-  dragMode, onDragStart, onDragOver, onDrop,
+  dragMode, onDragStart, onDragOver, onDrop, onDragEnd,
   isDraggedOver, isDragging, compact,
 }: Props) {
   const isDisabled = !product.available || disabled;
@@ -161,10 +162,12 @@ export function ProductTile({
       return (
         <div
           draggable
-          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(product.id); }}
+          data-product-drag-id={product.id}
+          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', product.id); onDragStart?.(product.id); }}
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.(product.id); }}
-          onDrop={(e) => { e.preventDefault(); onDrop?.(); }}
-          className={classes}
+          onDrop={(e) => { e.preventDefault(); onDrop?.(product.id); }}
+          onDragEnd={onDragEnd}
+          className={`${classes} touch-none select-none`}
           style={style}
         >
           {content}

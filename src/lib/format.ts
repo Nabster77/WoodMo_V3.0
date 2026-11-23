@@ -28,7 +28,9 @@ export function formatDateGermanFromISO(value: string): string {
 }
 
 export function parseGermanDate(value: string): string | null {
-  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value.trim());
+  const text = value.trim();
+  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(text.replace(/,/g, '.'))
+    ?? /^(\d{2})(\d{2})(\d{4})$/.exec(text);
   if (!match) return null;
   const [, day, month, year] = match;
   const parsed = new Date(Number(year), Number(month) - 1, Number(day));

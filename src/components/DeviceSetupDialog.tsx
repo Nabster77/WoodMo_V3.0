@@ -1,119 +1,150 @@
-import { useState } from 'react';
-import { Download, FolderOpen, ShieldCheck, X } from 'lucide-react';
-import { configureJournalExportFolder, folderPickerSupported, grantWriteForPendingFolder, type FolderSetupResult } from '@/lib/journalPdfFile';
+import { useEffect, useState } from 'react';
+import { FolderOpen, Settings } from 'lucide-react';
+import { archiveFolderStatus, confirmJournalExportFolder, folderPickerSupported, loadExportFolder, pickJournalExportFolder, type ArchiveFolderStatus } from '@/lib/journalPdfFile';
 import { readDeviceSetup, saveDeviceSetup } from '@/lib/deviceSetup';
 
 interface Props {
+  firstSetup?: boolean;
+  onContinue: () => void;
   onComplete: () => void;
-  onCancel?: () => void;
+  onClose: () => void;
+  onOffline?: () => void;
   warning?: string | null;
 }
 
-export function DeviceSetupDialog({ onComplete, onCancel, warning }: Props) {
+const action = 'flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800';
+
+export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, onClose, onOffline, warning }: Props) {
+  const [setup, setSetup] = useState(readDeviceSetup);
+  const [status, setStatus] = useState<ArchiveFolderStatus | null>(null);
+  const [folderOptionsOpen, setFolderOptionsOpen] = useState(firstSetup && setup?.archiveMode !== 'folder');
+  const [selection, setSelection] = useState<FileSystemDirectoryHandle | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [needsWrite, setNeedsWrite] = useState<string | null>(null);
-  const previous = readDeviceSetup();
-  // Devices that can pick a folder must use one: no folder, no register.
-  const [folderFailed, setFolderFailed] = useState(false);
-  // If writing into the chosen folder fails on this device, offer the manual
-  // save mode so the register stays usable.
-  const folderOnly = folderPickerSupported() && !folderFailed;
+  const [pickerSupported, setPickerSupported] = useState(folderPickerSupported);
+
+  useEffect(() => {
+    if (setup?.archiveMode !== 'folder') return;
+    let active = true;
+    void archiveFolderStatus().then(result => {
+      if (!active) return;
+      setStatus(result);
+      if (firstSetup && result === 'missing') setFolderOptionsOpen(true);
+    });
+    return () => { active = false; };
+  }, [setup, firstSetup]);
 
   async function chooseFolder() {
-    if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      handleResult(await configureJournalExportFolder());
+      const folder = await pickJournalExportFolder();
+      if (folder) setSelection(folder);
     } catch (reason) {
-      setFolderFailed(true);
-      setError(reason instanceof Error ? reason.message : 'Ordner konnte nicht ausgewählt werden.');
+      if (reason instanceof DOMException && reason.name === 'NotSupportedError') {
+        setSelection(null);
+        setPickerSupported(false);
+      } else {
+        setError(reason instanceof Error ? reason.message : 'Der Ordner konnte nicht geöffnet werden.');
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  function handleResult(result: FolderSetupResult) {
-    if (result.mode === 'cancelled') return;
-    if (result.mode === 'needs-write') {
-      setNeedsWrite(result.folderName ?? 'gewählter Ordner');
-      return;
-    }
-    setNeedsWrite(null);
-    if (result.mode === 'folder') {
-      saveDeviceSetup('folder', result.folderName);
+  async function saveLocation(choice: FileSystemDirectoryHandle | 'saved') {
+    setBusy(true);
+    setError(null);
+    try {
+      const folder = choice === 'saved' ? await loadExportFolder() : choice;
+      if (!folder) {
+        setStatus('missing');
+        setFolderOptionsOpen(true);
+        throw new Error('Der gespeicherte Ordner fehlt. Bitte wählen Sie ihn erneut aus.');
+      }
+      const label = await confirmJournalExportFolder(folder);
+      const next = choice === 'saved' && setup?.folderLabel === label ? setup : saveDeviceSetup('folder', label);
+      setSetup(next);
+      setStatus('ok');
+      setSelection(null);
+      setFolderOptionsOpen(false);
       onComplete();
-    } else {
-      // The filesystem picker is unavailable on this browser.
-      setError('Dieser Browser unterstützt keine automatische Ordnerverwaltung. Bitte manuell speichern.');
-    }
-  }
-
-  async function grantWrite() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      handleResult(await grantWriteForPendingFolder());
+      if (firstSetup) onContinue();
     } catch (reason) {
-      setFolderFailed(true);
-      setError(reason instanceof Error ? reason.message : 'Schreibzugriff wurde nicht erteilt.');
+      setError(reason instanceof Error ? reason.message : 'Der Speicherort konnte nicht übernommen werden.');
+      if (choice === 'saved') {
+        const result = await archiveFolderStatus();
+        setStatus(result);
+        if (result === 'missing') setFolderOptionsOpen(true);
+      }
     } finally {
       setBusy(false);
     }
-  }
-
-  function chooseDownloads() {
-    saveDeviceSetup('downloads');
-    onComplete();
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm">
       <section role="dialog" aria-modal="true" aria-labelledby="device-setup-title"
-        className="relative w-full max-w-lg space-y-4 rounded-3xl border border-emerald-700/40 bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-7">
-        {onCancel && <button type="button" aria-label="Setup schließen" onClick={onCancel}
-          className="absolute right-4 top-4 rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={20} /></button>}
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-emerald-800/10 p-3 text-emerald-700 dark:text-emerald-400"><FolderOpen size={26} /></div>
-          <div>
-            <h2 id="device-setup-title" className="text-xl font-bold text-slate-900 dark:text-white">WOODMO 3.0 – Geräte-Setup</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-300">Einmalig für dieses Gerät. Später in der Verwaltung änderbar.</p>
-          </div>
-        </div>
-        {warning && <p role="alert" className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm font-semibold text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">{warning}</p>}
-        <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-          <p>Wähle nur den <strong>Speicherort</strong>. WOODMO verwaltet alle Unterordner automatisch.</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Beispiel: Kasse 2026 / Friedrichshafen / Tagesjournal · Sicherungen: Kasse 2026 / Backup
-          </p>
-          {folderOnly
-            ? <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Ohne Speicherort kann die Kasse auf diesem Gerät nicht verwendet werden.</p>
-            : <p className="text-xs text-slate-500 dark:text-slate-400">Dieser Browser kann keinen Ordner auswählen. Dateien werden dann selbst gespeichert (Downloads / Teilen).</p>}
-        </div>
-        {previous?.folderLabel && <p className="rounded-lg bg-slate-100 p-2 text-xs dark:bg-slate-800">
-          Aktueller Speicherort: <strong>{previous.folderLabel}</strong>
-        </p>}
-        <div className="space-y-2">
-          <button type="button" onClick={() => void chooseFolder()} disabled={busy}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">
-            <FolderOpen size={19} /> {busy ? 'Ordner wird geprüft …' : 'Speicherort auswählen'}
-          </button>
-          {!folderOnly && <button type="button" onClick={chooseDownloads} disabled={busy}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800">
-            <Download size={19} /> Selbst verwalten (bei jedem PDF „Speichern unter“)
+        className="my-auto w-full max-w-md space-y-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <h2 id="device-setup-title" className="flex items-center gap-2 text-xl font-bold"><Settings size={20} aria-hidden="true" /> {firstSetup ? 'Speicherort wählen' : 'Setup'}</h2>
+        {firstSetup && <p className="text-sm font-semibold text-red-700 dark:text-red-300">Bitte geben Sie den Ordner an, wo das Tablet die Kassendaten speichern kann.</p>}
+        {warning && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-200">{warning}</p>}
+        <section aria-labelledby="setup-storage-title" className="space-y-2">
+          <h3 id="setup-storage-title" className="font-semibold">Speicherort für PDFs und Backups</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300">Offene Übertragungen bleiben im lokalen App-Speicher. Mit Schreibzugriff legt die App zusätzlich eine Wiederherstellungskopie in „Offline-Sicherung“ ab.</p>
+          {setup?.archiveMode === 'folder' && <div className="rounded-lg bg-slate-100 p-2 text-sm dark:bg-slate-800">
+            <strong className="block [overflow-wrap:anywhere]">{setup.folderLabel ?? 'Gespeicherter Ordner'}</strong>
+            {status === 'missing' && <p className="text-amber-800 dark:text-amber-200">Der Ordner ist nicht mehr verfügbar.</p>}
+            {status === 'needs-permission' && <p>Bitte bestätigen Sie den Schreibzugriff erneut.</p>}
+            {status === null && <p>Gespeicherter Ordner wird geprüft …</p>}
+          </div>}
+          {setup?.archiveMode === 'downloads' && <p className="text-sm">Dateien werden manuell gespeichert.</p>}
+          {firstSetup && !folderOptionsOpen && status && status !== 'missing' && <div className="space-y-2">
+            <p className="text-sm">{status === 'ok' ? 'Ordner bereits ausgewählt. Möchten Sie ihn behalten?' : 'Möchten Sie den Schreibzugriff auf diesen Ordner erneut erlauben?'}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={action} disabled={busy} onClick={() => void saveLocation('saved')}>{status === 'ok' ? 'Behalten und weiter' : 'Zugriff erlauben und weiter'}</button>
+              <button type="button" className={action} disabled={busy} onClick={() => { setError(null); setFolderOptionsOpen(true); }}>Ordner ändern</button>
+            </div>
+          </div>}
+          {!folderOptionsOpen && (!firstSetup || status === null) && <button type="button" className={action} onClick={() => setFolderOptionsOpen(true)}>
+            <FolderOpen size={18} aria-hidden="true" /> {firstSetup ? 'Ordner ändern' : 'Kassen-Speicherort wählen'}
           </button>}
-        </div>
-        {needsWrite && <div className="space-y-2 rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
-          <p>Ordner „<strong>{needsWrite}</strong>“ gewählt. Das Tablet erlaubt bisher nur das <strong>Lesen</strong>. Bitte jetzt das Schreiben erlauben:</p>
-          <button type="button" onClick={() => void grantWrite()} disabled={busy}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">
-            <FolderOpen size={19} /> {busy ? 'Wird erlaubt …' : 'Schreiben im Ordner erlauben'}
-          </button>
+          {folderOptionsOpen && <div className="space-y-2">
+            <p className="text-sm">{firstSetup ? 'Bitte wählen Sie den Ordner, in dem Ihre Kassendaten abgelegt werden.' : 'Wählen Sie den Ordner, in dem Sie die Kassendateien ablegen möchten.'}</p>
+            {firstSetup && pickerSupported
+              // Erststart (23.11.): nur EINE Schaltfläche – erst „Ordner wählen“, nach der Auswahl „Bestätigen“.
+              ? <button type="button" disabled={busy}
+                  onClick={() => void (selection ? saveLocation(selection) : chooseFolder())}
+                  className={selection
+                    ? 'flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50'
+                    : action}>
+                  <FolderOpen size={18} aria-hidden="true" /> {selection ? 'Bestätigen' : 'Ordner wählen'}
+                </button>
+              : pickerSupported
+              ? <button type="button" className={action} disabled={busy} onClick={() => void chooseFolder()}>
+                  <FolderOpen size={18} aria-hidden="true" /> Ordner auswählen
+                </button>
+              : <p className="text-sm">Dieser Browser kann keinen Ordner dauerhaft freigeben.</p>}
+            {selection && <p className="rounded-lg bg-emerald-50 p-2 text-sm dark:bg-emerald-950">
+              Ausgewählter Ordner <strong className="block [overflow-wrap:anywhere]">{selection.name}</strong>
+            </p>}
+            {selection && <p className="text-xs text-slate-600 dark:text-slate-300">Chrome stellt hier den Ordnernamen bereit. Laufwerk und vollständiger Systempfad sind im Auswahlfenster sichtbar, soweit das Betriebssystem sie anzeigt.</p>}
+            {!(firstSetup && pickerSupported) && <div className="flex flex-wrap gap-2">
+              <button type="button" className={action} disabled={busy} onClick={() => {
+                setSelection(null); setError(null); setFolderOptionsOpen(false);
+                if (firstSetup) onClose();
+              }}>Abbrechen</button>
+              <button type="button" className={action} disabled={busy || !selection} onClick={() => {
+                if (selection) void saveLocation(selection);
+              }}>OK</button>
+            </div>}
+          </div>}
+        </section>
+        {error && <p role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {onOffline && <button type="button" className={action} disabled={busy} onClick={onOffline}>Offline zur Kasse</button>}
+        {!firstSetup && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 pt-3 dark:border-slate-700">
+          <button type="button" className={`${action} ml-auto`} disabled={busy} onClick={onClose}>Schließen</button>
         </div>}
-        {error && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
-        <p className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>PDFs bleiben lokal auf diesem Gerät.</p>
       </section>
     </div>
   );

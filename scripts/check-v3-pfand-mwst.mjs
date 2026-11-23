@@ -58,11 +58,11 @@ test('02 Bar mit Retoure: Pfand-Saldo −3 € → USt −0,50 €; Bon 1,20 €
   assert.equal(ret.pfandTaxRate, 20);
   assert.equal(cents(ret.pfandTax), -100);
 });
-test('03 Karte + Pfandausgabe bar: Kartenbeleg Pfand-USt +1,00 €, Pfandausgabe −2,50 €; DB-Felder der Pfandausgabe bleiben 0', () => {
+test('03 Karte + Pfand (ab 22.11. verrechnet): Kartenbeleg Pfand-USt 0 €, Pfandausgabe für 3 Becher −1,50 €; DB-Felder bleiben 0', () => {
   const [card, payout] = buildCheckoutTransactions({ items: [line(gluehwein, 2), retoure(15, 5)], location: 'Bregenz', paymentMethod: 'card', makeId });
-  assert.equal(cents(transactionPfandTax(card)), 100);
-  assert.equal(cents(transactionPfandTax(payout)), -250);
-  assert.equal(cents(payout.pfandNet), -1250);
+  assert.equal(cents(transactionPfandTax(card)), 0);
+  assert.equal(cents(transactionPfandTax(payout)), -150);
+  assert.equal(cents(payout.pfandNet), -750);
   assert.deepEqual(payout.taxByRate, {});
   assert.equal(payout.totalTax, 0);
   assert.equal(payout.totalNet, 0);

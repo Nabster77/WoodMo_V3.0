@@ -1,6 +1,49 @@
 import type { CashSession, Transaction } from '@/types';
 import type { StornoRecord } from '@/lib/stornoRules';
 
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Same rule as woodmo_private.valid_restore_cash_refund (SQL, 22.11.2026):
+ * a receipt with a negative total is restorable only as a cash receipt whose
+ * deposit returns exceed the sale (pure deposit return or sale + return).
+ * Checked on export AND import, so a reset never starts with a backup the
+ * server would reject.
+ */
+export function isRestorableNegativeReceipt(tx: Transaction): boolean {
+  const t = tx as Transaction & Record<string, unknown>;
+  if (t.paymentMethod !== 'cash' || !Array.isArray(t.items) || !t.taxByRate || typeof t.taxByRate !== 'object') return false;
+  for (const key of ['total', 'subtotal', 'totalPfand', 'totalNet', 'totalTax'] as const) {
+    if (typeof t[key] !== 'number' || !Number.isFinite(t[key] as number)) return false;
+  }
+  let sale = 0;
+  let deposit = 0;
+  let hasReturn = false;
+  for (const raw of t.items as unknown[]) {
+    const item = raw as Record<string, unknown>;
+    if (!item || typeof item !== 'object' || !item.productId ||
+        typeof item.quantity !== 'number' || typeof item.price !== 'number' || typeof item.pfand !== 'number' ||
+        !(item.quantity > 0)) return false;
+    const gross = item.price * item.quantity;
+    if (item.isPfandRetoure === true) {
+      if (item.productId !== '__pfand_retoure__' || item.pfand >= 0 || round2(gross) !== round2(item.pfand) ||
+          item.taxRate !== 0 || item.taxAmount !== 0) return false;
+      hasReturn = true;
+    } else {
+      if (item.productId === '__pfand_retoure__' || gross < 0 || item.pfand < 0) return false;
+      sale += gross;
+    }
+    deposit += item.pfand;
+  }
+  const total = t.total as number;
+  return hasReturn && total < 0 &&
+    round2(sale) === round2(t.subtotal as number) &&
+    round2(deposit) === round2(t.totalPfand as number) &&
+    round2(sale + deposit) === round2(total) &&
+    round2((t.totalNet as number) + (t.totalTax as number)) === round2(sale) &&
+    (sale !== 0 || (t.totalNet === 0 && t.totalTax === 0));
+}
+
 /** Read-only validation before exporting OR importing accounting evidence. */
 export function inspectBackupIntegrity(financial: {
   transactions: readonly Transaction[];
@@ -47,6 +90,10 @@ export function inspectBackupIntegrity(financial: {
         !['Friedrichshafen', 'Bregenz'].includes(transaction.location) ||
         !['cash', 'card'].includes(transaction.paymentMethod)) {
       issues.push('Buchung ' + transaction.id + ': ungültiger Betrag, Zeitpunkt, Standort oder Zahlungsart.');
+    } else if (transaction.total < 0 && !isRestorableNegativeReceipt(transaction)) {
+      issues.push('Buchung ' + transaction.id + ' (' + transaction.location + ', ' +
+        new Date(transaction.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) +
+        '): Minus-Bon passt nicht zu Verkauf + Pfandrückgabe und wäre nicht zurückspielbar.');
     }
     if (transaction.cashSessionId) {
       const session = sessions.get(transaction.cashSessionId);

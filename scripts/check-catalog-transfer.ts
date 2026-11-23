@@ -90,6 +90,21 @@ assert.deepEqual(twice.next,modified,'explicit rates and shot overrides roundtri
   assert.equal(pathOf('Kaffee groß','Likör (Flaschen)'), 'Flaschenbilder/Kafee groß.jpeg');
   assert.equal(pathOf('Zirbe (S)','Kurze (Schnaps)'), 'Getränke/Zirbenschnaps.png');
   assert.equal(pathOf('Zirbe (L)','Kurze (Likör)'), 'Getränke/Zirbe (L).png');
+  // 22.11.2026: Getränk „Kaffee“ bekam das Flaschenbild „Kaffee klein (L)“. Nie mehr.
+  const coffeeBase: LocalCatalog = {...structuredClone(base), categories: normalizeCategories([g('c-g','Getränke'), g('c-fl','Flaschen')]), products: [mk('Kaffee','c-g','pk'), {...mk('Kaffee klein','c-fl','pkk'), spiritType: 'likoer' as const}, {...mk('Kaffee groß','c-fl','pkg'), spiritType: 'likoer' as const}]};
+  const coffeeArchive = ['Flaschen/Kaffee klein (L).webp','Flaschen/Kaffee groß (L).webp','Kurze/Kaffee (L).webp','Flaschen/Kaffee.webp'].map(path => ({path, ...png}));
+  const coffee = buildImportPlan(make([['Kaffee',4,'Getränke','fix',19,20],['Kaffee klein',21,'Flaschen','fix',19,20],['Kaffee groß',28,'Flaschen','fix',19,20]]), coffeeBase, coffeeArchive);
+  assert.equal(coffee.images['pk'], undefined, 'Getränk Kaffee bekommt kein Flaschenbild');
+  assert.equal(coffee.images['pkk']?.path, 'Flaschen/Kaffee klein (L).webp');
+  assert.equal(coffee.images['pkg']?.path, 'Flaschen/Kaffee groß (L).webp');
+  // Vorhandenes echtes Bild: nur exakter Dateiname ersetzt es, ähnliche Namen (Tippfehler) nicht.
+  const withImage: LocalCatalog = {...structuredClone(coffeeBase), products: coffeeBase.products.map(p => p.id === 'pkg' ? {...p, imageUrl: 'https://example.test/alt.webp'} : p)};
+  const typo = buildImportPlan(make([['Kaffee groß',28,'Flaschen','fix',19,20]]), withImage, ['Flaschen/Kafee groß (L).webp'].map(path => ({path, ...png})));
+  assert.equal(typo.images['pkg'], undefined, 'Tippfehler ersetzt kein vorhandenes Bild');
+  assert(typo.warnings.some(w => w.includes('vorhandenes Bild bleibt')));
+  const exactPlan = buildImportPlan(make([['Kaffee groß',28,'Flaschen','fix',19,20]]), withImage, ['Flaschen/Kaffee groß (L).webp'].map(path => ({path, ...png})));
+  assert.equal(exactPlan.images['pkg']?.path, 'Flaschen/Kaffee groß (L).webp');
+  assert(exactPlan.warnings.some(w => w.includes('wird durch Flaschen/Kaffee groß (L).webp ersetzt')), 'Vorschau nennt das Ersetzen');
 }
 
 // Veraltete Bildadresse in der Excel darf ein vorhandenes Bild nicht zurücksetzen.

@@ -41,7 +41,8 @@ assert.match(pos, /if \(favoritesActive\) \{\s*const back = /, '★ ein zweites 
 assert.match(pos, /flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-xl/, 'Favoriten: kleines Quadrat nur mit Stern');
 assert.doesNotMatch(pos, /favoriteRank|FAVORITE_DAYS/, 'Favoriten nur von Hand, keine Automatik (Nutzerwunsch 17.11. 20:43)');
 assert.match(pos, /list = list\.filter\(\(p\) => shownIds\.includes\(p\.id\)\);/);
-assert.match(pos, /!search\.trim\(\) && !favoritesActive && !favoriteEdit && \(/, 'Kacheln verschieben nicht in Favoriten');
+assert.match(pos, /!search\.trim\(\) && !favoriteEdit && \(/, 'Kacheln verschieben auch in Favoriten, nicht beim Favoriten-Wählen');
+assert.match(pos, /if \(!favoritesActive\) \{\s*onMoveProduct\?\.\(sourceId, targetId\);\s*return;\s*\}\s*setFavoriteIds\(/, 'Favoriten-Reihenfolge nur lokal, Artikelreihenfolge der Cloud bleibt unverändert');
 // Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
 assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
 assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
@@ -49,7 +50,8 @@ assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/)
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
 assert.match(tile, /group relative flex h-full min-h-\[6\.25rem\] w-full min-w-0 flex-col/, 'kompakte Kacheln immer volle Zellbreite und gleiche Höhe');
 assert.match(tile, /group relative isolate aspect-square w-full min-w-0/, 'Bild-Kacheln nie 0 breit');
-assert.match(pos, /if \(favoritesActive && favoriteIds\.length === 0 && shownCategories\[0\]\) setActiveCat\(shownCategories\[0\]\.id\);/, 'Favoriten wählen in ★: nur ohne Favoriten zur ersten Gruppe');
+assert.match(pos, /disabled=\{!favoriteEdit && favoritesActive && visibleProducts\.length === 0\}/, 'In ★ heißt der Knopf „Favoriten abwählen“ und ist ohne Favoriten gesperrt');
+assert.match(pos, /favoritesActive \? 'Favoriten abwählen' : 'Favoriten wählen'/);
 assert.match(pos, /setFavoriteEditShown\(\[\.\.\.favoriteIds\]\);/, 'Favoriten wählen in ★: Liste bleibt beim Abwählen sichtbar');
 assert.match(pos, /favoriteEdit && favoriteEditShown\s*\?/, 'abgewählte bleiben bis Fertig sichtbar');
 assert.match(pos, /setFavoriteEditShown\(null\);/, 'Fertig: abgewählte verschwinden');
@@ -67,7 +69,7 @@ assert.ok(pos.indexOf('placeholder="Artikel suchen..."') < pos.indexOf('aria-lab
 assert.match(pos, /const TILE_IMAGES_KEY = 'pos_tile_images'/);
 assert.match(pos, /compact=\{!showImages\}/);
 assert.match(pos, /'Bilder aus' : 'Bilder an'/);
-assert.match(readFileSync('src/components/POS/CartItemRow.tsx', 'utf8'), /<SpiritBadge kind=\{item\.product\.spiritType\} \/>/);
+assert.match(readFileSync('src/components/POS/CartItemRow.tsx', 'utf8'), /<SpiritBadge kind=\{item\.product\.spiritType\}/);
 console.log('KOMPAKT-ANSICHT: Umschalter Bilder an/aus pro Gerät, Likör-Kennzeichnung geprüft.');
 console.log('ARTIKELBILDER: quadratisches Vollbild, randlos, kontrastreiche Preis/Pfand-Texte und Touch-/Drag-Funktionen geprüft.');
 assert.match(pos, /const kindRank = \(p: Product\) => p\.spiritType === 'schnaps' \? 0 : p\.spiritType === 'likoer' \? 1 : 2;/);

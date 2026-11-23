@@ -3,7 +3,7 @@ import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBala
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useStore } from '@/hooks/useStore';
-import { useCloudSync } from '@/hooks/useCloudSync';
+import { isReachable, useCloudSync } from '@/hooks/useCloudSync';
 import { useCatalogSync } from '@/hooks/useCatalogSync';
 import { useStornoLedger } from '@/hooks/useStornoLedger';
 import { prepareStorno, prepareFinalCloseStornoSnapshot } from '@/lib/stornoRules';
@@ -15,9 +15,11 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { useStaffDirectory } from '@/hooks/useStaffDirectory';
 import { StaffLoginDialog } from '@/components/StaffLoginDialog';
 import { DeviceSetupDialog } from '@/components/DeviceSetupDialog';
-import { readDeviceSetup } from '@/lib/deviceSetup';
+import { InitialSyncDialog, type UpdatePhase } from '@/components/InitialSyncDialog';
+import { readDeviceSetup, setInitialSetupPending } from '@/lib/deviceSetup';
+import { APP_VERSION, activatePublishedUpdate, activationVerified, approvedActivation, preflightPublishedUpdate, preparePublishedUpdate, publishedUpdate, type PublishedUpdate } from '@/lib/appVersion';
+import { checkStartupData, startupCashDigest } from '@/lib/startupDataCheck';
 import { PDF_ARCHIVE_SETUP_EVENT } from '@/lib/pdfArchiveSetup';
-import { RootPasswordWarning } from '@/components/RootPasswordWarning';
 import { CloudPasswordPanel } from '@/components/Admin/CloudPasswordPanel';
 import { ManagerPasswordPanel } from '@/components/Admin/ManagerPasswordPanel';
 import { changeManagerPassword, loadManagerCredential, restoreManagerCredential, type ManagerCredential } from '@/lib/managerAuth';
@@ -25,13 +27,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { fetchCatalogRows } from '@/lib/catalogCloud';
 import { fetchCloudData } from '@/lib/cloudPull';
 import { fetchLatestBookingReset } from '@/lib/bookingReset';
+import { checkRegistersClosedInCloud, type RegisterStatus } from '@/lib/registerStatus';
 import { pfandCloudMatches } from '@/lib/pfandValidation';
 import type { PfandSettings } from '@/types';
 import type { Location, StaffUser } from '@/types';
 import { POSScreen } from '@/components/POS/POSScreen';
 import { WoodmoHome } from '@/components/WoodmoHome';
-import { ReleaseNotice, UpdateCenter, UpdateReport } from '@/components/UpdateCenter';
-import { clearUpdateCheck, markBackupExported, markReleaseSeen, readUpdateCheck, shouldShowReleaseNotice } from '@/lib/updateCenter';
 import { WoodmoBrand } from '@/components/WoodmoBrand';
 import { AdminScreen } from '@/components/Admin/AdminScreen';
 import { JournalScreen } from '@/components/Journal/JournalScreen';
@@ -39,11 +40,10 @@ import { PasswordGate } from '@/components/PasswordGate';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { SyncToast } from '@/components/SyncToast';
 import { SyncDialog } from '@/components/SyncDialog';
-import { CatalogConflictDialog } from '@/components/CatalogConflictDialog';
 import { knownBookingReset, rememberBookingReset, resetCloudBookings } from '@/lib/bookingReset';
-import { enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, clearResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
+import { backUpPendingOutbox, enqueueEntries, discardEntriesBeforeGeneration, readPendingOutbox, removeQueuedUnusedCashSession, readResetQuarantineSummary, exportResetQuarantine, clearResetQuarantine, RESET_QUARANTINE_EVENT } from '@/lib/outbox';
 import { sessionTransactions } from '@/lib/sessionTransactions';
-import { prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
+import { archiveFolderStatus, prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
 import type { JournalReportData } from '@/lib/journalPdf';
 import { closedSessionReport } from '@/lib/dailyReport';
 import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 
 type Tab = 'pos' | 'admin' | 'journal';
+const STARTUP_OFFLINE_MESSAGE = 'Bitte stellen Sie eine Internetverbindung her';
 type HeaderAction = 'deposit' | 'withdrawal' | 'pfand' | 'correction' | 'close' | null;
 type OpeningManagementAccess =
   | { kind: 'manager-only' }
@@ -70,19 +71,9 @@ type OpeningManagementAccess =
   | { kind: 'employee-denied' }
   | null;
 
-export default function App() {
+export default function App({ adminStartup = false }: { adminStartup?: boolean }) {
   const { theme, toggle } = useTheme();
   const store = useStore();
-  // Artikel im Warenkorb (für die Update-Zentrale: Neustart nur mit leerem Warenkorb).
-  const [cartCount, setCartCount] = useState(0);
-  const [updateCenterOpen, setUpdateCenterOpen] = useState(false);
-  const [updateReport, setUpdateReport] = useState(() => readUpdateCheck());
-  const [releaseNoticeOpen, setReleaseNoticeOpen] = useState(() =>
-    shouldShowReleaseNotice(updateReport !== null || readDeviceSetup() !== null)
-  );
-  useEffect(() => {
-    if (!releaseNoticeOpen) markReleaseSeen();
-  }, [releaseNoticeOpen]);
   const [tab, setTab] = useState<Tab>('pos');
   // A cash register remains mounted when navigating Home/Admin/Journal: the
   // active unsaved cart must not disappear merely because its view is hidden.
@@ -102,7 +93,15 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminShotDirty, setAdminShotDirty] = useState(false);
   const [adminSection, setAdminSection] = useState('Kassen-Übersicht');
-  const [deviceSetupOpen, setDeviceSetupOpen] = useState(() => readDeviceSetup() === null);
+  const [deviceSetupOpen, setDeviceSetupOpen] = useState(false);
+  const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
+  const [candidate, setCandidate] = useState<PublishedUpdate | null>(null);
+  const [autoInstallPending, setAutoInstallPending] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [syncPercent, setSyncPercent] = useState(0);
+  const updateBusy = useRef(false);
+  const syncedCashDigest = useRef<string | null>(null);
+  const startupActive = updatePhase !== null && updatePhase !== 'offer' && updatePhase !== 'reload';
   const [pdfArchiveWarning, setPdfArchiveWarning] = useState<string | null>(null);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   // Jedes Betreten der Verwaltung (egal mit welcher Anmeldung) öffnet zuerst das Verwaltungsmenü.
@@ -145,15 +144,26 @@ export default function App() {
   const [pendingClosePdf, setPendingClosePdf] = useState<JournalReportData | null>(null);
   const [lastStaffId, setLastStaffId] = useState<string | null>(() => loadJSON<string | null>(STORAGE_KEYS.lastStaffId, null));
   const [staffAdminLoginOpen, setStaffAdminLoginOpen] = useState(false);
-  const [rootWarningOpen, setRootWarningOpen] = useState(() => !loadJSON<boolean>(STORAGE_KEYS.rootPasswordChanged, false) && !loadJSON<boolean>(STORAGE_KEYS.rootPasswordNoticeDismissed, false));
   const signedInUser = useAuthUser();
-  const staff = useStaffDirectory();
+  const canOpenSetup = currentStaff?.role !== 'employee' && (adminStartup || signedInUser === 'admin' || adminUnlocked);
+  useEffect(() => {
+    if (!canOpenSetup || readDeviceSetup()?.archiveMode !== 'folder') return;
+    let active = true;
+    void archiveFolderStatus().then(status => {
+      if (active && status === 'missing') {
+        setPdfArchiveWarning('Der gespeicherte Kassenordner ist nicht mehr verfügbar. Du kannst ihn im Setup erneut wählen.');
+      }
+    });
+    return () => { active = false; };
+  }, [canOpenSetup]);
+  const staff = useStaffDirectory(startupActive);
   const catalog = useCatalogSync({
     categories: store.categories,
     products: store.products,
     pfandSettings: store.pfandSettings,
     shotOptions: store.shotOptions,
     testMode,
+    offerInitialDownload: startupActive,
     applyRows: store.applyCatalogRows,
   });
   const { online, syncNow, pauseSyncForRestore, resumeSyncAfterRestore } = useCloudSync(
@@ -164,9 +174,194 @@ export default function App() {
     store.mergeCloudData,
     catalog.syncCatalog,
     store.applyCloudBookingReset,
+    startupActive,
   );
   const stornoLedger = useStornoLedger(testMode, online);
 
+  // Published updates are detected in the background (start, every 15 min,
+  // when the app comes back to the foreground or online). Nothing is installed:
+  // the running version stays active until "Jetzt installieren" is confirmed.
+  const [updateReady, setUpdateReady] = useState(false);
+  const updateDeferred = useRef(false);
+  const candidateRef = useRef<PublishedUpdate | null>(null);
+  const checkForUpdate = useCallback(async (offer: boolean) => {
+    const update = await publishedUpdate();
+    if (!update) return null;
+    const known = candidateRef.current;
+    if (!known || known.commit !== update.commit || known.builtAt !== update.builtAt) {
+      candidateRef.current = update;
+      setCandidate(update);
+      setUpdateReady(false);
+      // Download check only (HTTP cache); the active app files stay untouched.
+      void preflightPublishedUpdate(update).then(ok => { if (candidateRef.current === update) setUpdateReady(ok); });
+    }
+    // 23.11.: Beim Start (und bei Rückkehr in die App) installiert die App ein Update
+    // selbst, ohne Fenster. Das Fenster erscheint nur, wenn etwas fehlt (Kasse offen, offline …).
+    if (offer) setAutoInstallPending(true);
+    return update;
+  }, []);
+
+  useEffect(() => {
+    const activation = approvedActivation();
+    if (activation) {
+      if (!activationVerified(activation)) setUpdatePhase('reload');
+      return;
+    }
+    const check = () => {
+      if (document.visibilityState === 'hidden') return;
+      // Offer automatically only until the user chose "Später installieren".
+      void checkForUpdate(!updateDeferred.current).catch(() => undefined); // offline: keep the running app
+    };
+    check();
+    const timer = window.setInterval(check, 15 * 60_000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('online', check);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('online', check);
+    };
+  }, [checkForUpdate]);
+
+  async function openUpdateFromHome() {
+    updateDeferred.current = false;
+    try {
+      const update = candidateRef.current ?? await checkForUpdate(false);
+      if (update) setUpdatePhase('offer');
+      else alert(`Version ${APP_VERSION} ist aktuell.`);
+    } catch (error) {
+      alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
+    }
+  }
+
+  // Fix 23.11.: Ein Tipp auf „Jetzt installieren“ führt den ganzen vorhandenen Ablauf
+  // selbst durch (prüfen -> Speicherort -> Cloud-Abgleich -> aktivieren -> Neustart).
+  // Rückfragen kommen nur noch bei Fehlern oder wenn kein Speicherort gespeichert ist.
+  // Sicherer Zeitpunkt bleibt: nur auf dem Startbildschirm ohne angemeldeten Mitarbeiter.
+  const autoUpdate = useRef(false);
+  useEffect(() => {
+    if (!autoUpdate.current || updateBusy.current) return;
+    if (!homeVisible || currentStaff) { autoUpdate.current = false; return; }
+    if (updatePhase === 'prepared' && !updateError) void continueUpdate();
+    else if (updatePhase === 'synced' && !updateError) void finishUpdate();
+    else if (updatePhase === 'sync-error' || updatePhase === 'offer' || updatePhase === null) autoUpdate.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
+  }, [updatePhase, updateError, homeVisible, currentStaff]);
+  useEffect(() => {
+    if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
+    if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
+    setAutoInstallPending(false);
+    autoUpdate.current = true;
+    void prepareUpdate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
+  }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
+
+  // Sicherheitsprüfung 23.11.: Update nur, wenn in der Cloud ALLE Kassen endgültig
+  // abgeschlossen sind. Ohne Cloud-Antwort gilt das Update als nicht freigegeben.
+  const [registerStatus, setRegisterStatus] = useState<RegisterStatus | null>(null);
+  useEffect(() => {
+    if (updatePhase !== 'offer' || testMode) return;
+    let active = true;
+    setRegisterStatus(null);
+    void checkRegistersClosedInCloud().then((status) => { if (active) setRegisterStatus(status); });
+    return () => { active = false; };
+  }, [updatePhase, testMode]);
+  async function requireRegistersClosed() {
+    const status = await checkRegistersClosedInCloud();
+    setRegisterStatus(status);
+    if (!status.ready) throw new Error('Update noch nicht freigegeben: ' + status.lines.join(' '));
+  }
+
+  async function prepareUpdate() {
+    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    updateBusy.current = true;
+    setUpdateError(null);
+    setUpdatePhase('preparing');
+    try {
+      if (!supabase || testMode) throw new Error('Der Cloud-Abgleich für das Update benötigt den aktiven Modus.');
+      await requireRegistersClosed();
+      await checkStartupData();
+      await preparePublishedUpdate(candidate);
+      setUpdatePhase('prepared');
+    } catch (error) {
+      setUpdateError(readableSyncError(error));
+      setUpdatePhase('offer');
+      void publishedUpdate().then(setCandidate).catch(() => undefined);
+    } finally {
+      updateBusy.current = false;
+    }
+  }
+
+  async function continueUpdate() {
+    if (updateBusy.current) return;
+    setUpdateError(null);
+    setUpdatePhase('folder-check');
+    // An interrupted setup (cancelled or app closed) always starts again with
+    // the setup step; nothing is synced or activated before it is completed.
+    // Fix 23.11.: Ein gespeicherter Ordner (z. B. „Kasse 2026“) wird verwendet, die Abfrage entfällt.
+    // Nur wenn kein Ordner gespeichert ist oder er fehlt, muss einer gewählt werden.
+    if (readDeviceSetup()?.archiveMode === 'folder' && await archiveFolderStatus() !== 'missing') {
+      setInitialSetupPending(false);
+      await syncBeforeUpdate();
+    } else {
+      setInitialSetupPending(true);
+      if (canOpenSetup) setUpdatePhase('folder');
+      else {
+        setUpdateError('Ein Administrator muss den Kassenordner einrichten.');
+        setUpdatePhase('prepared');
+      }
+    }
+  }
+
+  async function syncBeforeUpdate() {
+    if (updateBusy.current) return;
+    updateBusy.current = true;
+    syncedCashDigest.current = null;
+    setUpdateError(null);
+    setSyncPercent(0);
+    setUpdatePhase('syncing');
+    try {
+      if (!(await isReachable())) throw new Error(STARTUP_OFFLINE_MESSAGE);
+      setSyncPercent(20);
+      const result = await syncNow(true);
+      if (!result.ok) throw new Error(result.error || 'Der Cloud-Abgleich konnte nicht abgeschlossen werden.');
+      setSyncPercent(80);
+      await staff.sync();
+      await checkStartupData();
+      if ((await readPendingOutbox()).length) throw new Error('Es sind noch lokale Übertragungen offen. Bitte erneut synchronisieren.');
+      syncedCashDigest.current = await startupCashDigest();
+      setSyncPercent(100);
+      setUpdatePhase('synced');
+    } catch (error) {
+      setUpdateError(readableSyncError(error));
+      setUpdatePhase('sync-error');
+    } finally {
+      updateBusy.current = false;
+    }
+  }
+
+  async function finishUpdate() {
+    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    updateBusy.current = true;
+    setUpdateError(null);
+    setUpdatePhase('activating');
+    try {
+      await requireRegistersClosed();
+      if ((await readPendingOutbox()).length || await startupCashDigest() !== syncedCashDigest.current) {
+        syncedCashDigest.current = null;
+        throw new Error('Der Kassenstand hat sich seit dem Abgleich geändert. Bitte erneut synchronisieren.');
+      }
+      await activatePublishedUpdate(candidate);
+      setInitialSetupPending(false);
+      setUpdatePhase('reload');
+      window.location.reload();
+    } catch (error) {
+      setUpdateError(readableSyncError(error));
+      setUpdatePhase(syncedCashDigest.current ? 'synced' : 'sync-error');
+    } finally {
+      updateBusy.current = false;
+    }
+  }
   /** Explicit admin save with truthful read-after-write proof in V3 cloud. */
   async function savePfandAndVerify(settings: PfandSettings): Promise<'cloud' | 'local'> {
     // Update only the V3 local catalog; the existing catalog engine handles its
@@ -198,17 +393,40 @@ export default function App() {
     throw new Error(problem);
   }
 
+  // Fix 22.11.: Neues/zurückgesetztes Gerät ohne Kassenordner bekommt das
+  // Ordner-Setup auch ohne Update (vorher nur im Update-Ablauf). Nur für Admins,
+  // nur auf dem Startbildschirm, ändert keine Daten. Abbruch -> beim nächsten Start erneut.
+  const [freshSetup, setFreshSetup] = useState(false);
+  const freshSetupShown = useRef(false);
+  useEffect(() => {
+    if (freshSetupShown.current || !canOpenSetup || !homeVisible || currentStaff || updatePhase !== null || deviceSetupOpen) return;
+    // Nur ohne gespeicherten Speicherort fragen (23.11.).
+    if (readDeviceSetup()) { setInitialSetupPending(false); return; }
+    freshSetupShown.current = true;
+    setInitialSetupPending(true);
+    setFreshSetup(true);
+    setDeviceSetupOpen(true);
+  }, [canOpenSetup, homeVisible, currentStaff, updatePhase, deviceSetupOpen]);
+
+  async function syncAfterFreshSetup() {
+    setFreshSetup(false);
+    setDeviceSetupOpen(false);
+    setInitialSetupPending(false);
+    const result = await syncNow();
+    if (!result.ok) alert('Ordner gespeichert. Cloud-Abgleich: ' + (result.error || 'nicht abgeschlossen. Bitte „Sync Cloud“ tippen.'));
+  }
+
   // Any PDF export on this device can request reconfiguration. This includes
   // journal exports from another computer restoring a cloud booking history.
   useEffect(() => {
     const showSetup = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
       setPdfArchiveWarning(detail?.message || 'Der lokale PDF-Speicherordner muss erneut eingerichtet werden.');
-      setDeviceSetupOpen(true);
+      if (canOpenSetup) setDeviceSetupOpen(true);
     };
     window.addEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
     return () => window.removeEventListener(PDF_ARCHIVE_SETUP_EVENT, showSetup);
-  }, []);
+  }, [canOpenSetup]);
 
   // The last finalized balance per location is a suggestion only. It is not
   // copied until the user actually opens the next cash session.
@@ -226,8 +444,8 @@ export default function App() {
   // The browser profile may be new while the personnel list already exists in
   // the cloud. Load it again once the cloud session is definitely available.
   useEffect(() => {
-    if (signedInUser && online) void staff.sync().catch(() => undefined);
-  }, [online, signedInUser, staff.sync]);
+    if (!startupActive && signedInUser && online) void staff.sync().catch(() => undefined);
+  }, [online, signedInUser, staff.sync, startupActive]);
 
   const syncEverything = useCallback(async () => {
     const result = await syncNow();
@@ -653,6 +871,12 @@ export default function App() {
                 <span className="hidden min-[740px]:inline text-xs">Menü</span>
               </button>
             )}
+            <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-slate-200"
+              role="status"
+              title={headerDateLong(headerNow)}>
+              <MapPin className="h-4 w-4" aria-hidden="true" />
+              {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)}
+            </div>
             {tab === 'pos' && !store.activeSession && (
               <button type="button" aria-label="Kasse eröffnen" title="Kasse eröffnen"
                 onClick={() => setCashierLoginRequest((request) => request + 1)}
@@ -661,38 +885,11 @@ export default function App() {
                 <span className="hidden min-[800px]:inline">Kasse eröffnen</span>
               </button>
             )}
-            {tab === 'pos' && (
-              <div
-                className="order-3 flex w-full min-w-0 items-center gap-1.5 border-t border-slate-700/50 pt-1 text-xs text-slate-200 min-[700px]:order-none min-[700px]:w-auto min-[700px]:flex-1 min-[700px]:overflow-hidden min-[700px]:border-0 min-[700px]:pt-0"
-                role="status"
-                aria-label={`Standort ${store.activeSession?.location ?? store.selectedLocation}, aktuelles Datum ${headerDateLong(headerNow)}`}
-                title={`${store.activeSession?.location ?? store.selectedLocation} · ${headerDateLong(headerNow)}`}
-              >
-                <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />
-                <span className="hidden min-[1500px]:inline min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateLong(headerNow)}
-                </span>
-                <span className="hidden min-[1100px]:inline min-[1500px]:hidden min-w-0 truncate whitespace-nowrap font-semibold">
-                  {store.activeSession?.location ?? store.selectedLocation} · {headerDateShort(headerNow)}
-                </span>
-                <span className="min-w-0 truncate whitespace-nowrap font-semibold min-[1100px]:hidden">
-                  {headerDateShort(headerNow)}
-                </span>
-                {/* Uhrzeit groß und mittig im freien Platz der Kopfzeile. */}
-                <span className="flex-1 whitespace-nowrap text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl"
-                  role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
-                  {headerTime(headerNow)} Uhr
-                </span>
-              </div>
-            )}
-            {/* Kasse: Uhrzeit steht hinter dem Datum. Verwaltung/Journal: nur die Uhrzeit (Gerätezeit, auch offline). */}
-            {tab !== 'pos' && (
-              <span className="order-2 ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-200 min-[700px]:order-none"
-                role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
-                {headerDateShort(headerNow)} · {headerTime(headerNow)} Uhr
-              </span>
-            )}
-            <div className={`order-2 flex shrink-0 items-center gap-1.5 ${tab === 'pos' ? 'ml-auto' : ''}`}>
+            <span className="order-3 w-full text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl min-[1100px]:absolute min-[1100px]:left-1/2 min-[1100px]:w-auto min-[1100px]:-translate-x-1/2"
+              role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
+              {headerTime(headerNow)} Uhr
+            </span>
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
               {tab === 'pos' && (
                 <button type="button"
                   aria-label={currentStaff ? 'Mitarbeiter abmelden' : 'Mitarbeiter anmelden'}
@@ -824,7 +1021,7 @@ export default function App() {
       )}
 
       {/* Content */}
-      <main className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
+      <main ref={node => { if (node) node.inert = startupActive; }} className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
         {homeVisible && (
           <WoodmoHome
             onCash={() => {
@@ -838,7 +1035,9 @@ export default function App() {
             location={store.activeSession?.location ?? store.selectedLocation}
             status={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
             testMode={testMode}
-            onUpdateCenter={() => setUpdateCenterOpen(true)}
+            onSetup={canOpenSetup ? () => setDeviceSetupOpen(true) : undefined}
+            updateWaiting={candidate?.version}
+            onUpdate={!currentStaff ? () => void openUpdateFromHome() : undefined}
           />
         )}
         {posVisited && (
@@ -995,7 +1194,6 @@ export default function App() {
             onHome={goHome}
             openingBalanceSuggestions={openingBalanceSuggestions}
             openSessionsByLocation={openSessionsByLocation}
-            onCartCountChange={setCartCount}
             onContinueSessionAt={continueOpenSessionAt}
           />
           </div>
@@ -1004,6 +1202,7 @@ export default function App() {
           adminUnlocked ? (
             <AdminScreen
               menuOpen={menuOpen}
+              onOpenMenu={() => setMenuOpen(true)}
               onCloseMenu={() => setMenuOpen(false)}
               onOpenJournal={() => navigateToProtected('journal')}
               onAdminSectionChange={setAdminSection}
@@ -1135,8 +1334,9 @@ export default function App() {
                 };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const savedAs = await saveBackupFile(backupTarget, blob, `kasse-backup-${formatDateISO(Date.now())}.json`);
-                markBackupExported();
-                if (backupTarget.mode === 'folder') alert(`Backup gespeichert: ${savedAs}`);
+                if (backupTarget.mode === 'folder') {
+                  alert(`Backup gespeichert: ${savedAs}`);
+                }
                 } catch (error) {
                   // Keep the existing error dialog and propagate failure to the
                   // reset checklist: a failed download must never become green.
@@ -1167,6 +1367,34 @@ export default function App() {
                      stornos: imported.stornos ?? [],
                    }, 'Backup-Import');
                    await validateBackupCloseArchive(selectedBackup);
+
+                   // Backup 1:1 gleich dem aktuellen Cloud-Stand → nichts zu tun (Wunsch 22.11.2026).
+                   {
+                     const current = await fetchLatestBookingReset();
+                     const currentGeneration = current?.generation ?? 0;
+                     const cloudNow = await fetchCloudData(null, currentGeneration);
+                     const stornosNow = await loadCloudStornos(currentGeneration);
+                     const byId = <T extends { id: string }>(rows: readonly T[]) =>
+                       JSON.stringify([...rows].sort((a, b) => a.id.localeCompare(b.id)));
+                     if (cloudNow.transactions.length > 0 &&
+                         byId(cloudNow.transactions) === byId(imported.transactions) &&
+                         byId(cloudNow.cashSessions) === byId(imported.cashSessions) &&
+                         byId(stornosNow) === byId(imported.stornos ?? [])) {
+                       alert('Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud. Ein Import ist nicht nötig.');
+                       return;
+                     }
+                     // Cloud hat Buchungen: ein Import ist erst nach dem Zurücksetzen möglich.
+                     if (cloudNow.transactions.length > 0 || cloudNow.cashSessions.length > 0) {
+                       const cloudIds = new Set(cloudNow.transactions.map(tx => tx.id));
+                       const newer = imported.transactions.every(tx => cloudIds.has(tx.id)) &&
+                         cloudNow.transactions.length > imported.transactions.length;
+                       alert((newer
+                         ? 'In der Cloud sind neuere Daten als in diesem Backup (' + cloudNow.transactions.length + ' statt ' + imported.transactions.length + ' Buchungen).'
+                         : 'In der Cloud sind andere Buchungen als in diesem Backup.') +
+                         '\n\nSo geht es:\n1. Zuerst das aktuelle Backup sichern (Backup exportieren).\n2. Buchungen zurücksetzen.\n3. Danach dieses Backup importieren.');
+                       return;
+                     }
+                   }
 
                    // Der Wiederherstellungsdienst gleicht die Daten bereits
                   // gezielt mit der Cloud ab. Die normale Hintergrund-
@@ -1264,7 +1492,6 @@ export default function App() {
       </main>
       {syncedAt !== null && <SyncToast key={syncedAt} onClose={closeSyncToast} />}
       {syncOpen && <SyncDialog syncNow={syncEverything} onRecoverCashConflict={recoverUnusedLocalCashConflict} onClose={() => setSyncOpen(false)} />}
-      {catalog.conflict && <CatalogConflictDialog onChoose={catalog.resolveConflict} />}
       {staffAdminLoginOpen && (
         <StaffLoginDialog
           users={staff.users}
@@ -1280,22 +1507,26 @@ export default function App() {
         />
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
-      {updateCenterOpen && (
-        <UpdateCenter administrators={staff.users} online={online}
-          cloudStatus={!online || catalog.syncStatus === 'error' ? 'error' : !testMode && catalog.syncStatus !== 'saved' ? 'pending' : 'ok'}
-          sessionOpen={Boolean(store.activeSession)} cartCount={cartCount} transactions={store.transactions} cashSessions={store.cashSessions}
-          onClose={() => setUpdateCenterOpen(false)} />
-      )}
-      {updateReport && (
-        <UpdateReport check={updateReport} transactions={store.transactions} cashSessions={store.cashSessions}
-          onClose={() => { clearUpdateCheck(); setUpdateReport(null); }} />
-      )}
-      {releaseNoticeOpen && !deviceSetupOpen && !updateReport && !updateCenterOpen && (
-        <ReleaseNotice onConfirm={() => { markReleaseSeen(); setReleaseNoticeOpen(false); }} />
-      )}
-      {deviceSetupOpen && <DeviceSetupDialog warning={pdfArchiveWarning} onComplete={() => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); }} onCancel={readDeviceSetup() ? () => { setPdfArchiveWarning(null); setDeviceSetupOpen(false); } : undefined} />}
+      {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
+        <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
+          notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
+          onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
+          onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
+          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
+      {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
+        firstSetup={updatePhase === 'folder' || freshSetup}
+        onContinue={() => void (freshSetup && updatePhase !== 'folder' ? syncAfterFreshSetup() : syncBeforeUpdate())}
+        onComplete={() => {
+          setPdfArchiveWarning(null);
+          void backUpPendingOutbox().catch(() => undefined);
+        }}
+        onClose={() => {
+          setPdfArchiveWarning(null);
+          setDeviceSetupOpen(false);
+          setFreshSetup(false);
+          if (updatePhase === 'folder') setUpdatePhase('prepared');
+        }} />}
       <InstallPrompt />
-      <RootPasswordWarning visible={signedInUser === 'admin' && rootWarningOpen} onClose={() => { saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); setRootWarningOpen(false); }} />
     </div>
   );
 }

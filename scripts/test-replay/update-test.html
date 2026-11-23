@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WOODMO TEST – Update-Test starten</title>
+<style>
+  body { color-scheme: dark; font: 1rem system-ui, sans-serif; padding: 2rem; max-width: 36rem; margin: 5vh auto; }
+</style>
+<h1>WOODMO TEST</h1>
+<p id="status" role="status">Der Update-Test wird geöffnet …</p>
+<button id="retry" type="button" hidden>Erneut versuchen</button>
+<script>
+  const statusText = document.getElementById('status');
+  const retry = document.getElementById('retry');
+
+  function openStart() {
+    const worker = navigator.serviceWorker.controller;
+    if (worker?.state === 'activated' && new URL(worker.scriptURL).pathname === '/sw.js') {
+      // The previous test worker also used /sw.js. Only the launcher worker
+      // navigates automatically on activation; the fetch below verifies it here.
+      return confirmLauncher(worker);
+    }
+    return false;
+  }
+
+  function confirmLauncher(worker) {
+    const channel = new MessageChannel();
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 1000);
+      channel.port1.onmessage = event => {
+        clearTimeout(timer);
+        channel.port1.close();
+        if (event.data === 'WOODMO_TEST_REPLAY_READY') location.replace('/update-test-start.html');
+        resolve(event.data === 'WOODMO_TEST_REPLAY_READY');
+      };
+      worker.postMessage({ type: 'WOODMO_TEST_REPLAY_CHECK' }, [channel.port2]);
+    });
+  }
+
+  async function start() {
+    retry.hidden = true;
+    statusText.textContent = 'Der Update-Test wird geöffnet …';
+    try {
+      if (!navigator.serviceWorker) throw new Error();
+      if (await openStart()) return;
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+      if (new URL(registration.active?.scriptURL ?? location.href).pathname === '/sw.js' &&
+          !registration.installing && !registration.waiting) await registration.update();
+      const end = Date.now() + 12000;
+      while (Date.now() < end) {
+        if (await openStart()) return;
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      throw new Error();
+    } catch {
+      statusText.textContent = 'Der Teststart ist noch nicht bereit. Schließe weitere WOODMO-Test-Tabs und versuche es erneut.';
+      retry.hidden = false;
+    }
+  }
+
+  retry.addEventListener('click', start);
+  void start();
+</script>
+</html>

@@ -1,5 +1,5 @@
 import { Cloud, LockKeyhole, Settings2, WifiOff } from 'lucide-react';
-import { APP_VERSION } from '@/lib/updateCenter';
+import { APP_VERSION } from '@/lib/appVersion';
 import type { Location } from '@/types';
 
 interface Props {
@@ -9,12 +9,14 @@ interface Props {
   location: Location;
   status: 'ok' | 'pending' | 'error';
   testMode: boolean;
-  /** Kleiner, unauffälliger Zugang zur Update-Zentrale (nur Administratoren). */
-  onUpdateCenter?: () => void;
+  onSetup?: () => void;
+  /** Version of a published update waiting for installation, if any. */
+  updateWaiting?: string;
+  onUpdate?: () => void;
 }
 
 /** WOODMO home: two existing routes, no invented features or register mutations. */
-export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, testMode, onUpdateCenter }: Props) {
+export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, testMode, onSetup, updateWaiting, onUpdate }: Props) {
   const symbol = `${import.meta.env.BASE_URL}woodmo-cashmark-no-text.svg`;
   const watermark = 'pointer-events-none absolute grayscale brightness-150 -right-5 top-1/2 h-40 w-40 -translate-y-1/2 rotate-[-12deg] opacity-[0.085] sm:-right-8 sm:h-52 sm:w-52';
   return (
@@ -54,15 +56,17 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
           {sessionOpen && <span>{location} · Kasse geöffnet</span>}
           {testMode && <span className="font-semibold text-amber-300">TESTMODUS</span>}
         </div>
-        {/* Fußzeile: Signatur mittig, „Update“ rechts – beide klein und grau. */}
         <div className="relative flex w-full items-center justify-center">
-          <p className="px-16 text-center text-[11px] font-semibold text-slate-500">Holz trifft Code · by Nabster77</p>
-          {onUpdateCenter && (
-            <button type="button" onClick={onUpdateCenter} aria-label="Update-Zentrale (nur Administrator)"
-              className="absolute right-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-white/5 hover:text-slate-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-slate-400">
-              Update
-            </button>
-          )}
+          {onUpdate && <button type="button" onClick={onUpdate}
+            title={updateWaiting ? `Update ${updateWaiting} wartet auf Installation` : 'Nach Updates suchen'}
+            className={`absolute left-0 min-h-8 rounded-lg px-2 text-[11px] font-semibold hover:bg-white/10 hover:text-white ${updateWaiting ? 'text-emerald-300' : 'text-slate-400'}`}>
+            {updateWaiting ? '● Update wartet' : 'Update'}
+          </button>}
+          <p className="px-24 text-center text-[11px] font-semibold text-slate-500">Holz trifft Code · by Nabster77</p>
+          {onSetup && <button type="button" onClick={onSetup}
+            className="absolute right-0 min-h-8 rounded-lg px-2 text-[11px] font-semibold text-slate-400 hover:bg-white/10 hover:text-white">
+            Setup
+          </button>}
         </div>
       </div>
     </section>

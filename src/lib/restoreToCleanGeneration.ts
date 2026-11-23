@@ -58,14 +58,14 @@ export async function restoreToCleanGeneration(backup: CompleteBackup): Promise<
 
   const prepared = prepareCleanGenerationRestore(financial);
   const approved = window.confirm(
-    'WOODMO – HISTORISCHES BACKUP WIEDERHERSTELLEN\\n\\n' +
-    'Aktuelle Buchungsgeneration ' + generation + ': LEER.\\n' +
-    'Sicherung vom ' + new Date(backup.exportedAt).toLocaleString('de-DE') + ':\\n' +
+    'WOODMO – HISTORISCHES BACKUP WIEDERHERSTELLEN\n\n' +
+    'Aktuelle Buchungsgeneration ' + generation + ': LEER.\n' +
+    'Sicherung vom ' + new Date(backup.exportedAt).toLocaleString('de-DE') + ':\n' +
     financial.transactions.length + ' Buchungen, ' +
     financial.cashSessions.length + ' Kassensitzungen, ' +
-    financial.stornos.length + ' Stornos.\\n\\n' +
+    financial.stornos.length + ' Stornos.\n\n' +
     'Alte Originalbelege bleiben unverändert archiviert; ' +
-    'die wiederhergestellten Einträge erhalten neue technische IDs.\\n\\n' +
+    'die wiederhergestellten Einträge erhalten neue technische IDs.\n\n' +
     'Möchten Sie die komplette Kasse aus diesem Backup wiederherstellen?'
   );
   if (!approved) throw new Error('Backup-Wiederherstellung abgebrochen. Keine Buchungen verändert.');

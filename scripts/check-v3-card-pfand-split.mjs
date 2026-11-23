@@ -1,12 +1,12 @@
 // WOODMO V3: Kartenzahlung mit Pfand-Retoure.
-// Regel: Ware per Karte, Pfand-Retoure bar aus der Kasse (mindert den
-// Kassenbestand), als eigener Beleg „Pfandausgabe“ mit gemeinsamer
-// paymentSplitId. Prüft Rechnung, Kassenbestand, Unveränderlichkeit der
+// Regel ab 22.11.2026: zurückgegebene Becher werden zuerst mit dem Pfand der
+// neuen Ware verrechnet (Karte), nur der Überschuss wird bar ausgezahlt
+// (eigener Beleg „Pfandausgabe“, gemeinsame paymentSplitId). Prüft Rechnung, Kassenbestand, Unveränderlichkeit der
 // bisherigen Fälle und die Backup-Wiederherstellung (isolierte PGlite).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
-import { buildCheckoutTransactions, checkoutTotals, isCardWithCashPfandPayout } from '../src/lib/checkoutTransactions.ts';
+import { buildCheckoutTransactions, cardPfandCashPayout, checkoutTotals, isCardWithCashPfandPayout } from '../src/lib/checkoutTransactions.ts';
 import { prepareCleanGenerationRestore } from '../src/lib/cleanGenerationRestore.ts';
 import { inspectBackupIntegrity } from '../src/lib/backupIntegrity.ts';
 
@@ -58,41 +58,60 @@ await test('02 Karte + Pfand-Retoure ergibt zwei Belege mit gemeinsamer paymentS
   assert.notEqual(card.id, payout.id);
   assert.ok(payout.timestamp > card.timestamp, 'Pfandausgabe nach dem Kartenbeleg');
 });
-await test('03 Kartenbeleg: nur Ware inkl. Ware-Pfand (15 €), Umsatz 9 €, MwSt 1,50 €', () => {
+await test('03 Kartenbeleg: Ware 9 € + Pfand 6 € − 2 verrechnete Becher 6 € = 9 €, MwSt Ware 1,50 €', () => {
   const [card] = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', makeId });
-  assert.equal(card.items.length, 1);
-  assert.ok(card.items.every((i) => !i.isPfandRetoure));
-  assert.equal(cents(card.total), 1500);
+  assert.equal(card.items.length, 2);
+  assert.equal(card.items.filter((i) => i.isPfandRetoure)[0].quantity, 2);
+  assert.equal(cents(card.total), 900);
   assert.equal(cents(card.subtotal), 900);
-  assert.equal(cents(card.totalPfand), 600);
+  assert.equal(cents(card.totalPfand), 0, 'Pfand-Saldo auf der Karte 0');
   assert.equal(cents(card.totalTax), 150);
   assert.equal(cents(card.taxByRate[20]), 150);
 });
-await test('04 Pfandausgabe bar: −15 €, Ware-MwSt 0 (DB-Regel), Pfand-USt −2,50 € separat', () => {
+await test('04 Pfandausgabe bar nur für 3 übrige Becher: −9 €, Ware-MwSt 0, Pfand-USt −1,50 €', () => {
   const [, payout] = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', makeId });
-  assert.equal(cents(payout.total), -1500);
-  assert.equal(cents(payout.totalPfand), -1500);
+  assert.equal(cents(payout.total), -900);
+  assert.equal(cents(payout.totalPfand), -900);
   assert.equal(payout.subtotal, 0);
   assert.equal(payout.totalTax, 0);
   assert.deepEqual(payout.taxByRate, {});
   assert.equal(payout.items.length, 1);
-  assert.equal(payout.items[0].isPfandRetoure, true);
-  // Entgeltminderung steht in eigenen Feldern (DB-Prüfung verlangt oben 0).
-  assert.equal(cents(payout.pfandTaxByRate[20]), -250);
-  assert.equal(cents(payout.pfandNet), -1250);
+  assert.equal(payout.items[0].quantity, 3);
+  assert.equal(cents(payout.pfandTaxByRate[20]), -150);
+  assert.equal(cents(payout.pfandNet), -750);
 });
-await test('05 Kassenbestand sinkt um 15 € (bar ausgezahlt), Karte +15 €, Saldo unverändert 0 €', () => {
+await test('05 Kassenbestand sinkt nur um 9 €, Karte +9 €, Saldo unverändert 0 €', () => {
   const txs = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', makeId });
-  assert.equal(cents(cashEffect(txs)), -1500);
-  assert.equal(cents(cardEffect(txs)), 1500);
+  assert.equal(cents(cashEffect(txs)), -900);
+  assert.equal(cents(cardEffect(txs)), 900);
   assert.equal(cents(txs.reduce((s, t) => s + t.total, 0)), 0);
+  assert.equal(cents(cardPfandCashPayout(screenshot)), 900, 'Anzeige „Pfand bar auszahlen“');
 });
-await test('06 Retoure größer als Einkauf: Karte nie negativ, Rest bar ausgezahlt', () => {
+await test('06 Retoure größer als Einkauf: Karte nie negativ, nur Rest bar ausgezahlt', () => {
   const items = [line(gluehwein, 1), retoure(15, 5)];
   const txs = buildCheckoutTransactions({ items, location: 'Bregenz', paymentMethod: 'card', makeId });
-  assert.equal(cents(cardEffect(txs)), 750);
-  assert.equal(cents(cashEffect(txs)), -1500);
+  assert.equal(cents(cardEffect(txs)), 450);
+  assert.equal(cents(cashEffect(txs)), -1200);
   assert.ok(txs.every((t) => t.paymentMethod !== 'card' || t.total >= 0), 'keine negative Kartenbuchung');
+});
+await test('06b 1 Kaffee + 1 Becher zurück per Karte: nur Kaffeepreis, keine Barauszahlung', () => {
+  const kaffee = product('p-k', 'Kaffee', 4, 3);
+  const items = [line(kaffee, 1), retoure(3, 1)];
+  assert.equal(isCardWithCashPfandPayout(items, 'card'), false, 'keine grüne Meldung');
+  const txs = buildCheckoutTransactions({ items, location: 'Bregenz', paymentMethod: 'card', makeId });
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0].paymentMethod, 'card');
+  assert.equal(txs[0].paymentSplitId, undefined);
+  assert.equal(cents(txs[0].total), 400);
+  assert.equal(cents(txs[0].totalPfand), 0);
+  assert.equal(cents(cashEffect(txs)), 0, 'Karte berührt den Bargeldbestand nicht');
+});
+await test('06c 2 Kaffee per Karte ohne Rückgabe: Pfand mit Karte bezahlt, nichts in die Kasse', () => {
+  const kaffee = product('p-k', 'Kaffee', 4, 3);
+  const txs = buildCheckoutTransactions({ items: [line(kaffee, 2)], location: 'Bregenz', paymentMethod: 'card', makeId });
+  assert.equal(txs.length, 1);
+  assert.equal(cents(cardEffect(txs)), 1400);
+  assert.equal(cents(cashEffect(txs)), 0);
 });
 await test('07 Unverändert: Karte ohne Retoure = ein Kartenbeleg', () => {
   const txs = buildCheckoutTransactions({ items: [line(gluehwein, 2)], location: 'Bregenz', paymentMethod: 'card', makeId });
@@ -150,7 +169,7 @@ try {
     const txs = buildCheckoutTransactions({ items: screenshot, location: 'Bregenz', paymentMethod: 'card', now: openedAt + 60000, makeId })
       .map((t) => ({ ...t, cashSessionId: 'br-1', employeeId: '5bffe378-a2ec-4bf4-83aa-37d0145229f6', employeeName: 'SZ' }));
     const session = { id: 'br-1', location: 'Bregenz', date: '2026-11-14', openedAt, openingBalance: 100,
-      closed: true, closedAt: openedAt + 120000, closingBalance: 85, entries: [], corrections: [],
+      closed: true, closedAt: openedAt + 120000, closingBalance: 91, entries: [], corrections: [],
       dailyCloseFinalizedAt: openedAt + 120000, dailyCloseSnapshot: { transactions: txs, stornos: [], finalizedAt: openedAt + 120000 } };
     const backup = { transactions: txs, cashSessions: [session], stornos: [] };
     assert.deepEqual(inspectBackupIntegrity(backup), []);
@@ -159,9 +178,9 @@ try {
       [JSON.stringify(mapped), '2026-11-14T16:30:00Z']);
     const { rows } = await db.query(`SELECT data->>'paymentMethod' pm, (data->>'total')::numeric total
       FROM public.pos_transactions WHERE booking_generation=1 ORDER BY timestamp`);
-    assert.deepEqual(rows.map((r) => [r.pm, Number(r.total)]), [['card', 15], ['cash', -15]]);
+    assert.deepEqual(rows.map((r) => [r.pm, Number(r.total)]), [['card', 9], ['cash', -9]]);
   });
 } finally {
   await db.close();
 }
-console.log(`WOODMO V3 KARTE + PFANDAUSGABE BAR: ${passed}/11 BESTANDEN.`);
+console.log(`WOODMO V3 KARTE + PFAND VERRECHNET, REST BAR: ${passed}/13 BESTANDEN.`);

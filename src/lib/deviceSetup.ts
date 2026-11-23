@@ -10,6 +10,23 @@ export interface DeviceSetup {
   configuredAt: number;
 }
 const KEY = 'woodmo_v3_device_setup_v1';
+const SETUP_PENDING_KEY = 'woodmo_v3_initial_setup_pending_v1';
+
+/** An interrupted first setup can resume even after a folder has been saved. */
+export function initialSetupPending(): boolean {
+  try {
+    return localStorage.getItem(SETUP_PENDING_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setInitialSetupPending(pending: boolean): void {
+  try {
+    if (pending) localStorage.setItem(SETUP_PENDING_KEY, '1');
+    else localStorage.removeItem(SETUP_PENDING_KEY);
+  } catch { /* The current flow stays usable with restricted storage. */ }
+}
 
 export function readDeviceSetup(): DeviceSetup | null {
   try {

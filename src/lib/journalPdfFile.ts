@@ -4,7 +4,7 @@ import { buildJournalHTML, type JournalReportData } from '@/lib/journalPdf';
 import { getWeekNumber } from '@/lib/format';
 import type { Location } from '@/types';
 import { colorNegativeMoney } from '@/lib/movementStyle';
-import { archiveDate, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
+import { archiveDate, archiveSubfolders, batchArchiveLocation, safeArchiveFileName } from '@/lib/archivePaths';
 import { ensureReportFolder, ensureYearStructure, saveFileNoOverwrite, savePdfInFolder } from '@/lib/archiveFolders';
 import { BACKUP_FOLDER } from '@/lib/archiveRoot';
 import { readDeviceSetup } from '@/lib/deviceSetup';
@@ -86,14 +86,18 @@ function openExportFolderDatabase(): Promise<IDBDatabase> {
   });
 }
 
-async function loadExportFolder(): Promise<FileSystemDirectoryHandle | null> {
+export async function loadExportFolder(): Promise<FileSystemDirectoryHandle | null> {
   try {
     const db = await openExportFolderDatabase();
-    return await new Promise((resolve, reject) => {
-      const request = db.transaction(EXPORT_FOLDER_STORE, 'readonly').objectStore(EXPORT_FOLDER_STORE).get(EXPORT_FOLDER_KEY);
-      request.onsuccess = () => resolve((request.result as FileSystemDirectoryHandle | undefined) ?? null);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const request = db.transaction(EXPORT_FOLDER_STORE, 'readonly').objectStore(EXPORT_FOLDER_STORE).get(EXPORT_FOLDER_KEY);
+        request.onsuccess = () => resolve((request.result as FileSystemDirectoryHandle | undefined) ?? null);
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      db.close();
+    }
   } catch {
     return null;
   }
@@ -132,13 +136,33 @@ export type ArchiveFolderStatus = 'ok' | 'needs-permission' | 'missing';
 
 /** Check at app start WITHOUT prompting (no tap available yet). */
 export async function archiveFolderStatus(): Promise<ArchiveFolderStatus> {
+  let timeout: number | undefined;
+  try {
+    return await Promise.race([
+      probeArchiveFolder(),
+      new Promise<ArchiveFolderStatus>(resolve => {
+        timeout = window.setTimeout(() => resolve('missing'), 4000);
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function probeArchiveFolder(): Promise<ArchiveFolderStatus> {
   const folder = await loadExportFolder() as WritableDirectoryHandle | null;
   if (!folder) return 'missing';
   try {
     const permission = await folder.queryPermission?.({ mode: 'readwrite' });
-    return permission === 'granted' ? 'ok' : 'needs-permission';
-  } catch {
-    return 'needs-permission';
+    if (permission !== undefined && permission !== 'granted') return 'needs-permission';
+    // A handle can still report permission after the actual directory moved.
+    // Resolving itself checks the directory without creating any subfolders.
+    const directory = folder as FileSystemDirectoryHandle & { keys: () => AsyncIterableIterator<string> };
+    await directory.keys().next();
+    return 'ok';
+  } catch (error) {
+    return error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')
+      ? 'needs-permission' : 'missing';
   }
 }
 
@@ -162,10 +186,6 @@ export async function grantArchiveFolder(): Promise<boolean> {
   return true;
 }
 
-/** Called directly from a user click in the first-run/administration Setup.
- * Directory handles are persisted in IndexedDB (not embedded in an URL).
- * Android browsers may not support selecting a persistent local folder.
- */
 /**
  * Call as the FIRST thing in a tap that will save files later (daily close,
  * backup). Android Chrome forgets folder access after a reload and only
@@ -179,69 +199,44 @@ export async function requestArchiveAccess(): Promise<void> {
   } catch { /* The later save shows the real problem. */ }
 }
 
-export type FolderSetupResult = { mode: 'folder' | 'downloads' | 'cancelled' | 'needs-write'; folderName?: string };
-
-let pendingFolder: WritableDirectoryHandle | null = null;
-
-async function finishFolderSetup(selected: WritableDirectoryHandle): Promise<FolderSetupResult> {
-  // Only create missing components of this year's base structure.
-  const configuredAt = Date.now();
-  await ensureYearStructure(selected, configuredAt);
-  await rememberExportFolder(selected);
-  pendingFolder = null;
-  return { mode: 'folder', folderName: `${selected.name}/${archiveRootName(configuredAt)}` };
-}
-
-export async function configureJournalExportFolder(): Promise<FolderSetupResult> {
+/** Open the native picker directly from a click, without storing the selection. */
+export async function pickJournalExportFolder(): Promise<FileSystemDirectoryHandle | null> {
   const picker = (window as Window & { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker;
-  if (!picker) return { mode: 'downloads' };
+  if (!picker) throw new Error('Dieser Browser unterstützt keine automatische Ordnerverwaltung.');
   try {
-    // Call picker directly from the button handler to preserve user activation.
-    const selected = await picker.call(window, { id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' }) as WritableDirectoryHandle;
+    const selected = await picker.call(window, { id: 'holzbar-journal-exports', mode: 'readwrite', startIn: 'documents' });
     const wrongFolder = wrongArchiveFolderMessage(selected.name);
     if (wrongFolder) throw new Error(wrongFolder);
-    // Android may grant only READ access at this point although readwrite was
-    // requested. Writing then fails with NotAllowedError. In that case a
-    // second, fresh tap must ask for write access (see grantWriteForPendingFolder).
-    let permission: PermissionState | undefined;
-    try { permission = await selected.queryPermission?.({ mode: 'readwrite' }); } catch { permission = undefined; }
-    if (permission !== undefined && permission !== 'granted') {
-      pendingFolder = selected;
-      return { mode: 'needs-write', folderName: selected.name };
-    }
-    try {
-      return await finishFolderSetup(selected);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        pendingFolder = selected;
-        return { mode: 'needs-write', folderName: selected.name };
-      }
-      throw error;
-    }
+    return selected;
   } catch (error) {
-    if (isAbortError(error)) return { mode: 'cancelled' };
+    if (isAbortError(error)) return null;
     throw error;
   }
 }
 
-/** Second tap in the Setup: ask Android for WRITE access to the chosen folder. */
-export async function grantWriteForPendingFolder(): Promise<FolderSetupResult> {
-  const selected = pendingFolder;
-  if (!selected) return { mode: 'cancelled' };
+/** Confirm from the OK click so Android can request write access on that tap. */
+export async function confirmJournalExportFolder(folder: FileSystemDirectoryHandle): Promise<string> {
+  const selected = folder as WritableDirectoryHandle;
   let permission: PermissionState | undefined;
   try {
-    permission = await selected.requestPermission?.({ mode: 'readwrite' });
+    permission = await selected.queryPermission?.({ mode: 'readwrite' });
+    if (permission !== 'granted') permission = await selected.requestPermission?.({ mode: 'readwrite' });
   } catch (error) {
     throw new Error(`Schreibzugriff konnte nicht angefragt werden (${error instanceof Error ? error.name + ': ' + error.message : String(error)}).`);
   }
   if (permission !== undefined && permission !== 'granted') {
-    throw new Error(`Das Tablet erlaubt das Schreiben in „${selected.name}“ nicht (Status: ${permission}). Bitte erneut versuchen oder einen anderen Ordner wählen, z. B. einen neuen Ordner unter „Documents“.`);
+    throw new Error(`Das Gerät erlaubt das Schreiben in „${selected.name}“ nicht. Bitte den Zugriff erlauben oder einen anderen Ordner auswählen.`);
   }
   try {
-    return await finishFolderSetup(selected);
+    const configuredAt = Date.now();
+    await ensureYearStructure(selected, configuredAt);
+    try { await selected.getDirectoryHandle('Offline-Sicherung', { create: true }); }
+    catch { /* The additional backup must not prevent use of the PDF archive. */ }
+    await rememberExportFolder(selected);
+    return `${selected.name}/${archiveRootName(configuredAt)}`;
   } catch (error) {
     if (error instanceof DOMException) {
-      throw new Error(`Ordner „${selected.name}“ ist nicht beschreibbar (${error.name}). Dieses Tablet lässt Web-Apps hier keine Ordner anlegen.`);
+      throw new Error(`Der Ordner „${selected.name}“ konnte nicht eingerichtet werden (${error.name}).`);
     }
     throw error;
   }
@@ -255,14 +250,16 @@ export async function grantWriteForPendingFolder(): Promise<FolderSetupResult> {
  * (siehe canWrite / localArchiveFolder / saveManualPdfToConfiguredArchive).
  */
 
-async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<void> {
+/** Returns the saved location, e.g. "WOODMO › Kasse 2026 › Tagesjournal › Datei.pdf". */
+async function saveIntoJournalFolder(folder: FileSystemDirectoryHandle, data: JournalReportData, blob: Blob): Promise<string> {
   if (data.documentStatus === 'Endgültig abgeschlossen' && data.reportPeriodStart == null) {
     throw new Error('Für einen endgültigen Tagesabschluss fehlt das originale Berichtsdatum.');
   }
   const now = Date.now();
   const target = await ensureReportFolder(folder, data, now);
   // Never overwrite: an existing name gets a copy "Name (1).pdf".
-  await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
+  const saved = await savePdfInFolder(target, safeArchiveFileName(data.fileName), blob);
+  return [folder.name, archiveRootName(archiveDate(data)), ...archiveSubfolders(data), saved].join(' › ');
 }
 
 type ArchiveTarget = { mode: 'downloads' } | { mode: 'fallback' } | { mode: 'folder'; folder: FileSystemDirectoryHandle };
@@ -625,13 +622,16 @@ async function saveManualPdfToConfiguredArchive(target: ArchiveTarget, data: Jou
     return;
   }
   const selected = target.folder;
+  let savedAt: string;
   try {
-    await saveIntoJournalFolder(selected, data, blob);
+    savedAt = await saveIntoJournalFolder(selected, data, blob);
   } catch (error) {
     if (error instanceof PdfArchiveSetupRequired) throw error;
     console.warn('Der eingestellte PDF-Ordner kann nicht beschrieben werden.', error);
     return requirePdfArchiveSetup('Der PDF-Speicherordner oder ein benötigter Unterordner ist nicht beschreibbar. Bitte den Speicherort im Geräte-Setup überprüfen.');
   }
+  // Manual export: always say where the file went.
+  alert('PDF gespeichert:\n' + savedAt);
 }
 
 function showPdfExportError(error: unknown): void {

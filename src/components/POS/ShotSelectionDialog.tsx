@@ -1,6 +1,6 @@
 import type { Product, ShotOption, Location } from '@/types';
 import { shotPriceForLocation } from '@/lib/shotCatalog';
-import { NO_SHOT_ID, REMOVE_ALL_SHOTS_ID, shotParts } from '@/lib/shotCombine';
+import { REMOVE_ALL_SHOTS_ID, shotParts } from '@/lib/shotCombine';
 
 import { X, Wine } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
@@ -17,27 +17,24 @@ interface Props {
 
 export function ShotSelectionDialog({ product, options, location, current, onSelect, onCancel }: Props) {
   const already = shotParts(current);
-  // „Ohne Schuss“ / „Kein weiterer Schuss“: nichts hinzufügen, nichts berechnen.
-  const availableOptions: ShotOption[] = [{ id: NO_SHOT_ID, name: already.length ? 'Kein weiterer Schuss' : 'Ohne Schuss', price: 0 }, ...options];
+  // Ohne-Eintrag entfernt (22.11.): wer keinen Schuss will, öffnet das Fenster nicht.
+  const availableOptions: ShotOption[] = options;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center" onClick={onCancel}>
       <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
-            <Wine className="h-5 w-5 text-blue-600 dark:text-blue-400" /> Schuss-Auswahl
+            <Wine className="h-5 w-5 text-blue-600 dark:text-blue-400" /> Schussauswahl {location}
           </h3>
           <button onClick={onCancel} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">{product.name} — SCHUSS für {location} auswählen?</p>
-        {already.length > 0 ? (
+        {already.length > 0 && (
           <p className="mb-4 rounded-xl bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
-            Schon drin: {product.name} + {already.join(' + ')} ({formatCurrency(current?.price ?? 0)}). Eine weitere Auswahl kommt dazu.
+            Schon drin: {product.name} + {current?.name} ({formatCurrency(current?.price ?? 0)}). Eine weitere Auswahl kommt dazu.
           </p>
-        ) : (
-          <p className="mb-4 text-xs text-gray-400 dark:text-gray-500">Mehrere Schüsse möglich: danach einfach noch einmal auf SCHUSS tippen.</p>
         )}
         <div className="space-y-2">
           {availableOptions.map((shot) => (

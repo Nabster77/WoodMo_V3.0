@@ -68,24 +68,31 @@ function parseName(raw: string, hint = ''): NameInfo {
 }
 const isBottleHint = (v: string) => /flasche/i.test(v);
 /** Highest score wins; 0 = not the same product. */
-function imageScore(article: string, group: string, file: string): number {
+function imageScore(article: string, group: string, file: string, kind: Kind = ''): number {
   const folder = file.includes('/') ? file.split('/').slice(0, -1).join('/') : '';
   const a = parseName(article, group);
+  if (!a.kind && kind) a.kind = kind;
   const explicitFile = parseName(imageStem(file));
   const f = parseName(imageStem(file), explicitFile.kind ? '' : folder);
   if (!nearlySame(a.key, f.key)) return 0;
   if (a.kind && f.kind && a.kind !== f.kind) return 0;
-  if (a.size && f.size && a.size !== f.size) return 0;
+  // Different article: "Kaffee" (Getränke) is not "Kaffee klein (L)" (Flaschen).
+  // Size must match exactly, and a Likör/Schnaps image never goes to an article without that type.
+  if (a.size !== f.size) return 0;
+  if (f.kind && !a.kind) return 0;
+  // A bottle image (folder „Flaschen…“) never goes to an article outside a bottle group,
+  // e.g. hot drink „Kaffee“ (Getränke) never gets a Kaffee-Likör bottle.
+  if (isBottleHint(folder) && !isBottleHint(group)) return 0;
   let score = a.key === f.key ? 100 : 94;
   if (a.kind && f.kind && a.kind === f.kind) score += 4;
-  if (a.size && f.size) score += 4; else if (a.size || f.size) score -= 5;
+  if (a.size && f.size) score += 4;
   if (isBottleHint(group) === isBottleHint(folder)) score += isBottleHint(group) ? 10 : 0; else score -= 10;
   const groupStem = normalizeName(group.replace(/\(.*\)/, ''));
   if (folder && groupStem && normalizeName(folder).includes(groupStem)) score += 3;
   return score;
 }
-function bestImage(article: string, group: string, archive: ImageEntry[]): { file?: ImageEntry; ambiguous: ImageEntry[] } {
-  const scored = archive.map(file => ({ file, score: imageScore(article, group, file.path) })).filter(x => x.score > 0)
+function bestImage(article: string, group: string, archive: ImageEntry[], kind: Kind = ''): { file?: ImageEntry; ambiguous: ImageEntry[] } {
+  const scored = archive.map(file => ({ file, score: imageScore(article, group, file.path, kind) })).filter(x => x.score > 0)
     .sort((x, y) => y.score - x.score || x.file.path.localeCompare(y.file.path, 'de'));
   if (!scored.length) return { ambiguous: [] };
   const top = scored.filter(x => x.score === scored[0].score);
@@ -300,13 +307,19 @@ export function buildImportPlan(sheets: SheetRows, base: LocalCatalog, archive: 
           if (!/^(https?:\/\/|\/[^/])/.test(imageUrl)) throw new Error('Bild muss eine HTTP(S)-URL oder ein lokaler Asset-Pfad sein.');
           if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) p.imageUrl = imageUrl;
         }
-        // Images from the ZIP always win over existing images.
+        // ZIP images fill missing images. An existing real image is only replaced by a file
+        // whose name matches the article exactly (no typo tolerance) – and the preview says so.
         let image: string | undefined;
         if (archive.length) {
-          const found = bestImage(name, group, archive);
+          const found = bestImage(name, group, archive, p.spiritType ?? '');
+          const hasRealImage = !!p.imageUrl && !/[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl);
+          const exact = !!found.file && parseName(name, group).key === parseName(imageStem(found.file.path)).key;
           if (found.ambiguous.length) {
             plan.warnings.push(`${name}: mehrere gleich gute ZIP-Bilder gefunden (${found.ambiguous.map(f => f.path).join(', ')}). Bild nicht zugeordnet; bitte Bildnamen eindeutig machen.`);
+          } else if (found.file && hasRealImage && !exact) {
+            plan.warnings.push(`${name}: vorhandenes Bild bleibt. ZIP-Datei ${found.file.path} passt nur ähnlich, nicht exakt.`);
           } else if (found.file) {
+            if (hasRealImage) plan.warnings.push(`${name}: vorhandenes Bild wird durch ${found.file.path} ersetzt.`);
             plan.images[p.id] = found.file;
             image = found.file.path;
           } else if (!p.imageUrl || /[?&]woodmoIllustration=1(?:&|$)/.test(p.imageUrl)) {

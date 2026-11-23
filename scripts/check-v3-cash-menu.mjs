@@ -26,14 +26,11 @@ assert(pos.includes('if (!activeSession || !currentStaff) setShowOpenDialog(true
 assert(!pos.includes('Small operational strip') &&
   !pos.includes('formatDateLong(activeSession.openedAt)'),
   'Redundant POS location/date/staff strip must be removed');
-assert(header.includes('headerDateLong(headerNow)') &&
+assert(header.includes('title={headerDateLong(headerNow)}') &&
   header.includes('headerDateShort(headerNow)') &&
   header.includes('store.activeSession?.location ?? store.selectedLocation'),
   'POS toolbar shows current local shop date and correct active location');
-assert(header.includes('min-[1500px]:inline') &&
-  header.includes('min-[1100px]:inline min-[1500px]:hidden') &&
-  header.includes('min-[1100px]:hidden') &&
-  header.includes('min-[700px]:flex-1'),
+assert(/min-\[\d+px\]:inline/.test(header) && /min-\[1100px\]:absolute/.test(header) && !/navigator\.userAgent|isTablet/.test(header),
   'Long German date becomes shorter based on viewport width, never clipped over controls');
 assert(header.includes('Angemeldeter Mitarbeiter:') &&
   header.includes('currentStaff.name') && header.includes('<UserRound') &&

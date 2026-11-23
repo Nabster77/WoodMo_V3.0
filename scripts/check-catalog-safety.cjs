@@ -60,10 +60,15 @@ async function main() {
   assert(!pushed.some(r=>r.id==='cat-system-schuss'||r.kind==='setting'),'SCHUSS und Einstellungen werden nie gelöscht');
   assert(applied.some(r=>r.id==='p-old'&&r.deleted),'lokal wird die Löschung übernommen');
  }
- // A first-device conflict must block preview preparation.
- const other=loader({...stubs,storage:{...stubs.storage,loadJSON:(_k,f)=>f,saveJSON:()=>{}}})('catalogEngine').createCatalogEngine({getLocal:()=>({...base,shotOptions:[]}),isEnabled:()=>true,setConflict:()=>{},applyRows:()=>{}});
- assert.equal((await other.sync()).ok,false);
- await assert.rejects(other.prepareImport(),/konflikt/i);
+ // A first device takes the cloud catalog (Cloud übernehmen): local data is replaced, never uploaded.
+ {
+  let replaced=null; const pushesBefore=pushes;
+  const other=loader({...stubs,storage:{...stubs.storage,loadJSON:(_k,f)=>f,saveJSON:()=>{}}})('catalogEngine').createCatalogEngine({getLocal:()=>({...base,shotOptions:[]}),isEnabled:()=>true,applyRows:(r,_s,replace)=>{replaced=replace;}});
+  assert.equal((await other.sync()).ok,true);
+  assert.equal(replaced,true,'erstes Gerät übernimmt die Cloud vollständig');
+  assert.equal((await other.sync()).ok,true);
+  assert.equal(pushes,pushesBefore,'veraltete lokale Daten werden nie hochgeladen');
+ }
  // Exercise actual restore code with a mocked transport, not a real Supabase endpoint.
  Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
  let written=[];
