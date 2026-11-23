@@ -47,7 +47,10 @@ assert.match(pdfFile, /\[folder\.name, archiveRootName\(archiveDate\(data\)\), \
 // Update wartet: Hintergrund-Erkennung, „Später installieren“, Update-Knopf auf dem Startbildschirm.
 assert.match(app, /window\.setInterval\(check, 15 \* 60_000\)/);
 assert.match(app, /addEventListener\('visibilitychange', check\)/);
-assert.match(app, /onDismiss=\{\(\) => \{ updateDeferred\.current = true; setUpdatePhase\(null\); \}\}/);
+assert.match(app, /onDismiss=\{\(\) => \{ autoUpdate\.current = false; updateDeferred\.current = true; setUpdatePhase\(null\); \}\}/);
+// Ein Tipp: „Jetzt installieren“ läuft selbst bis zum Neustart (23.11.), nur auf dem Startbildschirm ohne Mitarbeiter.
+assert.match(app, /onPrepare=\{\(\) => \{ autoUpdate\.current = true; void prepareUpdate\(\); \}\}/);
+assert.match(app, /if \(!homeVisible \|\| currentStaff\) \{ autoUpdate\.current = false; return; \}/);
 assert.match(app, /homeVisible && !currentStaff && updatePhase/, 'Dialog nie während eines Kassenvorgangs');
 assert.match(app, /updateWaiting=\{candidate\?\.version\}/);
 assert.match(home, /'● Update wartet' : 'Update'/);

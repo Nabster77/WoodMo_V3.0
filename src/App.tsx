@@ -230,6 +230,20 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     }
   }
 
+  // Fix 23.11.: Ein Tipp auf „Jetzt installieren“ führt den ganzen vorhandenen Ablauf
+  // selbst durch (prüfen -> Speicherort -> Cloud-Abgleich -> aktivieren -> Neustart).
+  // Rückfragen kommen nur noch bei Fehlern oder wenn kein Speicherort gespeichert ist.
+  // Sicherer Zeitpunkt bleibt: nur auf dem Startbildschirm ohne angemeldeten Mitarbeiter.
+  const autoUpdate = useRef(false);
+  useEffect(() => {
+    if (!autoUpdate.current || updateBusy.current) return;
+    if (!homeVisible || currentStaff) { autoUpdate.current = false; return; }
+    if (updatePhase === 'prepared' && !updateError) void continueUpdate();
+    else if (updatePhase === 'synced' && !updateError) void finishUpdate();
+    else if (updatePhase === 'sync-error' || updatePhase === 'offer' || updatePhase === null) autoUpdate.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
+  }, [updatePhase, updateError, homeVisible, currentStaff]);
+
   async function prepareUpdate() {
     if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
     updateBusy.current = true;
@@ -1466,9 +1480,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
         <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
           notes={candidate?.notes} ready={updateReady} error={updateError} percent={syncPercent}
-          onPrepare={() => void prepareUpdate()} onContinue={() => void continueUpdate()}
+          onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
-          onDismiss={() => { updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
+          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
       {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
         firstSetup={updatePhase === 'folder' || freshSetup}
         onContinue={() => void (freshSetup && updatePhase !== 'folder' ? syncAfterFreshSetup() : syncBeforeUpdate())}
