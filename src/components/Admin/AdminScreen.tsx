@@ -1012,7 +1012,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   }
   const swipe = useDaySwipe(() => shiftDate(-1), () => shiftDate(1));
   // Standardmäßig nur der ausgewählte Standort (Wunsch 23.11.); „Alle Standorte“ zeigt beide.
-  const [showAllLocations, setShowAllLocations] = useState(false);
+  const [showAllLocations, setShowAllLocations] = useState(true); // wie gewohnt: beide Kassen
   // Letzter Tag mit Umsatz am ausgewählten Standort (bis heute).
   const lastSalesDay = useMemo(() => {
     let latest: string | null = null;
@@ -1081,10 +1081,20 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Kassen-Übersicht</h3>
         </div>
         <DateNav value={selectedDate} onChange={setOverviewDate} max={today} lastSalesDay={lastSalesDay} />
-        <button type="button" onClick={() => setShowAllLocations((v) => !v)} aria-pressed={showAllLocations}
-          className="flex h-10 items-center rounded-xl border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-          {showAllLocations ? 'Nur ' + selectedLocation : 'Alle Standorte'}
-        </button>
+        {/* Standort direkt in der Verwaltung wechseln (24.11.) oder beide anzeigen. */}
+        <div role="group" aria-label="Standort" className="flex h-10 overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
+          {LOCATIONS.map((loc) => (
+            <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc}
+              onClick={() => { setShowAllLocations(false); handleSwitch(loc); }}
+              className={`px-3 ${!showAllLocations && selectedLocation === loc ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+              {loc}
+            </button>
+          ))}
+          <button type="button" aria-pressed={showAllLocations} onClick={() => setShowAllLocations(true)}
+            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+            Alle
+          </button>
+        </div>
       </div>
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{dateLabel}{isToday ? ' · Heute' : ''}</p>
       <div {...swipe} className={`relative grid gap-4 ${showAllLocations ? 'lg:grid-cols-2' : ''}`}>
