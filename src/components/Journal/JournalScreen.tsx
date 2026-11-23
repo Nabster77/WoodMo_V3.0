@@ -50,6 +50,16 @@ const groupModes = [
 
 const NO_PRODUCTS: Product[] = [];
 
+function defaultSelection(): JournalSelection {
+  const today = formatDateISO(Date.now());
+  // Standard (24.11.): alle Standorte zusammen, Zeitraum heute.
+  return { period: 'daily', groupMode: 'category', locationFilter: 'all',
+    customFrom: today, customTo: today, journalSearch: '', dailyCloseStatus: 'all', journalSort: 'amountHigh' };
+}
+let sessionSelection: JournalSelection | null = null;
+/** Beim Abmelden des Admins aufrufen: nächster Journal-Aufruf startet mit der Standardansicht. */
+export function resetJournalSelection(): void { sessionSelection = null; }
+
 interface Props {
   transactions: Transaction[];
   stornos: StornoRecord[];
@@ -61,37 +71,37 @@ interface Props {
   products?: Product[];
 }
 
-export function JournalScreen({ transactions: storedTransactions, stornos, categories, cashSessions, defaultLocation = 'Friedrichshafen', currentStaff, products = NO_PRODUCTS }: Props) {
+export function JournalScreen({ transactions: storedTransactions, stornos, categories, cashSessions, currentStaff, products = NO_PRODUCTS }: Props) {
   const transactions = useMemo(() => withCurrentCategories(storedTransactions, categories, products), [storedTransactions, categories, products]);
-  const [selection, setSelection] = useState<JournalSelection>(() => {
-    const today = formatDateISO(Date.now());
-    return { period: 'daily', groupMode: 'category', locationFilter: defaultLocation,
-      customFrom: today, customTo: today, journalSearch: '', dailyCloseStatus: 'all', journalSort: 'amountHigh' };
-  });
+  // 24.11.: Filter bleibt während der Admin-Sitzung erhalten (auch beim erneuten Öffnen);
+  // erst beim Abmelden des Admins zurück auf die Standardansicht (resetJournalSelection).
+  const [selection, setSelection] = useState<JournalSelection>(() => sessionSelection ?? defaultSelection());
+  useEffect(() => { sessionSelection = selection; }, [selection]);
   const { period, groupMode, locationFilter, customFrom, customTo, journalSearch, dailyCloseStatus, journalSort } = selection;
   const [draft, setDraft] = useState<JournalSelection | null>(null);
   const [dateError, setDateError] = useState('');
+  // Jede Änderung wirkt sofort auf Liste und Summen; Datumsfelder erst, wenn gültig.
   const edit = (change: Partial<JournalSelection>) => {
-    setDraft(current => current && { ...current, ...change });
-    setDateError('');
+    setDraft(current => {
+      if (!current) return current;
+      const next = { ...current, ...change };
+      const from = next.period === 'day' || next.period === 'custom' ? parseGermanDate(next.customFrom) : customFrom;
+      const to = next.period === 'custom' ? parseGermanDate(next.customTo) : from;
+      if (!from || !to) setDateError('Bitte ein gültiges Datum eingeben.');
+      else if (to < from) setDateError('Das Bis-Datum muss am oder nach dem Von-Datum liegen.');
+      else {
+        setDateError('');
+        setSelection({ ...next, customFrom: from, customTo: to });
+        setSelectedCloseIds(null);
+      }
+      return next;
+    });
   };
 
-  function applySelection(event: React.FormEvent) {
+  function closeFilter(event: React.FormEvent) {
     event.preventDefault();
-    if (!draft) return;
-    const from = draft.period === 'day' || draft.period === 'custom' ? parseGermanDate(draft.customFrom) : customFrom;
-    const to = draft.period === 'custom' ? parseGermanDate(draft.customTo) : from;
-    if (!from || !to) {
-      setDateError('Bitte ein gültiges Datum eingeben.');
-      return;
-    }
-    if (to < from) {
-      setDateError('Das Bis-Datum muss am oder nach dem Von-Datum liegen.');
-      return;
-    }
-    setSelection({ ...draft, customFrom: from, customTo: to, journalSearch: draft.journalSearch.trim() });
-    setSelectedCloseIds(null);
     setDraft(null);
+    setDateError('');
   }
 
   const [archive, setArchive] = useState<CashSession[]>([]);
@@ -199,6 +209,16 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
     [filteredTx, filteredStornos, start, end],
   );
   const taxByRateMap = useMemo(() => mergeTaxByRate(financialTx), [financialTx]);
+  // Suche schränkt die Artikel-/Warengruppen-/MwSt-/Bestseller-Liste auf passende Positionen ein.
+  const viewTx = useMemo(() => {
+    const search = journalSearch.trim().toLocaleLowerCase('de-DE');
+    if (!search) return financialTx;
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+    const matches = (item: (typeof financialTx)[number]['items'][number]) =>
+      [item.name, categoryNames.get(item.categoryId), `${item.taxRate}%`].filter(Boolean).join(' ').toLocaleLowerCase('de-DE').includes(search);
+    const any = financialTx.some((tx) => tx.items.some(matches));
+    return any ? financialTx.map((tx) => ({ ...tx, items: tx.items.filter(matches) })).filter((tx) => tx.items.length > 0) : financialTx;
+  }, [financialTx, journalSearch, categories]);
 
   const stats = useMemo(() => computeJournalStats(financialTx), [financialTx]);
 
@@ -314,7 +334,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         <DateNav value={navDay} onChange={showDay} max={today} lastSalesDay={lastSalesDay} />
       </div>
 
-      {draft && <form onSubmit={applySelection} aria-label="Filter" className="mb-4 space-y-4 rounded-2xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+      {draft && <form onSubmit={closeFilter} aria-label="Filter" className="mb-4 space-y-4 rounded-2xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label>Standort
             <select aria-label="Standort" value={draft.locationFilter} onChange={event => edit({ locationFilter: event.target.value as LocationFilter })} className={journalInput}>
@@ -357,8 +377,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         </div>
         {dateError && <p role="alert" className="text-sm font-semibold text-red-700 dark:text-red-300">{dateError}</p>}
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => setDraft(null)} className="min-h-11 rounded-xl border border-slate-400 px-4 text-sm font-semibold">Abbrechen</button>
-          <button type="submit" className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700">Anwenden</button>
+          <button type="submit" className="min-h-11 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700">OK</button>
         </div>
       </form>}
 
@@ -436,13 +455,13 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
             <p className="text-sm">Keine Verkäufe im gewählten Zeitraum für {locationFilter === 'all' ? 'die gewählten Standorte' : locationFilter}</p>
           </div>
         ) : groupMode === 'category' ? (
-          <CategoryGroupView transactions={financialTx} categories={categories} sort={journalSort} />
+          <CategoryGroupView transactions={viewTx} categories={categories} sort={journalSort} />
         ) : groupMode === 'article' ? (
-          <ArticleGroupView transactions={financialTx} sort={journalSort} />
+          <ArticleGroupView transactions={viewTx} sort={journalSort} />
         ) : groupMode === 'tax' ? (
-          <TaxClassView transactions={financialTx} sort={journalSort} />
+          <TaxClassView transactions={viewTx} sort={journalSort} />
         ) : groupMode === 'bestseller' ? (
-          <BestsellerView transactions={financialTx} categories={categories} sort={journalSort} />
+          <BestsellerView transactions={viewTx} categories={categories} sort={journalSort} />
         ) : (
           <TransactionListView transactions={financialTx} sort={journalSort} />
         )}
