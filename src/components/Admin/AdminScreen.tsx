@@ -1012,7 +1012,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   }
   const swipe = useDaySwipe(() => shiftDate(-1), () => shiftDate(1));
   // Standardmäßig nur der ausgewählte Standort (Wunsch 23.11.); „Alle Standorte“ zeigt beide.
-  const [showAllLocations, setShowAllLocations] = useState(false);
+  const [showAllLocations, setShowAllLocations] = useState(true); // wie gewohnt: beide Kassen
   // Letzter Tag mit Umsatz am ausgewählten Standort (bis heute).
   const lastSalesDay = useMemo(() => {
     let latest: string | null = null;
