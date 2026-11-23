@@ -4,18 +4,19 @@ import type { CatalogImportSession } from '@/lib/catalogEngine';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
-import { formatCurrency, formatDateGermanFromISO, formatDateISO, formatTime, parseGermanDate } from '@/lib/format';
+import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
 import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
 import { buildDailyReport } from '@/lib/dailyReport';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
+import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
 import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, Calendar, ChevronLeft, ChevronRight, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -973,7 +974,6 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
   exportedByName?: string;
 }) {
   const [selectedDate, setSelectedDate] = useState<string>(formatDateISO(Date.now()));
-  const [dateInput, setDateInput] = useState<string>(() => formatDateGermanFromISO(formatDateISO(Date.now())));
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -987,7 +987,6 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
       setToday(next);
       if (selectedDate === today) {
         setSelectedDate(next);
-        setDateInput(formatDateGermanFromISO(next));
       }
     };
     const timer = window.setInterval(followCalendar, 1000);
@@ -1007,14 +1006,25 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
   }
 
   function shiftDate(days: number) {
-    const d = new Date(selectedDate + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    setOverviewDate(formatDateISO(d.getTime()));
+    const next = shiftIsoDay(selectedDate, days);
+    if (next <= today) setOverviewDate(next);
   }
+  const swipe = useDaySwipe(() => shiftDate(-1), () => shiftDate(1));
+  // Standardmäßig nur der ausgewählte Standort (Wunsch 23.11.); „Alle Standorte“ zeigt beide.
+  const [showAllLocations, setShowAllLocations] = useState(false);
+  // Letzter Tag mit Umsatz am ausgewählten Standort (bis heute).
+  const lastSalesDay = useMemo(() => {
+    let latest: string | null = null;
+    for (const t of transactions) {
+      if (t.location !== selectedLocation) continue;
+      const day = formatDateISO(t.timestamp);
+      if (day <= today && (latest === null || day > latest)) latest = day;
+    }
+    return latest;
+  }, [transactions, selectedLocation, today]);
 
   function setOverviewDate(next: string) {
     setSelectedDate(next);
-    setDateInput(formatDateGermanFromISO(next));
   }
 
   const locationData = useMemo(() => {
@@ -1069,42 +1079,15 @@ function LiveSessionOverview({ transactions, cashSessions, categories, activeSes
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Kassen-Übersicht</h3>
         </div>
-        {/* Date picker bar */}
-        <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 py-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <button onClick={() => shiftDate(-1)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Vorheriger Tag">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-1.5 px-1">
-            <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <input
-              type="text"
-              inputMode="numeric"
-              value={dateInput}
-              placeholder="TT.MM.JJJJ"
-              aria-label="Datum im Format Tag Monat Jahr"
-              onChange={(e) => {
-                const value = e.target.value;
-                setDateInput(value);
-                const parsed = parseGermanDate(value);
-                if (parsed && parsed <= formatDateISO(Date.now())) setSelectedDate(parsed);
-              }}
-              onBlur={() => setDateInput(formatDateGermanFromISO(selectedDate))}
-              className="w-24 bg-transparent text-center text-sm font-semibold text-gray-900 focus:outline-none dark:text-gray-100"
-            />
-          </div>
-          <button onClick={() => shiftDate(1)} disabled={isToday} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700" aria-label="Nächster Tag">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          {!isToday && (
-            <button onClick={() => setOverviewDate(formatDateISO(Date.now()))} className="ml-1 rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40">
-              Heute
-            </button>
-          )}
-        </div>
+        <DateNav value={selectedDate} onChange={setOverviewDate} max={today} lastSalesDay={lastSalesDay} />
+        <button type="button" onClick={() => setShowAllLocations((v) => !v)} aria-pressed={showAllLocations}
+          className="flex h-10 items-center rounded-xl border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+          {showAllLocations ? 'Nur ' + selectedLocation : 'Alle Standorte'}
+        </button>
       </div>
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{dateLabel}{isToday ? ' · Heute' : ''}</p>
-      <div className="relative grid gap-4 lg:grid-cols-2">
-        {locationData.map((data) => (
+      <div {...swipe} className={`relative grid gap-4 ${showAllLocations ? 'lg:grid-cols-2' : ''}`}>
+        {locationData.filter((data) => showAllLocations || data.loc === selectedLocation).map((data) => (
           <LocationSessionCard
             key={data.loc}
             loc={data.loc}

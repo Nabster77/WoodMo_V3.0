@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { compareJournalRows, compareJournalTransactions, type JournalSort } from '@/lib/journalOrdering';
 import { openingBalanceOfDays } from '@/lib/dayOverview';
 import { loadDailyCloseArchive, sessionCloseArchiveKey } from '@/lib/dailyCloseArchive';
@@ -114,6 +115,26 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
     document.addEventListener('visibilitychange', refresh);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, []);
+
+  // Datumsnavigation (23.11.): ‹ Datum › wählt einen einzelnen Tag; heute = Tagesjournal.
+  const navDay = period === 'day' ? customFrom : today;
+  function showDay(iso: string) {
+    if (iso > today) return;
+    setSelection((current) => ({ ...current, period: iso === today ? 'daily' : 'day', customFrom: iso, customTo: iso }));
+    setSelectedCloseIds(null);
+    setDraft(null);
+  }
+  const swipe = useDaySwipe(() => showDay(shiftIsoDay(navDay, -1)), () => showDay(shiftIsoDay(navDay, 1)));
+  // „Letzter Umsatztag“: jüngster Tag (bis heute) mit Bons am gewählten Standort.
+  const lastSalesDay = useMemo(() => {
+    let latest: string | null = null;
+    for (const t of transactions) {
+      if (locationFilter !== 'all' && t.location !== locationFilter) continue;
+      const day = formatDateISO(t.timestamp);
+      if (day <= today && (latest === null || day > latest)) latest = day;
+    }
+    return latest;
+  }, [transactions, locationFilter, today]);
 
   const { start, end, headerLabel } = useMemo(() => {
     const now = Date.now();
@@ -261,10 +282,10 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   const printSelectedCloses = () => openJournalPrintBatch(selectedCloseReports);
 
   return (
-    <div className="h-full overflow-y-auto overscroll-contain pb-4">
+    <div {...swipe} className="h-full overflow-y-auto overscroll-contain pb-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         {groupMode === 'dailyClose' && archiveError && <p role="alert" className="text-sm text-amber-500">{archiveError}</p>}
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{groupMode === 'dailyClose' ? 'Tagesabschlüsse' : headerLabel}</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{groupMode === 'dailyClose' ? 'Tagesabschlüsse' : headerLabel} · {sessionLocationLabel}</h2>
         <div className="flex gap-2">
           <button
             onClick={groupMode === 'dailyClose' ? exportSelectedCloses : exportReport}
@@ -288,14 +309,12 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
           setDateError('');
           setDraft(draft ? null : { ...selection, customFrom: formatDateGermanFromISO(customFrom), customTo: formatDateGermanFromISO(customTo) });
         }} className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-400 bg-slate-100 px-3 text-sm font-semibold dark:border-slate-600 dark:bg-slate-800">
-          <Filter className="h-4 w-4" /> Journalausgabe <ChevronDown className="h-4 w-4" />
+          <Filter className="h-4 w-4" /> Filter <ChevronDown className="h-4 w-4" />
         </button>
-        <p className="text-sm text-gray-600 dark:text-gray-300">
-          {sessionLocationLabel} · {periodLabel} · {groupModes.find(option => option.mode === groupMode)?.label}
-        </p>
+        <DateNav value={navDay} onChange={showDay} max={today} lastSalesDay={lastSalesDay} />
       </div>
 
-      {draft && <form onSubmit={applySelection} aria-label="Journalausgabe" className="mb-4 space-y-4 rounded-2xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+      {draft && <form onSubmit={applySelection} aria-label="Filter" className="mb-4 space-y-4 rounded-2xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label>Standort
             <select aria-label="Standort" value={draft.locationFilter} onChange={event => edit({ locationFilter: event.target.value as LocationFilter })} className={journalInput}>

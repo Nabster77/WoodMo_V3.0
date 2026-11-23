@@ -1,7 +1,9 @@
 {
   "title": "WOODMO Update: Journal, Favoriten, Update-Ablauf",
   "notes": [
-    "Journalausgabe bündelt Standort, Zeitraum und Auswertung. Die Datumseingabe unterstützt Punkt, Komma und acht Ziffern.",
+    "Journal: „Filter“ bündelt Standort (auch alle Standorte), Zeitraum und Auswertung. Datum per ‹ ›, Kalender oder Wischen; „Letzter Umsatztag“.",
+    "Kassen-Übersicht zeigt zuerst den ausgewählten Standort (umschaltbar auf alle) mit derselben Datumsnavigation.",
+    "Warenkorb kompakt: „+ Pfand“, „+ n× Schuss Sorte“; Schussauswahl nennt den Standort; Bon und Journal zeigen Schusssorte und Anzahl.",
     "Favoritenkacheln lassen sich mit Maus und Touch verschieben. Ihre Reihenfolge wird separat gespeichert.",
     "Beim Start prüft die App im Hintergrund auf Updates und gleicht die Kassendaten automatisch ab.",
     "Updates werden nach Ordnerprüfung, erfolgreicher Cloud-Synchronisierung und Bestätigung aktiviert.",
