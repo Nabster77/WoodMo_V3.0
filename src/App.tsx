@@ -35,7 +35,7 @@ import { POSScreen } from '@/components/POS/POSScreen';
 import { WoodmoHome } from '@/components/WoodmoHome';
 import { WoodmoBrand } from '@/components/WoodmoBrand';
 import { AdminScreen } from '@/components/Admin/AdminScreen';
-import { JournalScreen } from '@/components/Journal/JournalScreen';
+import { JournalScreen, resetJournalSelection } from '@/components/Journal/JournalScreen';
 import { PasswordGate } from '@/components/PasswordGate';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { SyncToast } from '@/components/SyncToast';
@@ -712,7 +712,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       setMenuOpen(true);
       return;
     }
-    setAdminUnlocked(false);
+    setAdminUnlocked(false); resetJournalSelection();
     setManagementAdministrator(null);
     if (!selectedStaff) {
       // Home login accepts a personal administrator password or the existing
@@ -835,7 +835,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     // A cashier logout closes an administrator's direct workspace access as
     // well. The next person must authenticate with their own credentials.
     setManagementAdministrator(null);
-    setAdminUnlocked(false);
+    setAdminUnlocked(false); resetJournalSelection();
   }
 
   // Keep the current action visible in the heading even when it opens a
@@ -1458,7 +1458,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               onCancel={() => {
                 setOpeningManagementAccess(null);
                 setManagementAdministrator(null);
-                setAdminUnlocked(false);
+                setAdminUnlocked(false); resetJournalSelection();
                 goHome();
               }}
               staffUsers={staff.users}
