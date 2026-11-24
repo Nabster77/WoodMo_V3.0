@@ -48,7 +48,7 @@ interface Props {
   onOpenCash: (location: Location, openingBalance: number) => Promise<boolean>;
   onCorrectOpening: (newAmount: number, reason: string) => void;
   onCashEntry: (type: 'deposit' | 'withdrawal', amount: number, reason: string, isPfandRetoure?: boolean) => void;
-  onCloseCash: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string }>;
+  onCloseCash: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string; receiptLabel?: string; synced?: boolean }>;
   transactions: Transaction[];
   stornos: StornoRecord[];
   stornoStatus: StornoCloudState;
@@ -134,6 +134,7 @@ export function POSScreen({
   const [cashEntryType, setCashEntryType] = useState<'deposit' | 'withdrawal' | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [shotProduct, setShotProduct] = useState<Product | null>(null);
+  const [closeNotice, setCloseNotice] = useState<{ receipt?: string; synced: boolean; withdrawal: number } | null>(null);
   const [shotCartIndex, setShotCartIndex] = useState<number | null>(null);
   const [showPfandRetoure, setShowPfandRetoure] = useState(false);
   const [showBonliste, setShowBonliste] = useState(false);
@@ -804,6 +805,18 @@ export function POSScreen({
           onClose={() => setShowPfandRetoure(false)}
         />
       )}
+      {closeNotice && (
+        <div className="fixed inset-x-0 top-4 z-[70] flex justify-center px-4">
+          <div role="status" className="w-full max-w-md rounded-2xl border-2 border-green-500 bg-white p-4 shadow-2xl dark:bg-gray-900">
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100">Tagesabschluss {closeNotice.receipt ?? ''} abgeschlossen</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{closeNotice.withdrawal > 0 ? `Mit Entnahme ${closeNotice.withdrawal.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}.` : 'Ohne Entnahme.'}</p>
+            <p className={`mt-1 text-sm font-bold ${closeNotice.synced ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {closeNotice.synced ? '✓ Synchronisiert – in der Cloud bestätigt' : 'Testmodus – nicht in der Cloud gespeichert'}
+            </p>
+            <button type="button" onClick={() => setCloseNotice(null)} className="mt-3 w-full rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white dark:bg-white dark:text-slate-900">OK</button>
+          </div>
+        </div>
+      )}
       {showCloseDialog && activeSession && (
         <DailyCloseDialog session={activeSession} transactions={transactions} stornos={stornos} currentStaff={currentStaff} onClose={async (bal, closingWithdrawalAmount, reason) => {
           // Set BEFORE awaiting: the active session can already disappear while the
@@ -812,6 +825,7 @@ export function POSScreen({
           const result = await onCloseCash(bal, closingWithdrawalAmount, reason);
           if (result.ok) {
             setShowCloseDialog(false);
+            setCloseNotice({ receipt: result.receiptLabel, synced: !!result.synced, withdrawal: closingWithdrawalAmount });
           } else {
             openDialogAfterConfirmedClose.current = false;
           }

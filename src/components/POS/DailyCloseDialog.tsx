@@ -1,11 +1,11 @@
-import { movementStyle, movementBadgeHTML, hasNegativeMoney, negativeMoneyClass } from '@/lib/movementStyle';
+import { movementBadgeHTML, hasNegativeMoney, negativeMoneyClass } from '@/lib/movementStyle';
 import { useMemo, useState, type ReactNode } from 'react';
-import { X, Lock, FileDown, Check, TriangleAlert as AlertTriangle, Calculator, Coins, Banknote, ChevronDown } from 'lucide-react';
+import { X, Lock, FileDown, Check, TriangleAlert as AlertTriangle, Calculator, Coins, Banknote } from 'lucide-react';
 import { formatCurrency, formatTime } from '@/lib/format';
 import { formatCashSessionTimestamp, verifiedCloseTimestamp } from '@/lib/cashSessionTimes';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
-import { mergeTaxByRate, sortedRateKeys, transactionNet, transactionPfandTax } from '@/lib/tax';
+import { mergeTaxByRate, transactionNet, transactionPfandTax } from '@/lib/tax';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { renderPdfHtml } from '@/lib/journalPdfFile';
 import { calculateYearlyPfandOverview, type YearlyPfandOverview } from '@/lib/journalPdf';
@@ -92,16 +92,14 @@ function transactionMovementRecords(transaction: Transaction): MovementRecord[] 
   return records;
 }
 
-const MOVEMENT_ORDER: MovementKind[] = ['Pfandausgabe', 'Bareinnahme', 'Karteneinnahme', 'Storno', 'Einlage', 'Ausgabe', 'Korrektur'];
 
-function movementColor(kind: MovementKind): string { return movementStyle(kind).badge; }
 
 interface Props {
   session: CashSession;
   transactions: Transaction[];
   stornos?: StornoRecord[];
   currentStaff: StaffUser | null;
-  onClose: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string }>;
+  onClose: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string; receiptLabel?: string; synced?: boolean }>;
   onCancel: () => void;
 }
 
@@ -115,7 +113,6 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
   const [closeError, setCloseError] = useState<string | null>(null);
   const [withdrawalStep, setWithdrawalStep] = useState(false);
   const [closingWithdrawalInput, setClosingWithdrawalInput] = useState('');
-  const [expandedMovementGroups, setExpandedMovementGroups] = useState<Partial<Record<MovementKind, boolean>>>({});
 
   const sessionTx = useMemo(
     () => projectFinancialTransactions(
@@ -151,50 +148,9 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
   const totalTax = [...taxByRate.values()].reduce((s, v) => s + v, 0);
   // Netto/USt inkl. Pfand (ab 17.11.2026 im Bon gespeichert; aeltere Bons ohne Pfand-USt).
   const totalNet = sessionTx.reduce((s, t) => s + transactionNet(t), 0);
-  const pfandTax = sessionTx.reduce((s, t) => s + transactionPfandTax(t), 0);
   const deposits = session.entries.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const withdrawals = session.entries.filter((e) => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
   const expected = Math.round((session.openingBalance + cashTillTransactionTotal + deposits - withdrawals) * 100) / 100;
-  const openingView = openingCorrectionView(session);
-  const cashPfandIncome = sessionTx
-    .filter((transaction) => transaction.paymentMethod === 'cash')
-    .reduce((sum, transaction) => sum + transaction.items
-      .filter((item) => !item.isPfandRetoure)
-      .reduce((itemSum, item) => itemSum + item.pfand, 0), 0);
-  const cashPfandPayout = Math.abs(sessionTx
-    .filter((transaction) => transaction.paymentMethod === 'cash')
-    .reduce((sum, transaction) => sum + transaction.items
-    .filter((item) => item.isPfandRetoure)
-    .reduce((itemSum, item) => itemSum + item.price * item.quantity, 0), 0));
-
-  const movementGroups = useMemo(() => {
-    const grouped = new Map<MovementKind, MovementRecord[]>();
-    const add = (record: MovementRecord) => grouped.set(record.kind, [...(grouped.get(record.kind) ?? []), record]);
-
-    sessionTx.forEach((transaction) => transactionMovementRecords(transaction).forEach(add));
-    session.entries.forEach((entry) => add({
-      id: entry.id,
-      kind: entry.isPfandRetoure ? 'Pfandausgabe' : entry.type === 'deposit' ? 'Einlage' : 'Ausgabe',
-      timestamp: entry.timestamp,
-      employeeName: entry.employeeName,
-      amount: entry.type === 'deposit' ? entry.amount : -entry.amount,
-      details: entry.reason,
-    }));
-    session.corrections.forEach((correction) => add({
-      id: correction.id,
-      kind: 'Korrektur',
-      timestamp: correction.timestamp,
-      employeeName: correction.employeeName,
-      amount: correction.newAmount - correction.oldAmount,
-      details: `${formatCurrency(correction.oldAmount)} → ${formatCurrency(correction.newAmount)} · ${correction.reason}`,
-    }));
-
-    return MOVEMENT_ORDER.flatMap((kind) => {
-      const records = grouped.get(kind);
-      return records?.length ? [{ kind, records: [...records].sort((a, b) => a.timestamp - b.timestamp) }] : [];
-    });
-  }, [sessionTx, session.entries, session.corrections]);
-
   const countedTotal = useMemo(() => {
     let sum = 0;
     for (const d of DENOMINATIONS) {
@@ -300,79 +256,18 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
             <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
               <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Kartenzahlungen zählen zum Umsatz, nicht zum Bargeld.</p>
-          </div>
-
-          {/* 2) Tagesumsatz */}
-          <div className="mb-3 rounded-2xl bg-green-50 p-4 dark:bg-green-900/30">
-            <p className="mb-2 text-sm font-bold text-green-700 dark:text-green-400">Tagesumsatz</p>
-            <div className="space-y-1 text-sm text-green-800 dark:text-green-300">
-              <Row label="Umsatz brutto, ohne Pfand" value={<MoneyAmount value={txTotal} />} bold />
-              <Row label="Umsatz brutto, mit Pfand" value={<MoneyAmount value={grossWithPfand} />} />
-              <Row label="davon bar (brutto, ohne Pfand)" value={<MoneyAmount value={cashTxTotal} />} />
-              <Row label="davon Karte (brutto, ohne Pfand)" value={<MoneyAmount value={cardTxTotal} />} />
-              <Row label="Netto-Umsatz (inkl. Pfand)" value={<MoneyAmount value={totalNet} />} />
-              <Row label="Enthaltene MwSt (Ware + Pfand)" value={<MoneyAmount value={totalTax} />} />
+            {/* 2) Tagesumsatz direkt darunter, im selben Block (Karte zählt zum Umsatz, nicht zum Bargeld) */}
+            <div className="mt-2 rounded-xl bg-green-50 p-3 dark:bg-green-900/30">
+              <p className="mb-1.5 text-sm font-bold text-green-700 dark:text-green-400">Tagesumsatz</p>
+              <div className="space-y-1 text-sm text-green-800 dark:text-green-300">
+                <Row label="Umsatz brutto ohne Pfand" value={<MoneyAmount value={txTotal} />} bold />
+                <Row label="Umsatz brutto mit Pfand" value={<MoneyAmount value={grossWithPfand} />} />
+                <Row label="Davon Barzahlungen" value={<MoneyAmount value={cashTxTotal} />} />
+                <Row label="Davon Kartenzahlungen" value={<MoneyAmount value={cardTxTotal} />} />
+                <Row label="Enthaltene Mehrwertsteuer (Ware + Pfand)" value={<MoneyAmount value={totalTax} />} />
+              </div>
             </div>
           </div>
-
-          {/* Mehr Infos: alle weiteren Kassenbewegungen und MwSt-Aufteilung */}
-          <details className="mb-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200">
-              <ChevronDown className="h-4 w-4" /> Mehr Infos
-            </summary>
-            <div className="space-y-1.5 border-t border-gray-200 p-4 dark:border-gray-700">
-              {openingView && <>
-                <Row label="Übernommen vom Vortag" value={formatCurrency(openingView.carriedBalance)} />
-                {openingView.lines.map((line) => (
-                  <Row key={line.timestamp} label={`Korrektur Anfangsbestand · ${formatTime(line.timestamp)} · ${line.employeeName ?? 'unbekannt'}${line.reason ? ` · Grund: ${line.reason}` : ''}`} value={signedAmountLabel(line.amount, formatCurrency)} />
-                ))}
-              </>}
-              <Row label="Barumsatz (brutto, ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
-              <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
-              <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
-              <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
-              <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
-              {sortedRateKeys(taxByRate).map((rate) => (
-                <Row key={rate} label={`MwSt ${rate}%`} value={formatCurrency(taxByRate.get(rate) ?? 0)} />
-              ))}
-              {Math.abs(pfandTax) >= 0.005 && <Row label="davon MwSt auf Pfand" value={formatCurrency(pfandTax)} />}
-              {movementGroups.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  {movementGroups.map(({ kind, records }) => {
-                    const total = records.reduce((sum, record) => sum + record.amount, 0);
-                    const expanded = !!expandedMovementGroups[kind];
-                    return (
-                      <div key={kind} className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                        <button type="button" onClick={() => setExpandedMovementGroups((current) => ({ ...current, [kind]: !current[kind] }))}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 dark:hover:bg-gray-900/40" aria-expanded={expanded}>
-                          <span className="flex min-w-0 items-center gap-2">
-                            <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${movementColor(kind)}`}>{kind}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">{records.length} Buchung{records.length === 1 ? '' : 'en'}</span>
-                          </span>
-                          <span className={`shrink-0 font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={total} /></span>
-                        </button>
-                        {expanded && (
-                          <div className="border-t border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/30">
-                            {records.map((record) => (
-                              <div key={record.id} className="flex items-start justify-between gap-3 border-b border-gray-200 py-2 last:border-0 dark:border-gray-700">
-                                <div className="min-w-0 text-sm">
-                                  <p className="font-medium text-gray-800 dark:text-gray-200">{formatTime(record.timestamp)} · {record.employeeName ?? 'Nicht zugeordnet'}</p>
-                                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{record.details}</p>
-                                </div>
-                                <span className={`shrink-0 text-sm font-semibold ${record.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={record.amount} /></span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </details>
 
           {/* 3) Tatsächlicher Kassenbestand: Direkt (Standard) oder Geld-Zählhilfe */}
           <div className="mb-3">
@@ -392,10 +287,10 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
 
             {useCounting ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-                <DenominationGroup title="Münzen" subtitle="1 Cent bis 2 Euro" icon={<Coins className="h-4 w-4" />} labelClass="text-orange-700 dark:text-orange-400"
+                <DenominationGroup title="Münzen" subtitle="1 Cent bis 2 Euro" icon={<Coins className="h-4 w-4" />} labelClass="text-amber-800 dark:text-amber-500"
                   denominations={COINS} counts={counts} total={coinTotal}
                   onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
-                <DenominationGroup title="Scheine" subtitle="5 € bis 200 €" icon={<Banknote className="h-4 w-4" />} labelClass="text-green-800 dark:text-green-400"
+                <DenominationGroup title="Scheine" subtitle="5 € bis 200 €" icon={<Banknote className="h-4 w-4" />} labelClass="text-green-800 dark:text-green-500"
                   denominations={NOTES} counts={counts} total={noteTotal}
                   onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
                 <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700">

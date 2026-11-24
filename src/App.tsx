@@ -46,7 +46,7 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { archiveFolderStatus, prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
 import type { JournalReportData } from '@/lib/journalPdf';
 import { closedSessionReport } from '@/lib/dailyReport';
-import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
+import { formatDailyCloseReceiptNumber, issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
 import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
 import { persistFinalizedCashSession } from '@/lib/finalizedCashCloud';
 import { isTestMode, setTestMode, clearBookings, loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
@@ -1114,10 +1114,10 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 // Test mode is a simulation only: no Cloud receipt number,
                 // final Cloud write, or official persisted close/PDF.
                 store.closeCashSession(session.id, bal, currentStaff, closingWithdrawalAmount, undefined, stornoLedger.records);
-                return { ok: true };
+                return { ok: true, receiptLabel: 'Testmodus (ohne Belegnummer)', synced: false };
               }
               if (!online || !navigator.onLine) {
-                return { ok: false, error: 'Beleg konnte nicht erstellt werden, da keine Internetverbindung besteht. Bitte Internetverbindung prüfen und erneut versuchen.' };
+                return { ok: false, error: 'Keine Internetverbindung: Der Tagesabschluss wurde NICHT gebucht – die Abschlussnummer kommt aus der Cloud. Bitte stelle die Internetverbindung der App wieder her und schließe dann erneut ab. Die Kasse bleibt bis dahin offen, es geht nichts verloren.' };
               }
               if (stornoLedger.status !== 'ready') {
                 return { ok: false, error: 'Stornojournal nicht sicher synchronisiert. Vor endgültigem Tagesabschluss zuerst Cloud und Stornobelege prüfen.' };
@@ -1164,7 +1164,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                   console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
                   setPendingClosePdf(closeReport);
                 }
-                return { ok: true };
+                // persistFinalizedCashSession hat den Abschluss in der Cloud gespeichert UND zurückgelesen:
+                // „Synchronisiert“ ist damit bestätigt. Die Belegnummer ist je Kasse eindeutig (idempotent).
+                return { ok: true, synced: true, receiptLabel: formatDailyCloseReceiptNumber(closed.dailyCloseReceiptNumber, closed.dailyCloseReceiptLocation ?? closed.location, finalizedAt, closed.dailyCloseReceiptYear) ?? undefined };
               } catch (error) {
                 console.warn('Tagesabschluss ohne Belegnummer abgelehnt.', error);
                 return { ok: false, error: `Tagesabschluss konnte nicht sicher bestätigt werden: ${readableSyncError(error)} Bitte vor weiteren Buchungen den Cloud-Status prüfen und erneut synchronisieren; keine zweite Abschlussbuchung erzwingen.` };
