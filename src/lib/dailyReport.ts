@@ -4,7 +4,7 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoRecord } from '@/lib/stornoRules';
 import { buildJournalFileName } from '@/lib/journalPdfFile';
-import { calculateYearlyPfandOverview, type CashAuditRecord, type JournalReportData, type StaffTimeRecord } from '@/lib/journalPdf';
+import { calculatePfandOverview, type CashAuditRecord, type JournalReportData, type StaffTimeRecord } from '@/lib/journalPdf';
 import { endOfDay, startOfDay } from '@/lib/format';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { formatCashSessionTimestamp, verifiedCloseTimestamp } from '@/lib/cashSessionTimes';
@@ -53,8 +53,8 @@ export function buildDailyReport(
     cashAuditRecords: cashAuditRecordsFromSessions(sessions).filter(
       (entry) => entry.timestamp >= startOfDay(day.getTime()) && entry.timestamp <= endOfDay(day.getTime()),
     ),
-    yearlyPfandOverview: calculateYearlyPfandOverview(
-      projectFinancialTransactions(allTransactions, stornos), day.getFullYear(), loc),
+    yearlyPfandOverview: calculatePfandOverview(
+      projectFinancialTransactions(allTransactions, stornos), startOfDay(day.getTime()), endOfDay(day.getTime()), loc),
   };
 }
 
@@ -111,7 +111,6 @@ export function closedSessionReport(session: CashSession, transactions: Transact
   if (!session.closed || finalizedAt === null || finalizedAt < session.openedAt) {
     throw new Error('Endgültiger Kassenabschluss ohne gültigen Eröffnungs- und Abschlusszeitpunkt. PDF-Erstellung gesperrt.');
   }
-  const [year] = session.date.split('-');
   const closingWithdrawalAmount = session.closingWithdrawalAmount ?? session.entries.filter((entry) => entry.isClosingWithdrawal).reduce((sum, entry) => sum + entry.amount, 0);
   const deposits = session.entries.filter((entry) => entry.type === 'deposit').reduce((sum, entry) => sum + entry.amount, 0);
   const normalWithdrawals = session.entries.filter((entry) => entry.type === 'withdrawal' && !entry.isClosingWithdrawal).reduce((sum, entry) => sum + entry.amount, 0);
@@ -139,16 +138,19 @@ export function closedSessionReport(session: CashSession, transactions: Transact
     fileName: `${session.location}_Tagesabschluss_${session.date}_${formattedReceipt ?? session.id}.pdf`,
     receiptNumber: formattedReceipt ?? 'wird bei der nächsten Synchronisierung vergeben',
     staffTimeRecords: staffTimesFromSession(session, finalizedAt),
-    // An archived daily close must not change when later transactions add
-    // more yearly deposit movements; freeze the year-to-date scope at close.
-    yearlyPfandOverview: calculateYearlyPfandOverview(
+    // 24.11.: Pfandübersicht nur für den Tag des Abschlusses, eingefroren
+    // beim Abschlusszeitpunkt (spätere Buchungen ändern den Beleg nicht).
+    yearlyPfandOverview: calculatePfandOverview(
       projectFinancialTransactions(
         transactions.filter((transaction) => transaction.timestamp <= finalizedAt),
         [...new Map([...allStornos, ...sessionStornos]
           .filter((storno) => storno.timestamp <= finalizedAt)
           .map((storno) => [storno.id, storno])).values()],
       ),
-      Number(year), session.location,
+      startOfDay(new Date(session.date + 'T00:00:00').getTime()),
+      Math.min(endOfDay(new Date(session.date + 'T00:00:00').getTime()), finalizedAt),
+      session.location, session.location,
+      'Pfandübersicht: alle Pfandbuchungen dieses Tages am Standort (alle Kassensitzungen). Kassenbestand und Barbewegungen oben: nur diese Kassensitzung.',
     ),
     transactions: reportTransactions,
     stornos: sessionStornos,

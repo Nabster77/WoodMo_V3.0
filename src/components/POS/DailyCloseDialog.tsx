@@ -8,7 +8,7 @@ import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrectio
 import { mergeTaxByRate, transactionNet, transactionPfandTax } from '@/lib/tax';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { renderPdfHtml } from '@/lib/journalPdfFile';
-import { calculateYearlyPfandOverview, type YearlyPfandOverview } from '@/lib/journalPdf';
+import { calculatePfandOverview, type YearlyPfandOverview } from '@/lib/journalPdf';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { projectFinancialTransactions, type StornoJournalTransaction } from '@/lib/stornoReportProjection';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -124,10 +124,14 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
     [transactions, session, stornos],
   );
   const yearlyPfandOverview = useMemo(
-    () => calculateYearlyPfandOverview(
-      projectFinancialTransactions(transactions, stornos),
-      new Date(session.openedAt).getFullYear(), session.location),
-    [transactions, stornos, session.openedAt, session.location],
+    () => {
+      const dayStart = new Date(session.date + 'T00:00:00').getTime();
+      return calculatePfandOverview(
+        projectFinancialTransactions(transactions, stornos),
+        dayStart, dayStart + 86_400_000 - 1, session.location, session.location,
+        'Pfandübersicht: alle Pfandbuchungen dieses Tages am Standort (alle Kassensitzungen). Kassenbestand und Barbewegungen oben: nur diese Kassensitzung.');
+    },
+    [transactions, stornos, session.date, session.location],
   );
 
   // Sales turnover never includes deposits. Deposits are neither taxable nor
@@ -620,7 +624,7 @@ async function generatePDF(
     <section class="report-block"><h2>Kassenbewegungen (${session.entries.length + session.corrections.length})</h2><table><thead><tr><th>Datum</th><th>Uhrzeit</th><th>Mitarbeiter</th><th>Vorgang</th><th>Betrag / Änderung</th><th>Grund</th></tr></thead><tbody>${cashMovementRows || '<tr><td colspan="6">Keine Kassenbewegungen</td></tr>'}</tbody></table></section>
     ${staffRows ? `<section class="staff-times"><h2>Mitarbeiterzeiten</h2><table><thead><tr><th>Mitarbeiter</th><th>Anmeldung</th><th>Abmeldung</th><th>Gesamtzeit</th></tr></thead><tbody>${staffRows}</tbody></table><div class="box">${staffTotalRows}</div></section>` : ''}
     <div class="box"><div class="sum bold"><span>Gesamtdauer der Kasse</span><span>${overallDuration}</span></div></div>
-    ${yearlyPfandOverview ? `<section class="report-block"><h2>Pfand-Kontrollübersicht ${yearlyPfandOverview.year}</h2><div class="box"><div class="sum"><span>Pfandeinnahmen</span><span>+ ${formatCurrency(yearlyPfandOverview.pfandCollected)}</span></div><div class="sum"><span>Pfandretouren</span><span>- ${formatCurrency(yearlyPfandOverview.pfandReturned)}</span></div><div class="sum bold ${yearlyPfandClass}"><span>${yearlyPfandLabel}</span><span>${yearlyPfandValue}</span></div><p style="font-size:10px;color:#64748b;margin-top:7px">${escapeHtml(yearlyPfandOverview.scopeLabel)} · alle Buchungen im Kalenderjahr. Der Wert wird beim Zurücksetzen der Buchungen automatisch zurückgesetzt.</p></div></section>` : ''}
+    ${yearlyPfandOverview ? `<section class="report-block"><h2>${yearlyPfandOverview.periodLabel ? `Pfandübersicht · ${escapeHtml(yearlyPfandOverview.scopeLabel)} · ${escapeHtml(yearlyPfandOverview.periodLabel)}` : `Pfand-Kontrollübersicht ${yearlyPfandOverview.year}`}</h2><div class="box"><div class="sum"><span>Pfandeinnahmen</span><span>+ ${formatCurrency(yearlyPfandOverview.pfandCollected)}</span></div><div class="sum"><span>Pfandretouren</span><span>- ${formatCurrency(yearlyPfandOverview.pfandReturned)}</span></div><div class="sum bold ${yearlyPfandClass}"><span>${yearlyPfandOverview.periodLabel ? 'Pfandsaldo' : yearlyPfandLabel}</span><span>${yearlyPfandValue}</span></div><p style="font-size:10px;color:#64748b;margin-top:7px">${yearlyPfandOverview.note ? `<b>${escapeHtml(yearlyPfandOverview.note)}</b><br>` : ''}Pfandsaldo = Pfandeinnahmen minus Pfandretouren aus den Buchungen ${yearlyPfandOverview.periodLabel ? 'dieses Tages und Standorts' : 'des Kalenderjahres'}.</p></div></section>` : ''}
   </body></html>`;
   try {
     const pdf = await renderPdfHtml(html);

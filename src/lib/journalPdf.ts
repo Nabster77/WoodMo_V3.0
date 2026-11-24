@@ -64,6 +64,39 @@ export interface YearlyPfandOverview {
   pfandCollected: number;
   pfandReturned: number;
   pfandSaldo: number;
+  /** 24.11.: konkreter Berichtszeitraum, z. B. „24.11.2026“ oder „21.11.2026 – 23.11.2026“. */
+  periodLabel?: string;
+  /** Hinweis, z. B. dass der Kassenbestand nur die einzelne Kassensitzung betrifft. */
+  note?: string;
+}
+
+/**
+ * 24.11.: Pfandübersicht nur für Standort und Berichtszeitraum (Start und Ende
+ * einschließlich). Gleiche Zählweise wie die Jahresübersicht.
+ */
+export function calculatePfandOverview(
+  transactions: Transaction[],
+  startMs: number,
+  endMsInclusive: number,
+  location: Location | 'all',
+  scopeLabel: string = location === 'all' ? 'Alle Standorte' : location,
+  note?: string,
+): YearlyPfandOverview {
+  const inRange = transactions.filter((t) => t.timestamp >= startMs && t.timestamp <= endMsInclusive);
+  const fmt = (ms: number) => new Date(ms).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const from = fmt(startMs), to = fmt(endMsInclusive);
+  const base = calculateYearlyPfandOverview(inRange, new Date(startMs).getFullYear(), location, scopeLabel);
+  // Jahresfilter in der Basisfunktion darf einen Zeitraum über den Jahreswechsel nicht kürzen.
+  if (new Date(startMs).getFullYear() !== new Date(endMsInclusive).getFullYear()) {
+    let collected = 0, returned = 0;
+    for (const y of new Set(inRange.map((t) => new Date(t.timestamp).getFullYear()))) {
+      const part = calculateYearlyPfandOverview(inRange, y, location, scopeLabel);
+      collected += part.pfandCollected; returned += part.pfandReturned;
+    }
+    base.pfandCollected = collected; base.pfandReturned = returned;
+    base.pfandSaldo = Math.round((collected - returned) * 100) / 100;
+  }
+  return { ...base, periodLabel: from === to ? from : `${from} – ${to}`, note };
 }
 
 export interface CashAuditRecord {
@@ -454,14 +487,15 @@ function dailyCloseCashSection(cash?: JournalReportData['dailyCloseCash']): stri
 function yearlyPfandOverviewSection(overview?: YearlyPfandOverview): string {
   if (!overview) return '';
   return `<section class="report-table-section table-block yearly-pfand-overview">
-    <h2>Pfand-Kontrollübersicht ${overview.year}</h2>
-    <p class="pfand-control-note">${escapeHtml(overview.scopeLabel)} · alle Buchungen im Kalenderjahr</p>
+    <h2>${overview.periodLabel ? `Pfandübersicht · ${escapeHtml(overview.scopeLabel)} · ${escapeHtml(overview.periodLabel)}` : `Pfand-Kontrollübersicht ${overview.year}`}</h2>
+    ${overview.periodLabel ? '' : `<p class="pfand-control-note">${escapeHtml(overview.scopeLabel)} · alle Buchungen im Kalenderjahr</p>`}
     <table><tbody>
       <tr><td>Pfandeinnahmen</td><td style="text-align:right"><b>+ ${formatCurrency(overview.pfandCollected)}</b></td></tr>
       <tr><td>Pfandretouren</td><td style="text-align:right"><b>- ${formatCurrency(overview.pfandReturned)}</b></td></tr>
-      <tr><td><b>${pfandSaldoLabel(overview.pfandSaldo)}</b></td><td style="text-align:right">${pfandSaldoCell(overview.pfandSaldo)}</td></tr>
+      <tr><td><b>${overview.periodLabel ? 'Pfandsaldo' : pfandSaldoLabel(overview.pfandSaldo)}</b></td><td style="text-align:right">${pfandSaldoCell(overview.pfandSaldo)}</td></tr>
     </tbody></table>
-    <p class="pfand-control-note">Der Saldo wird aus den vorhandenen Buchungen berechnet und beim Zurücksetzen der Buchungen automatisch zurückgesetzt.</p>
+    ${overview.note ? `<p class="pfand-control-note"><b>${escapeHtml(overview.note)}</b></p>` : ''}
+    <p class="pfand-control-note">Pfandsaldo = Pfandeinnahmen minus Pfandretouren, berechnet aus den Buchungen ${overview.periodLabel ? 'dieses Zeitraums und Standorts' : 'des Kalenderjahres'}.</p>
   </section>`;
 }
 

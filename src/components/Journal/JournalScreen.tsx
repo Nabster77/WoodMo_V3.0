@@ -23,7 +23,7 @@ import { buildJournalFileName, exportJournalPdf, exportJournalPdfBatch, openJour
 import { cashAuditRecordsFromSessions, closedSessionReport } from '@/lib/dailyReport';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { JournalPreviewDialog } from '@/components/Journal/JournalPreviewDialog';
-import { calculateYearlyPfandOverview, computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
+import { calculatePfandOverview, computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
 import { mergeTaxByRate, getTaxByRate, isTaxFreeItem, isReducedRate, sortedRateKeys, transactionNet, transactionTax, transactionPfandTax } from '@/lib/tax';
 import {
   TrendingUp, Clock, Receipt, ChevronDown, ChevronUp,
@@ -246,8 +246,9 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   // The control total is intentionally independent from the displayed period:
   // every journal shows the current calendar year's deposit balance.
   const yearlyPfandOverview = useMemo(
-    () => calculateYearlyPfandOverview(projectFinancialTransactions(transactions, stornos), new Date().getFullYear(), locationFilter, sessionLocationLabel),
-    [transactions, stornos, locationFilter, sessionLocationLabel],
+    // 24.11.: nur Standort und gewählter Zeitraum (Start/Ende einschließlich).
+    () => calculatePfandOverview(projectFinancialTransactions(transactions, stornos), start, end, locationFilter, sessionLocationLabel),
+    [transactions, stornos, start, end, locationFilter, sessionLocationLabel],
   );
   const periodLabel = formatDate(start) + (formatDate(start) === formatDate(end) ? '' : ' bis ' + formatDate(end));
   const reportData = (): JournalReportData => ({
