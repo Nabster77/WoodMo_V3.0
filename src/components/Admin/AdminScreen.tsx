@@ -1271,7 +1271,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             {([
               ['Umsatz brutto (inkl. Pfand)', total + totalPfand],
               ['Pfand eingenommen', pfandCollected],
-              ['Pfandretoure gesamt', -Math.abs(pfandReturned)],
+              ['Pfandretoure gesamt', pfandReturned === 0 ? 0 : -Math.abs(pfandReturned)],
             ] as const).map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
