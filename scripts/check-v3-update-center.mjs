@@ -55,7 +55,7 @@ assert.match(app, /if \(!homeVisible \|\| currentStaff\) \{ autoUpdate\.current 
 assert.match(app, /homeVisible && !currentStaff && updatePhase/, 'Dialog nie während eines Kassenvorgangs');
 assert.match(app, /updateWaiting=\{candidate\?\.version\}/);
 assert.match(home, /'● Update wartet' : 'Update'/);
-assert.match(dialog, /'Später installieren'/);
+assert.match(dialog, /'Später'/);
 assert.match(dialog, /label: 'Jetzt installieren'/);
 assert.match(dialog, /Installiert: <strong>Version \{installedVersion\}/);
 assert.match(read('src/lib/appVersion.ts'), /export async function preflightPublishedUpdate[\s\S]*?await preparePublishedUpdate\(candidate\);\s*return true;\s*\} catch \{\s*return false;/);
