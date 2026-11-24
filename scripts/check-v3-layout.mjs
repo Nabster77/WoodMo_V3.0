@@ -54,7 +54,7 @@ assert.match(adminTagesinfo, />Pfand-Saldo</, 'Tagesinfo: Pfand als Saldo benann
 assert.match(adminTagesinfo, /Gesamt kassiert \(inkl\. Pfand\)[\s\S]{0,400}formatCurrency\(cashTotal \+ cardTotal\)/, 'Tagesinfo: Gesamt kassiert = Bar + Karte');
 const closeDialog = readFileSync('src/components/POS/DailyCloseDialog.tsx','utf8');
 assert.match(closeDialog, /Kassenbestand \(nur Bargeld\)[\s\S]{0,2200}label="= Erwarteter Kassenbestand"/, 'Abschluss: Kassenbestand nur aus Bargeld, von oben nach unten');
-assert.match(closeDialog, />Tagesumsatz<[\s\S]{0,600}davon Karte \(brutto, ohne Pfand\)/, 'Abschluss: Umsatz getrennt, Karte klar ausgewiesen');
+assert.match(closeDialog, />Tagesumsatz<[\s\S]{0,800}Davon Kartenzahlungen/, 'Abschluss: Umsatz getrennt, Karte klar ausgewiesen');
 assert.match(closeDialog, /Kartenzahlungen zählen zum Umsatz, nicht zum Bargeld/, 'Abschluss: Karte nicht im Bargeld');
 const journalPdfSrc = readFileSync('src/lib/journalPdf.ts','utf8');
 assert.equal((journalPdfSrc.match(/Gesamt kassiert \(inkl\. Pfand\)/g) ?? []).length, 3, 'Journal-PDF: Gesamt kassiert je Standort, gesamt und im Vergleich');
