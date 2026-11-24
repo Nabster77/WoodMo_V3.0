@@ -97,9 +97,17 @@ interface LocationStats {
   taxByRate: Record<number, number>;
 }
 
+/** Artikelname mit farbig markiertem Schuss-Anteil („Glühwein + 2× Rum“). */
+function itemNameHtml(name: string): string {
+  const parts = name.split(' + ');
+  if (parts.length < 2) return escapeHtml(name);
+  return `${escapeHtml(parts[0])} <span class="tag tag-shot">+ ${escapeHtml(parts.slice(1).join(' + '))}</span>`;
+}
+
 const LOCATION_META: Record<Location, { sub: string; color: string; bar: string }> = {
-  Friedrichshafen: { sub: 'Friedrichshafen', color: '#1e3a5f', bar: '#2563eb' },
-  Bregenz: { sub: 'Bregenz', color: '#0f766e', bar: '#0d9488' },
+  // 24.11.: gleiche Standortfarben wie in der App (Friedrichshafen grün, Bregenz blau).
+  Friedrichshafen: { sub: 'Friedrichshafen', color: '#14532d', bar: '#16a34a' },
+  Bregenz: { sub: 'Bregenz', color: '#1e3a8a', bar: '#2563eb' },
 };
 
 export function computeJournalStats(txs: Transaction[]): LocationStats {
@@ -178,7 +186,7 @@ function categoryRows(txs: Transaction[], categories: Category[], sort?: Journal
     }
   }
   return [...map.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total)
-    .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right">${pfandSaldoCell(g.pfand)}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g) => `<tr><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right">${pfandSaldoCell(g.pfand)}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
 }
 
@@ -210,10 +218,10 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
   }
   const ordered = [...artMap.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total);
   const rows = ordered
-    .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g) => `<tr><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   const bestRows = (sort ? ordered : [...artMap.values()].filter(g => g.total > 0).sort((a, b) => b.count - a.count).slice(0, 10))
-    .map((g, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g, i) => `<tr><td>${i + 1}</td><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   return { rows, bestRows, artMap };
 }
@@ -567,7 +575,7 @@ export function buildJournalHTML(data: JournalReportData): string {
   const generatedAt = new Date().toLocaleString('de-DE');
   const generatedTime = new Date().toLocaleTimeString('de-DE');
   const isBregenzReport = location.toLowerCase().includes('bregenz');
-  const reportAccent = isBregenzReport ? '#0f766e' : '#2563eb';
+  const reportAccent = isBregenzReport ? '#2563eb' : '#16a34a';
 
   const isBoth = location.includes('Beide') || location.includes('Kasse 1 + Kasse 2') || location.toLowerCase().includes('alle');
 
@@ -633,6 +641,8 @@ export function buildJournalHTML(data: JournalReportData): string {
     .header .cash-session-period { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 22px; margin-top: 9px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-weight: 700; color: #1e293b; }
     .header .cash-session-period span { white-space: nowrap; }
     .print-running-header, .print-running-footer { display: none; }
+    .tag { display: inline-block; border-radius: 4px; padding: 0 5px; font-size: 10px; font-weight: 700; color: #fff; }
+    .tag-shot { background: #b45309; }
     h2 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     caption { caption-side: top; text-align: left; font-size: 16px; font-weight: bold; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     .table-title-row th { text-align: left; text-transform: none; font-size: 16px; color: #1e3a5f; background: transparent; border-bottom: 1px solid #cbd5e1; padding: 20px 0 8px; }

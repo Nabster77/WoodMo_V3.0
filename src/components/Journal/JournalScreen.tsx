@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
+import { SpiritBadge } from '@/components/POS/ProductTile';
 import { compareJournalRows, compareJournalTransactions, type JournalSort } from '@/lib/journalOrdering';
 import { openingBalanceOfDays } from '@/lib/dayOverview';
 import { loadDailyCloseArchive, sessionCloseArchiveKey } from '@/lib/dailyCloseArchive';
@@ -234,6 +235,12 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
   // Je Standort und Tag nur der Morgenbestand der ersten Kasse (keine Doppelzählung).
   const totalOpeningBalance = openingBalanceOfDays(relevantSessions);
   const sessionLocationLabel = locationFilter === 'all' ? 'Alle Standorte' : locationFilter;
+  // 24.11.: kompakte Überschrift statt „Umsatz im Zeitraum“, folgt sofort den Filtern.
+  const summaryTitle = [
+    headerLabel.replace('journal - ', 'übersicht ').replace('Zeitraum: ', 'Übersicht '),
+    sessionLocationLabel,
+    groupModes.find(option => option.mode === groupMode)?.label,
+  ].filter(Boolean).join(' · ');
   // The control total is intentionally independent from the displayed period:
   // every journal shows the current calendar year's deposit balance.
   const yearlyPfandOverview = useMemo(
@@ -402,7 +409,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
       <div className="mb-3 overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-4 shadow-sm dark:border-green-800 dark:from-green-900/30 dark:to-emerald-900/20">
         <div className="mb-2 flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-          <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Umsatz im Zeitraum</p>
+          <p className="text-sm font-bold text-green-700 dark:text-green-400">{summaryTitle}</p>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 dark:bg-gray-900/40">
@@ -457,7 +464,7 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         ) : groupMode === 'category' ? (
           <CategoryGroupView transactions={viewTx} categories={categories} sort={journalSort} />
         ) : groupMode === 'article' ? (
-          <ArticleGroupView transactions={viewTx} sort={journalSort} />
+          <ArticleGroupView transactions={viewTx} sort={journalSort} products={products} />
         ) : groupMode === 'tax' ? (
           <TaxClassView transactions={viewTx} sort={journalSort} />
         ) : groupMode === 'bestseller' ? (
@@ -674,14 +681,15 @@ function CategoryGroupCard({ cat, label, total, count, pfand, items }: {
 
 // ---- 2. Einzelartikel view ----
 
-function ArticleGroupView({ transactions, sort }: { transactions: Transaction[]; sort: JournalSort }) {
+function ArticleGroupView({ transactions, sort, products = NO_PRODUCTS }: { transactions: Transaction[]; sort: JournalSort; products?: Product[] }) {
+  const spiritById = useMemo(() => new Map(products.map((p) => [p.id, p.spiritType])), [products]);
   const groups = useMemo(() => {
-    const map = new Map<string, { name: string; total: number; count: number; price: number; taxRate: number; pfand: number; instances: { quantity: number; timestamp: number }[] }>();
+    const map = new Map<string, { name: string; spirit?: Product['spiritType']; total: number; count: number; price: number; taxRate: number; pfand: number; instances: { quantity: number; timestamp: number }[] }>();
     for (const tx of transactions) {
       for (const item of tx.items) {
         if (item.isPfandRetoure) continue;
         const key = `${item.productId}-${item.name}`;
-        if (!map.has(key)) map.set(key, { name: item.name, total: 0, count: 0, price: item.price, taxRate: isTaxFreeItem(item) ? 0 : item.taxRate, pfand: 0, instances: [] });
+        if (!map.has(key)) map.set(key, { name: item.name, spirit: spiritById.get(item.productId), total: 0, count: 0, price: item.price, taxRate: isTaxFreeItem(item) ? 0 : item.taxRate, pfand: 0, instances: [] });
         const g = map.get(key)!;
         g.total += item.price * item.quantity;
         g.count += item.quantity;
@@ -690,19 +698,19 @@ function ArticleGroupView({ transactions, sort }: { transactions: Transaction[];
       }
     }
     return [...map.values()].sort((a, b) => compareJournalRows(a, b, sort));
-  }, [transactions, sort]);
+  }, [transactions, sort, spiritById]);
 
   return (
     <div className="space-y-2">
       {groups.map((g, i) => (
-        <ArticleGroupCard key={i} name={g.name} total={g.total} count={g.count} price={g.price} taxRate={g.taxRate} pfand={g.pfand} instances={g.instances} />
+        <ArticleGroupCard key={i} spirit={g.spirit} name={g.name} total={g.total} count={g.count} price={g.price} taxRate={g.taxRate} pfand={g.pfand} instances={g.instances} />
       ))}
     </div>
   );
 }
 
-function ArticleGroupCard({ name, total, count, price, taxRate, pfand, instances }: {
-  name: string; total: number; count: number; price: number; taxRate: number; pfand: number;
+function ArticleGroupCard({ spirit, name, total, count, price, taxRate, pfand, instances }: {
+  spirit?: Product['spiritType']; name: string; total: number; count: number; price: number; taxRate: number; pfand: number;
   instances: { quantity: number; timestamp: number }[];
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -716,7 +724,11 @@ function ArticleGroupCard({ name, total, count, price, taxRate, pfand, instances
             <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{name}</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {name.split(' + ')[0]}
+              {name.includes(' + ') && <span className="ml-1 rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-white">+ {name.split(' + ').slice(1).join(' + ')}</span>}
+              {spirit && <span className="ml-1 inline-block align-middle"><SpiritBadge kind={spirit} /></span>}
+            </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {count}× verkauft · {formatCurrency(price)}/Stück · {taxRate === 0 ? 'steuerfrei' : `${taxRate}% MwSt`}{pfand > 0 ? ` · Pfand ${formatCurrency(pfand)}` : ''}
               {instances.length > 1 && ` · ${formatDate(firstTime)} ${formatTime(firstTime)} bis ${formatDate(lastTime)} ${formatTime(lastTime)}`}

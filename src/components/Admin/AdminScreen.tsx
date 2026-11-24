@@ -9,6 +9,7 @@ import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@
 import { buildDailyReport } from '@/lib/dailyReport';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
+import { locationStyle } from '@/lib/locationColors';
 import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
@@ -144,9 +145,10 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     onCloseMenu();
     action();
   };
-  const adminMenuItem = 'flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-700/50 px-3 py-2.5 text-left text-sm font-semibold text-slate-100 transition hover:border-emerald-600/60 hover:bg-emerald-900/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400';
-  const activeAdminMenuItem = 'border-blue-500 bg-blue-600/30 text-white';
-  const adminMenuHeading = 'mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-emerald-300';
+  // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
+  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
+  const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
+  const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
@@ -188,12 +190,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             aria-modal="true"
             aria-label="Verwaltungsmenü"
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-emerald-600/40 bg-[#0c1729] p-4 text-white shadow-2xl"
+            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-4 text-white shadow-2xl"
           >
-            <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-700 pb-3">
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
               <div>
                 <h2 className="text-lg font-bold">Verwaltungsmenü</h2>
-                <p className="text-xs text-slate-400">Wähle den gewünschten Bereich oder eine Aktion.</p>
               </div>
               <button type="button" aria-label="Verwaltungsmenü schließen" onClick={onCloseMenu}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 text-slate-200 hover:bg-slate-700">
@@ -205,22 +206,22 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-admin-navigation" className={adminMenuHeading}>Verwaltungsbereiche</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" aria-current={menuItemChosen && tab === 'sessions' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'sessions' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('sessions')}>
-                  <MonitorDot className="h-5 w-5 shrink-0 text-blue-300" /> Kassen-Übersicht
+                  <MonitorDot className="h-5 w-5 shrink-0 text-white" /> Kassen-Übersicht
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'categories' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'categories' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('categories')}>
-                  <Tag className="h-5 w-5 shrink-0 text-blue-300" /> Warengruppen
+                  <Tag className="h-5 w-5 shrink-0 text-white" /> Warengruppen
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'products' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'products' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('products')}>
-                  <Package className="h-5 w-5 shrink-0 text-blue-300" /> Artikel
+                  <Package className="h-5 w-5 shrink-0 text-white" /> Artikel
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'shots' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'shots' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('shots')}>
-                  <Wine className="h-5 w-5 shrink-0 text-blue-300" /> SCHUSS
+                  <Wine className="h-5 w-5 shrink-0 text-white" /> SCHUSS
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'staff' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'staff' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('staff')}>
-                  <ShieldCheck className="h-5 w-5 shrink-0 text-blue-300" /> Benutzer
+                  <ShieldCheck className="h-5 w-5 shrink-0 text-white" /> Benutzer
                 </button>
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onOpenJournal)}>
-                  <ReceiptIcon className="h-5 w-5 shrink-0 text-blue-300" /> Journal
+                  <ReceiptIcon className="h-5 w-5 shrink-0 text-white" /> Journal
                 </button>
               </div>
             </section>
@@ -230,7 +231,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowReleaseInfo(true))}>
-                  <Info className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true" /> Info
+                  <Info className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Info
                   {unreadRelease && <>
                     <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
                     <span className="sr-only">Neue Versionshinweise</span>
@@ -238,12 +239,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
-                    <Settings className="h-5 w-5 shrink-0 text-emerald-300" /> Setup / PDF-Ordner
+                    <Settings className="h-5 w-5 shrink-0 text-white" /> Setup / PDF-Ordner
                   </button>
                 )}
                 {onToggleMode && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onToggleMode)}>
-                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" /> : <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />}
+                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0 text-white" /> : <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />}
                     {testMode ? 'Auf aktiven Modus wechseln' : 'Auf Testmodus wechseln'}
                   </button>
                 )}
@@ -254,16 +255,16 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-import-export" className={adminMenuHeading}>Import / Export</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowCatalogTransfer(true))}>
-                  <FileDown className="h-5 w-5 shrink-0 text-cyan-300" /> Excel-Import / Export
+                  <FileDown className="h-5 w-5 shrink-0 text-white" /> Excel-Import / Export
                 </button>
                 {onImportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowImport(true))}>
-                    <FileUp className="h-5 w-5 shrink-0 text-cyan-300" /> Backup importieren
+                    <FileUp className="h-5 w-5 shrink-0 text-white" /> Backup importieren
                   </button>
                 )}
                 {onExportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void onExportBackup(); })}>
-                    <Download className="h-5 w-5 shrink-0 text-cyan-300" /> Backup exportieren
+                    <Download className="h-5 w-5 shrink-0 text-white" /> Backup exportieren
                   </button>
                 )}
                 {onExportResetQuarantine && resetQuarantineCount > 0 && (
@@ -287,7 +288,6 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   </button>
                 )}
               </div>
-              <p className="mt-2 text-xs text-slate-400">Das Zurücksetzen öffnet weiterhin die vorhandene Sicherheitsbestätigung.</p>
             </section>
           </nav>
         </div>
@@ -1084,14 +1084,14 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
         {/* Standort direkt in der Verwaltung wechseln (24.11.) oder beide anzeigen. */}
         <div role="group" aria-label="Standort" className="flex h-10 overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
           {LOCATIONS.map((loc) => (
-            <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc}
+            <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc} style={locationStyle(loc)}
               onClick={() => { setShowAllLocations(false); handleSwitch(loc); }}
-              className={`px-3 ${!showAllLocations && selectedLocation === loc ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+              className={`px-3 ${!showAllLocations && selectedLocation === loc ? 'bg-[var(--loc-strong)] text-white' : 'text-[var(--loc-strong)] hover:bg-[var(--loc-soft)] dark:text-[var(--loc-light)]'}`}>
               {loc}
             </button>
           ))}
           <button type="button" aria-pressed={showAllLocations} onClick={() => setShowAllLocations(true)}
-            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-slate-700 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
             Alle
           </button>
         </div>
@@ -1173,14 +1173,14 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
       : isActive ? 'bg-green-600 text-white' : session ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
 
   return (
-    <div className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'border-green-500 dark:border-green-600 ring-2 ring-green-300/40 dark:ring-green-700/30' : isActive ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-800`}>
+    <div style={locationStyle(loc)} className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'border-[var(--loc-strong)] ring-2 ring-[var(--loc-soft)]' : 'border-[var(--loc-border)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
       <button
         onClick={onSwitch}
-        className={`flex w-full items-center justify-between px-4 py-3 text-left transition active:scale-[0.99] ${isSelected ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/10' : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/40 dark:hover:bg-gray-900/70'}`}
+        className={`flex w-full items-center justify-between px-4 py-3 text-left transition active:scale-[0.99] bg-[var(--loc-soft)] hover:brightness-110`}
       >
         <div className="flex items-center gap-2">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${isSelected || isActive ? 'bg-green-600' : 'bg-gray-400'} text-white`}>
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--loc-strong)] text-white`}>
             <MapPin className="h-5 w-5" />
           </div>
           <div>
@@ -1192,7 +1192,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
         </div>
         <div className="flex items-center gap-2">
           {isSelected && (
-            <span className="flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+            <span className="flex items-center gap-1 rounded-full bg-[var(--loc-strong)] px-2.5 py-1 text-xs font-bold text-white shadow-sm">
               <Check className="h-3 w-3" /> AUSGEWÄHLT
             </span>
           )}
@@ -1219,26 +1219,26 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
         )}
 
         {/* Sales stats */}
-        <div className="mb-3 rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-emerald-50 p-3 dark:border-green-800 dark:from-green-900/20 dark:to-emerald-900/10">
+        <div className="mb-3 rounded-xl border border-[var(--loc-border)] bg-[var(--loc-soft)] p-3">
           <div className="mb-2 flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Umsatz des Tages (ohne Pfand)</p>
+            <TrendingUp className="h-4 w-4 text-[var(--loc-strong)] dark:text-[var(--loc-light)]" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--loc-strong)] dark:text-[var(--loc-light)]">Umsatz des Tages (ohne Pfand)</p>
           </div>
           {sessionCount > 1 && (
-            <p className="mb-2 text-xs font-medium text-green-800/80 dark:text-green-300/80">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
+            <p className="mb-2 text-xs font-medium text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
           )}
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">Brutto</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(total)}</p>
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Brutto</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(total)}</p>
             </div>
             <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">Netto inkl. Pfand</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalNet)}</p>
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Netto inkl. Pfand</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalNet)}</p>
             </div>
             <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">MwSt inkl. Pfand</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalTax)}</p>
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt inkl. Pfand</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalTax)}</p>
             </div>
           </div>
         </div>

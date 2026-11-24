@@ -57,14 +57,14 @@ export function DateNav({ value, onChange, max, lastSalesDay }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-1.5 py-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center gap-0.5 rounded-xl border border-gray-200 bg-white px-1 py-0.5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <button type="button" onClick={() => onChange(shiftIsoDay(value, -1))} aria-label="Vorheriger Tag"
           className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="relative">
           <button type="button" onClick={openPicker} aria-label="Kalender öffnen"
-            className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-bold text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-700">
+            className="flex h-10 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-700">
             <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             {formatDateGermanFromISO(value)}
           </button>
