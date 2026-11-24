@@ -207,19 +207,39 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       if (!activationVerified(activation)) setUpdatePhase('reload');
       return;
     }
+    // 24.11.: Beim Wiederöffnen der PC-App (Chrome läuft weiter, Seite evtl. aus dem
+    // Zwischenspeicher wiederhergestellt) zuverlässig prüfen. Schlägt die Abfrage fehl
+    // (Netz nach dem Aufwachen noch nicht bereit), bald erneut versuchen statt erst
+    // nach 15 Minuten. Die installierte Version bleibt dabei unverändert nutzbar.
+    let retry: number | undefined;
+    let retryDelay = 20_000;
+    let lastCheck = 0;
     const check = () => {
       if (document.visibilityState === 'hidden') return;
+      if (Date.now() - lastCheck < 3_000) return; // focus + visibilitychange + pageshow kommen oft gleichzeitig
+      lastCheck = Date.now();
+      window.clearTimeout(retry);
       // Offer automatically only until the user chose "Später installieren".
-      void checkForUpdate(!updateDeferred.current).catch(() => undefined); // offline: keep the running app
+      void checkForUpdate(!updateDeferred.current)
+        .then(() => { retryDelay = 20_000; })
+        .catch(() => { // offline: keep the running app, try again soon
+          retry = window.setTimeout(check, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 5 * 60_000);
+        });
     };
     check();
     const timer = window.setInterval(check, 15 * 60_000);
     document.addEventListener('visibilitychange', check);
     window.addEventListener('online', check);
+    window.addEventListener('focus', check);
+    window.addEventListener('pageshow', check);
     return () => {
       window.clearInterval(timer);
+      window.clearTimeout(retry);
       document.removeEventListener('visibilitychange', check);
       window.removeEventListener('online', check);
+      window.removeEventListener('focus', check);
+      window.removeEventListener('pageshow', check);
     };
   }, [checkForUpdate]);
 
@@ -238,7 +258,16 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     const timer = window.setInterval(() => setReminderTick((n) => n + 1), 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') setReminderTick((n) => n + 1); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+    window.addEventListener('pageshow', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener('online', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('online', onVisible);
+    };
   }, []);
   useEffect(() => {
     // Neue Version tatsächlich installiert (Prüfung findet kein Update mehr): Erinnerung löschen.
