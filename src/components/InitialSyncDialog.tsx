@@ -8,7 +8,7 @@ interface Props {
   notes?: string[];
   ready?: boolean;
   /** Kassenstatus aus der Cloud (je Standort eine Zeile); null = wird geprüft. */
-  registers?: { ready: boolean; lines: string[] } | null;
+  registers?: { ready: boolean; allClosed?: boolean; lines: string[] } | null;
   error: string | null;
   percent: number;
   onPrepare: () => void;
@@ -42,11 +42,11 @@ export function InitialSyncDialog({ phase, version, installedVersion, notes, rea
           {notes && notes.length > 0 && <ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-slate-600 dark:text-slate-300">
             {notes.map(note => <li key={note}>{note}</li>)}
           </ul>}
-          <div className={`rounded-lg p-2 ${registers?.ready ? 'bg-emerald-50 dark:bg-emerald-950' : 'bg-amber-50 dark:bg-amber-950'}`}>
+          <div className={`rounded-lg p-2 ${registers?.ready && registers.allClosed ? 'bg-emerald-50 dark:bg-emerald-950' : registers?.ready ? 'bg-sky-50 dark:bg-sky-950' : 'bg-amber-50 dark:bg-amber-950'}`}>
             <p className="font-semibold">Kassenstatus (Cloud)</p>
             {registers ? registers.lines.map(line => <p key={line}>{line}</p>) : <p>Wird geprüft …</p>}
           </div>
-          <p className="font-semibold">Status: {registers && !registers.ready ? 'Noch nicht freigegeben – zuerst alle Kassen abschließen' : ready ? 'Bereit zur Installation' : 'Wird im Hintergrund vorbereitet …'}</p>
+          <p className="font-semibold">Status: {registers && !registers.ready ? 'Noch nicht freigegeben – Kassenstatus nicht prüfbar' : ready ? 'Bereit zur Installation' : 'Wird im Hintergrund vorbereitet …'}</p>
           <p className="text-xs text-slate-500">Die Kasse läuft bis zur Bestätigung unverändert weiter.</p>
         </div>}
         {phase === 'preparing' && <p role="status">Update-Dateien und Kassendaten werden geprüft …</p>}

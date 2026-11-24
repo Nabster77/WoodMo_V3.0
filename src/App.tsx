@@ -251,8 +251,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
     if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
     setAutoInstallPending(false);
-    autoUpdate.current = true;
-    void prepareUpdate();
+    // Automatisch nur, wenn alle Kassen abgeschlossen sind; sonst wartet das Update auf „Jetzt installieren“.
+    void checkRegistersClosedInCloud().then((status) => {
+      if (!status.ready || !status.allClosed) return;
+      autoUpdate.current = true;
+      void prepareUpdate();
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
   }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
 

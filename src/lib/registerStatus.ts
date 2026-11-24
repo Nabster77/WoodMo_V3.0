@@ -6,8 +6,10 @@ import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 const LOCATIONS: Location[] = ['Bregenz', 'Friedrichshafen'];
 
 export interface RegisterStatus {
-  /** true nur, wenn die Cloud geantwortet hat und KEINE Kasse offen/unvollständig ist. */
+  /** true, wenn der Kassenstatus sicher aus der Cloud geprüft wurde (Update darf starten). */
   ready: boolean;
+  /** true, wenn zusätzlich alle Kassen endgültig abgeschlossen sind (Voraussetzung nur für das automatische Update). */
+  allClosed: boolean;
   /** Eine Zeile je Standort, z. B. „Bregenz: geschlossen (TA-…, 23.11. 22:05)“. */
   lines: string[];
 }
@@ -23,14 +25,15 @@ export function isFinallyClosed(session: CashSession): boolean {
 export function summarizeRegisters(sessions: readonly CashSession[]): RegisterStatus {
   const active = sessions.filter((session) => !session.discarded);
   const lines: string[] = [];
-  let ready = true;
+  let allClosed = true;
   for (const location of LOCATIONS) {
     const own = active.filter((session) => session.location === location);
     const open = own.filter((session) => !isFinallyClosed(session));
     if (open.length) {
-      ready = false;
+      allClosed = false;
       for (const session of open) {
-        lines.push(`${location}: OFFEN seit ${time(session.openedAt)} – bitte Tagesabschluss buchen und Kasse schließen.`);
+        // 24.11.: offene Kasse sperrt das Update nicht mehr – sie wird nach dem Neustart fortgesetzt.
+        lines.push(`${location}: OFFEN seit ${time(session.openedAt)} – Kasse wird nach dem Update fortgesetzt.`);
       }
       continue;
     }
@@ -40,7 +43,7 @@ export function summarizeRegisters(sessions: readonly CashSession[]): RegisterSt
     const receipt = formatDailyCloseReceiptNumber(last.dailyCloseReceiptNumber, last.dailyCloseReceiptLocation ?? location, at, last.dailyCloseReceiptYear);
     lines.push(`${location}: geschlossen${receipt ? ` (${receipt}, ${time(at)})` : ` (${time(at)})`}.`);
   }
-  return { ready, lines };
+  return { ready: true, allClosed, lines };
 }
 
 /** Prüft den Kassenstatus direkt in der Cloud. Ohne Antwort gilt das Update als NICHT bereit. */
@@ -50,6 +53,6 @@ export async function checkRegistersClosedInCloud(): Promise<RegisterStatus> {
     return summarizeRegisters(await fetchCashSessions(latest?.generation ?? 0));
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return { ready: false, lines: [`Kassenstatus konnte nicht geprüft werden (${reason}). Bitte Internetverbindung prüfen und erneut versuchen.`] };
+    return { ready: false, allClosed: false, lines: [`Kassenstatus konnte nicht geprüft werden (${reason}). Bitte Internetverbindung prüfen und erneut versuchen.`] };
   }
 }
