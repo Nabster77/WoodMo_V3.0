@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { SpiritBadge } from '@/components/POS/ProductTile';
 import { locationStyle } from '@/lib/locationColors';
+import { exportJournalExcel } from '@/lib/journalExcel';
 import { compareJournalRows, compareJournalTransactions, type JournalSort } from '@/lib/journalOrdering';
 import { openingBalanceOfDays } from '@/lib/dayOverview';
 import { loadDailyCloseArchive, sessionCloseArchiveKey } from '@/lib/dailyCloseArchive';
@@ -262,9 +263,19 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
     cashAuditRecords: cashAuditRecordsFromSessions(relevantSessions)
       .filter((record) => record.timestamp >= start && record.timestamp <= end),
     yearlyPfandOverview,
+    spiritById: Object.fromEntries(products.filter((p) => p.spiritType).map((p) => [p.id, p.spiritType!])),
   });
   const exportReport = () => void exportJournalPdf(reportData());
   const printReport = () => openJournalPrintDialog(reportData());
+  // Excel: dieselben gefilterten Bons und Summen wie Anzeige, Druck und PDF.
+  const exportExcel = () => {
+    const data = reportData();
+    void exportJournalExcel({
+      title: summaryTitle, location: sessionLocationLabel, period: periodLabel, exportedBy: currentStaff?.name,
+      transactions: financialTx, itemTransactions: viewTx, categories, sort: journalSort, stats,
+      fileName: data.fileName ?? 'Journal',
+    }).catch((error: unknown) => alert('Excel-Export fehlgeschlagen: ' + (error instanceof Error ? error.message : String(error))));
+  };
   const visibleDailyCloses = useMemo(() => {
     const search = journalSearch.trim().toLocaleLowerCase('de-DE');
     const receiptNumber = (session: CashSession) => session.dailyCloseReceiptNumber ?? null;
@@ -322,6 +333,10 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
           >
             <FileDown className="h-3.5 w-3.5" /> PDF-Export
           </button>
+          {groupMode !== 'dailyClose' && <button onClick={exportExcel}
+            className="flex items-center gap-1.5 rounded-xl border border-emerald-600 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 dark:border-emerald-500 dark:bg-gray-800 dark:text-emerald-300 dark:hover:bg-gray-700">
+            <FileDown className="h-3.5 w-3.5" /> Excel-Export
+          </button>}
           <button
             onClick={groupMode === 'dailyClose' ? printSelectedCloses : printReport}
             disabled={groupMode === 'dailyClose' && selectedCloseReports.length === 0}

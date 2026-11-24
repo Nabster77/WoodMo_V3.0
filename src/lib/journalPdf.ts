@@ -57,6 +57,8 @@ export interface JournalReportData {
 
 export interface YearlyPfandOverview {
   year: number;
+  /** Kennzeichnung Schnaps/Likör je Artikel-ID (aus dem Katalog), nur für die Anzeige. */
+  spiritById?: Record<string, 'likoer' | 'schnaps'>;
   /** Human-readable scope, e.g. Friedrichshafen or Alle Standorte. */
   scopeLabel: string;
   pfandCollected: number;
@@ -98,10 +100,13 @@ interface LocationStats {
 }
 
 /** Artikelname mit farbig markiertem Schuss-Anteil („Glühwein + 2× Rum“). */
-function itemNameHtml(name: string): string {
+let spiritLookup: Record<string, 'likoer' | 'schnaps'> = {};
+function itemNameHtml(name: string, productId?: string): string {
   const parts = name.split(' + ');
-  if (parts.length < 2) return escapeHtml(name);
-  return `${escapeHtml(parts[0])} <span class="tag tag-shot">+ ${escapeHtml(parts.slice(1).join(' + '))}</span>`;
+  const spirit = productId ? spiritLookup[productId] : undefined;
+  const badge = spirit ? ` <span class="tag tag-${spirit}">${spirit === 'likoer' ? 'LIKÖR' : 'SCHNAPS'}</span>` : '';
+  if (parts.length < 2) return escapeHtml(name) + badge;
+  return `${escapeHtml(parts[0])}${badge} <span class="tag tag-shot">+ ${escapeHtml(parts.slice(1).join(' + '))}</span>`;
 }
 
 const LOCATION_META: Record<Location, { sub: string; color: string; bar: string }> = {
@@ -190,7 +195,7 @@ function categoryRows(txs: Transaction[], categories: Category[], sort?: Journal
     .join('');
 }
 
-function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number }> } {
+function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number; productId?: string }> } {
   const pricesByProduct = new Map<string, Set<number>>();
   for (const tx of txs) {
     for (const item of tx.items) {
@@ -200,7 +205,7 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
       pricesByProduct.set(item.productId, set);
     }
   }
-  const artMap = new Map<string, { name: string; count: number; total: number; taxRate: number }>();
+  const artMap = new Map<string, { name: string; count: number; total: number; taxRate: number; productId?: string }>();
   for (const tx of txs) {
     for (const item of tx.items) {
       if (item.isPfandRetoure) continue;
@@ -210,7 +215,7 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
       const variable = (pricesByProduct.get(item.productId)?.size ?? 0) > 1;
       const label = !sort && variable ? `${item.name} (${formatCurrency(item.price)})` : item.name;
       const isTaxFree = isTaxFreeItem(item);
-      if (!artMap.has(key)) artMap.set(key, { name: label, count: 0, total: 0, taxRate: isTaxFree ? 0 : item.taxRate });
+      if (!artMap.has(key)) artMap.set(key, { name: label, count: 0, total: 0, taxRate: isTaxFree ? 0 : item.taxRate, productId: item.productId });
       const g = artMap.get(key)!;
       g.count += item.quantity;
       g.total += item.price * item.quantity;
@@ -218,10 +223,10 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
   }
   const ordered = [...artMap.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total);
   const rows = ordered
-    .map((g) => `<tr><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g) => `<tr><td>${itemNameHtml(g.name, g.productId)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   const bestRows = (sort ? ordered : [...artMap.values()].filter(g => g.total > 0).sort((a, b) => b.count - a.count).slice(0, 10))
-    .map((g, i) => `<tr><td>${i + 1}</td><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g, i) => `<tr><td>${i + 1}</td><td>${itemNameHtml(g.name, g.productId)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   return { rows, bestRows, artMap };
 }
@@ -572,6 +577,7 @@ function selectedJournalSection(data: JournalReportData, view: NonNullable<Journ
 
 export function buildJournalHTML(data: JournalReportData): string {
   const { headerLabel, location, transactions, stornos = [], categories, fileName, exportedByName, cashAuditRecords = [], staffTimeRecords = [], documentTitle = 'Kassenjournal', documentStatus, receiptNumber, cashSessionPeriod, dailyCloseCash, yearlyPfandOverview } = data;
+  spiritLookup = data.spiritById ?? {};
   const generatedAt = new Date().toLocaleString('de-DE');
   const generatedTime = new Date().toLocaleTimeString('de-DE');
   const isBregenzReport = location.toLowerCase().includes('bregenz');
@@ -645,6 +651,8 @@ export function buildJournalHTML(data: JournalReportData): string {
     .print-running-header, .print-running-footer { display: none; }
     .tag { display: inline-block; border-radius: 4px; padding: 0 5px; font-size: 10px; font-weight: 700; color: #fff; }
     .tag-shot { background: #b45309; }
+    .tag-schnaps { background: #ef4444; }
+    .tag-likoer { background: #8b5cf6; }
     h2 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     caption { caption-side: top; text-align: left; font-size: 16px; font-weight: bold; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     .table-title-row th { text-align: left; text-transform: none; font-size: 16px; color: #1e3a5f; background: transparent; border-bottom: 1px solid #cbd5e1; padding: 20px 0 8px; }
