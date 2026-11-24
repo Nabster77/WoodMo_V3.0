@@ -1,5 +1,5 @@
 import { activeSessionForLocation } from '@/lib/cashSessionSelection';
-import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBalanceCarry';
+import { canDiscardCashSession, openingBalanceForLocation, openingBalanceCarryForLocation } from '@/lib/cashBalanceCarry';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useStore } from '@/hooks/useStore';
@@ -525,6 +525,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     const latestFor = (location: Location) => openingBalanceForLocation(store.cashSessions, store.transactions, location);
     return { Friedrichshafen: latestFor('Friedrichshafen'), Bregenz: latestFor('Bregenz') };
   }, [store.cashSessions, store.transactions, store.categories]);
+  // 24.11.: Datum des Abschlusses, aus dem der übertragbare Bestand stammt.
+  const openingBalanceDates = useMemo<Record<Location, number | null>>(() => ({
+    Friedrichshafen: openingBalanceCarryForLocation(store.cashSessions, store.transactions, 'Friedrichshafen').at,
+    Bregenz: openingBalanceCarryForLocation(store.cashSessions, store.transactions, 'Bregenz').at,
+  }), [store.cashSessions, store.transactions]);
 
   // The browser profile may be new while the personnel list already exists in
   // the cloud. Load it again once the cloud session is definitely available.
@@ -1280,6 +1285,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             onDiscardEmptySession={discardUnusedSession}
             onHome={goHome}
             openingBalanceSuggestions={openingBalanceSuggestions}
+            openingBalanceDates={openingBalanceDates}
             openSessionsByLocation={openSessionsByLocation}
             onContinueSessionAt={continueOpenSessionAt}
           />
