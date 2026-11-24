@@ -1296,6 +1296,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               activeSession={store.activeSession}
               selectedLocation={store.selectedLocation}
               onSwitchLocation={store.switchLocation}
+              // 24.11.: Ausgewählte Kasse aus der Kassen-Übersicht bedienen (bestehender Ablauf wie Kachel „Kasse“).
+              onOpenCash={() => {
+                navigateTo('pos');
+                if (!store.activeSession || !currentStaff) setCashierLoginRequest((n) => n + 1);
+              }}
               onAddCategory={store.addCategory}
               onUpdateCategory={store.updateCategory}
               onDeleteCategory={store.deleteCategory}

@@ -44,6 +44,7 @@ interface Props {
   activeSession: CashSession | null;
   selectedLocation: Location;
   onSwitchLocation: (loc: Location) => void;
+  onOpenCash?: () => void;
   onAddCategory: (data: Omit<Category, 'id'>) => void;
   onUpdateCategory: (id: string, data: Partial<Omit<Category, 'id'>>) => void;
   onDeleteCategory: (id: string) => void;
@@ -295,7 +296,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} stornos={props.stornos} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
+        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} stornos={props.stornos} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} onOpenCash={props.onOpenCash} exportedByName={props.currentStaff?.name} />
           : tab === 'categories' ? <CategoryManager {...props} />
             : tab === 'products' ? <ProductManager {...props} testMode={testMode} />
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
@@ -966,7 +967,7 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
 
 // ---- Live Session Overview ----
 
-function LiveSessionOverview({ transactions, cashSessions, stornos, categories, activeSession, selectedLocation, onSwitchLocation, exportedByName }: {
+function LiveSessionOverview({ transactions, cashSessions, stornos, categories, activeSession, selectedLocation, onSwitchLocation, onOpenCash, exportedByName }: {
   transactions: Transaction[];
   stornos: StornoRecord[];
   cashSessions: CashSession[];
@@ -974,6 +975,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   activeSession: CashSession | null;
   selectedLocation: Location;
   onSwitchLocation: (loc: Location) => void;
+  onOpenCash?: () => void;
   exportedByName?: string;
 }) {
   // 24.11.: Beim Öffnen die offene Kasse des gewählten Standorts zeigen, sonst heute.
@@ -1136,6 +1138,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             onExport={() => exportLocation(data.loc, data.txToday)}
             onPrint={() => printLocation(data.loc, data.txToday)}
             onSwitch={() => handleSwitch(data.loc)}
+            onOpenCash={isToday && selectedLocation === data.loc ? onOpenCash : undefined}
             onInfo={() => setInfoLocation(data.loc)}
           />
         ))}
@@ -1162,7 +1165,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   );
 }
 
-function LocationSessionCard({ loc, session, sessionCount, total, count, totalTax, totalPfand, pfandCollected, pfandReturned, closes, onReport, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
+function LocationSessionCard({ loc, session, sessionCount, total, count, totalTax, totalPfand, pfandCollected, pfandReturned, closes, onReport, onOpenCash, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
   loc: Location;
   session: CashSession | null;
   sessionCount: number;
@@ -1174,6 +1177,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
   pfandReturned: number;
   closes: CashSession[];
   onReport: (session: CashSession) => void;
+  onOpenCash?: () => void;
   cashBalance: number;
   taxByRateMap: Map<number, number>;
   txToday: Transaction[];
@@ -1208,10 +1212,10 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
       : isActive ? 'bg-green-600 text-white' : session ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
 
   return (
-    <div style={locationStyle(loc)} className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
+    <div style={locationStyle(loc)} onClick={isSelected ? undefined : onSwitch} className={`${isSelected ? '' : 'cursor-pointer '}overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
       <div role="button" tabIndex={0}
-        onClick={onSwitch}
+        onClick={(e) => { e.stopPropagation(); onSwitch(); }}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitch(); } }}
         className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left transition bg-[var(--loc-soft)] hover:brightness-110`}
       >
@@ -1355,6 +1359,13 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-95">
             <Info className="h-4 w-4" /> Info
           </button>
+          {/* 24.11.: Ausgewählte Kasse bedienen – öffnet nur die Kasse bzw. den bestehenden Eröffnungsablauf. */}
+          {onOpenCash && (
+            <button type="button" onClick={onOpenCash}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[var(--loc-strong)] px-4 text-sm font-bold text-white transition hover:brightness-110 active:scale-95">
+              <MonitorDot className="h-4 w-4" /> {session && !session.closed ? 'Kasse weiterführen' : 'Kasse eröffnen'}
+            </button>
+          )}
           <div className="ml-auto flex gap-2">
             <button onClick={onExport} disabled={txToday.length === 0}
               className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
