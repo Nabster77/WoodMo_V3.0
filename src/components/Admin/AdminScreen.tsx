@@ -1212,7 +1212,11 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
       : isActive ? 'bg-green-600 text-white' : session ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
 
   return (
-    <div style={locationStyle(loc)} onClick={isSelected ? undefined : onSwitch} className={`${isSelected ? '' : 'cursor-pointer '}overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
+    <div style={locationStyle(loc)} onClick={(e) => {
+        // 24.11.: Freie Kartenfläche wählt den Standort; Bedienelemente behalten ihre eigene Aktion.
+        if (isSelected || (e.target as HTMLElement).closest('button, a, input, select, summary, [role="dialog"]')) return;
+        onSwitch();
+      }} className={`${isSelected ? '' : 'cursor-pointer '}overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
       <div role="button" tabIndex={0}
         onClick={(e) => { e.stopPropagation(); onSwitch(); }}
