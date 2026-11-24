@@ -28,10 +28,11 @@ const DENOMINATIONS: { label: string; value: number }[] = [
   { label: '20 Euro', value: 20 },
   { label: '50 Euro', value: 50 },
   { label: '100 Euro', value: 100 },
+  { label: '200 Euro', value: 200 },
 ];
 
-const COINS = DENOMINATIONS.filter((denomination) => denomination.value < 1);
-const NOTES = DENOMINATIONS.filter((denomination) => denomination.value >= 1);
+const COINS = DENOMINATIONS.filter((denomination) => denomination.value < 5);
+const NOTES = DENOMINATIONS.filter((denomination) => denomination.value >= 5);
 
 type MovementKind = 'Pfandausgabe' | 'Bareinnahme' | 'Karteneinnahme' | 'Storno' | 'Einlage' | 'Ausgabe' | 'Korrektur';
 
@@ -107,7 +108,8 @@ interface Props {
 export function DailyCloseDialog({ session, transactions, stornos = [], currentStaff, onClose, onCancel }: Props) {
   const [counts, setCounts] = useState<Record<number, string>>({});
   const [differenceReason, setDifferenceReason] = useState('');
-  const [useCounting, setUseCounting] = useState(true);
+  const [useCounting, setUseCounting] = useState(false); // 24.11.: Standard „Direkt“
+  const [manualInput, setManualInput] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -211,14 +213,16 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
   const coinTotal = countValue(COINS);
   const noteTotal = countValue(NOTES);
 
-    const hasInput = useCounting ? Object.values(counts).some((v) => v.trim() !== '') : false;
-  const closingBalance = useCounting && hasInput ? countedTotal : expected;
+  const manualValue = Math.round((parseFloat(manualInput.trim().replace(/\s/g, '').replace(',', '.')) || 0) * 100) / 100;
+  const hasInput = useCounting ? Object.values(counts).some((v) => v.trim() !== '') : manualInput.trim() !== '';
+  const closingBalance = hasInput ? (useCounting ? countedTotal : manualValue) : expected;
+  const grossWithPfand = Math.round(sessionTx.reduce((sum, transaction) => sum + transaction.total, 0) * 100) / 100;
   const diff = closingBalance - expected;
   const closingWithdrawalAmount = Math.max(0, parseFloat(closingWithdrawalInput.replace(',', '.')) || 0);
   // The next opening balance is always determined from the booked cash
   // movements. A counted/manual value is only a control value and must not
   // accidentally overwrite the mathematical closing balance.
-  const remainingCash = Math.round((expected - closingWithdrawalAmount) * 100) / 100;
+  const remainingCash = Math.round((closingBalance - closingWithdrawalAmount) * 100) / 100;
 
     function beginClose() {
     if (isNaN(closingBalance) || closingBalance < 0 || !confirmed) return;
@@ -236,8 +240,8 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
       setCloseError('Bei einer Kassenabweichung ist eine Begruendung Pflicht.');
       return;
     }
-    if (closingWithdrawalAmount > closingBalance || closingWithdrawalAmount > expected) {
-      setCloseError('Die Entnahme darf nicht höher sein als der rechnerische Kassenbestand.');
+    if (closingWithdrawalAmount > closingBalance) {
+      setCloseError('Die Entnahme darf nicht höher sein als der tatsächliche Kassenbestand.');
       return;
     }
     setCloseError(null);
@@ -274,153 +278,135 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          <div className="mb-4">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Standort: {session.location}</p>
-            <p className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
-              Kasseneröffnung: {formatCashSessionTimestamp(session.openedAt)}
-            </p>
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              Endgültiger Tagesabschluss: {session.closed && verifiedCloseTimestamp(session) !== null
-                ? formatCashSessionTimestamp(verifiedCloseTimestamp(session)!)
-                : 'Noch nicht gebucht'}
-            </p>
-            <p className={`mt-1 text-sm font-bold ${session.closed ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+          <div className="mb-3 text-sm">
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100">{session.location}</p>
+            <p className="text-gray-600 dark:text-gray-300">Eröffnet: {formatCashSessionTimestamp(session.openedAt)}</p>
+            <p className={`font-bold ${session.closed ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
               {session.closed ? 'Endgültig abgeschlossen' : 'Entwurf – noch nicht endgültig abgeschlossen'}
             </p>
+            {session.closed && verifiedCloseTimestamp(session) !== null && <p className="text-gray-600 dark:text-gray-300">Abgeschlossen: {formatCashSessionTimestamp(verifiedCloseTimestamp(session)!)}</p>}
             {session.dailyCloseReceiptNumber && <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Belegnummer: {formatDailyCloseReceiptNumber(session.dailyCloseReceiptNumber, session.dailyCloseReceiptLocation ?? session.location, session.closedAt ?? session.openedAt, session.dailyCloseReceiptYear)}</p>}
           </div>
 
-          {/* Kassenbestand: nur Bargeld, von oben nach unten gerechnet */}
+          {/* 1) Kassenbestand kompakt (nur Bargeld) */}
           <div className="mb-3 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Kassenbestand (nur Bargeld)</p>
-            {openingView ? (
-              <>
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Kassenbestand (nur Bargeld)</p>
+              <p className="text-lg font-extrabold text-gray-900 dark:text-gray-100"><MoneyAmount value={expected} /></p>
+            </div>
+            <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
+            <Row label="Bargeldeinnahmen (Barbons inkl. Pfand)" value={signedAmountLabel(cashTillTransactionTotal, formatCurrency)} />
+            {Math.abs(deposits - withdrawals) >= 0.005 && <Row label="Einlagen / Ausgaben" value={signedAmountLabel(deposits - withdrawals, formatCurrency)} />}
+            <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
+              <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Kartenzahlungen zählen zum Umsatz, nicht zum Bargeld.</p>
+          </div>
+
+          {/* 2) Tagesumsatz */}
+          <div className="mb-3 rounded-2xl bg-green-50 p-4 dark:bg-green-900/30">
+            <p className="mb-2 text-sm font-bold text-green-700 dark:text-green-400">Tagesumsatz</p>
+            <div className="space-y-1 text-sm text-green-800 dark:text-green-300">
+              <Row label="Umsatz brutto, ohne Pfand" value={<MoneyAmount value={txTotal} />} bold />
+              <Row label="Umsatz brutto, mit Pfand" value={<MoneyAmount value={grossWithPfand} />} />
+              <Row label="davon bar (brutto, ohne Pfand)" value={<MoneyAmount value={cashTxTotal} />} />
+              <Row label="davon Karte (brutto, ohne Pfand)" value={<MoneyAmount value={cardTxTotal} />} />
+              <Row label="Netto-Umsatz (inkl. Pfand)" value={<MoneyAmount value={totalNet} />} />
+              <Row label="Enthaltene MwSt (Ware + Pfand)" value={<MoneyAmount value={totalTax} />} />
+            </div>
+          </div>
+
+          {/* Mehr Infos: alle weiteren Kassenbewegungen und MwSt-Aufteilung */}
+          <details className="mb-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+            <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200">
+              <ChevronDown className="h-4 w-4" /> Mehr Infos
+            </summary>
+            <div className="space-y-1.5 border-t border-gray-200 p-4 dark:border-gray-700">
+              {openingView && <>
                 <Row label="Übernommen vom Vortag" value={formatCurrency(openingView.carriedBalance)} />
                 {openingView.lines.map((line) => (
                   <Row key={line.timestamp} label={`Korrektur Anfangsbestand · ${formatTime(line.timestamp)} · ${line.employeeName ?? 'unbekannt'}${line.reason ? ` · Grund: ${line.reason}` : ''}`} value={signedAmountLabel(line.amount, formatCurrency)} />
                 ))}
-                <Row label="= Anfangsbestand (Ist)" value={<MoneyAmount value={session.openingBalance} />} bold />
-              </>
-            ) : (
-              <Row label="Anfangsbestand" value={<MoneyAmount value={session.openingBalance} />} />
-            )}
-            <Row label="Barumsatz (ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
-            <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
-            <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
-            <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
-            <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
-            <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
-              <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
-            </div>
-          </div>
-
-          {/* Umsatz zur Information: Karte fließt nicht in den Kassenbestand */}
-          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Umsatz des Tages (zur Information)</p>
-            <Row label="Umsatz gesamt (ohne Pfand)" value={<MoneyAmount value={txTotal} />} bold />
-            <Row label="davon bar" value={<MoneyAmount value={cashTxTotal} />} />
-            <Row label="davon Karte (nicht in der Kasse)" value={<MoneyAmount value={cardTxTotal} />} />
-          </div>
-
-          {/* Tax breakdown */}
-          <div className="mb-4 space-y-1.5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/40">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Mehrwertsteuer</p>
-            <Row label="Nettoumsatz (inkl. Pfand)" value={<MoneyAmount value={totalNet} />} />
-            {sortedRateKeys(taxByRate).map((rate) => (
-              <Row key={rate} label={`MwSt ${rate}%`} value={formatCurrency(taxByRate.get(rate) ?? 0)} />
-            ))}
-            <Row label="MwSt gesamt (inkl. Pfand)" value={<MoneyAmount value={totalTax} />} bold />
-            {Math.abs(pfandTax) >= 0.005 && <Row label="davon MwSt auf Pfand" value={formatCurrency(pfandTax)} />}
-          </div>
-
-          {/* Collapsible transaction and cash movement groups */}
-          {movementGroups.length > 0 && (
-            <div className="mb-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Transaktionen und Kassenbewegungen</p>
-              <div className="space-y-2">
-                {movementGroups.map(({ kind, records }) => {
-                  const total = records.reduce((sum, record) => sum + record.amount, 0);
-                  const expanded = !!expandedMovementGroups[kind];
-                  return (
-                    <div key={kind} className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedMovementGroups((current) => ({ ...current, [kind]: !current[kind] }))}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 dark:hover:bg-gray-900/40"
-                        aria-expanded={expanded}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${movementColor(kind)}`}>{kind}</span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{records.length} Buchung{records.length === 1 ? '' : 'en'}</span>
-                        </span>
-                        <span className={`shrink-0 font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={total} /></span>
-                      </button>
-                      {expanded && (
-                        <div className="border-t border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/30">
-                          {records.map((record) => (
-                            <div key={record.id} className="flex items-start justify-between gap-3 border-b border-gray-200 py-2 last:border-0 dark:border-gray-700">
-                              <div className="min-w-0 text-sm">
-                                <p className="font-medium text-gray-800 dark:text-gray-200">{formatTime(record.timestamp)} · {record.employeeName ?? 'Nicht zugeordnet'}</p>
-                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{record.details}</p>
+              </>}
+              <Row label="Barumsatz (brutto, ohne Pfand)" value={`+ ${formatCurrency(cashTxTotal)}`} />
+              <Row label="Pfandeinnahmen (bar)" value={`+ ${formatCurrency(cashPfandIncome)}`} />
+              <Row label="Pfandretouren (bar)" value={`- ${formatCurrency(cashPfandPayout)}`} />
+              <Row label="Bareinlagen" value={`+ ${formatCurrency(deposits)}`} />
+              <Row label="Barausgaben" value={`- ${formatCurrency(withdrawals)}`} />
+              {sortedRateKeys(taxByRate).map((rate) => (
+                <Row key={rate} label={`MwSt ${rate}%`} value={formatCurrency(taxByRate.get(rate) ?? 0)} />
+              ))}
+              {Math.abs(pfandTax) >= 0.005 && <Row label="davon MwSt auf Pfand" value={formatCurrency(pfandTax)} />}
+              {movementGroups.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  {movementGroups.map(({ kind, records }) => {
+                    const total = records.reduce((sum, record) => sum + record.amount, 0);
+                    const expanded = !!expandedMovementGroups[kind];
+                    return (
+                      <div key={kind} className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                        <button type="button" onClick={() => setExpandedMovementGroups((current) => ({ ...current, [kind]: !current[kind] }))}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 dark:hover:bg-gray-900/40" aria-expanded={expanded}>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${movementColor(kind)}`}>{kind}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{records.length} Buchung{records.length === 1 ? '' : 'en'}</span>
+                          </span>
+                          <span className={`shrink-0 font-bold ${total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={total} /></span>
+                        </button>
+                        {expanded && (
+                          <div className="border-t border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/30">
+                            {records.map((record) => (
+                              <div key={record.id} className="flex items-start justify-between gap-3 border-b border-gray-200 py-2 last:border-0 dark:border-gray-700">
+                                <div className="min-w-0 text-sm">
+                                  <p className="font-medium text-gray-800 dark:text-gray-200">{formatTime(record.timestamp)} · {record.employeeName ?? 'Nicht zugeordnet'}</p>
+                                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{record.details}</p>
+                                </div>
+                                <span className={`shrink-0 text-sm font-semibold ${record.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={record.amount} /></span>
                               </div>
-                              <span className={`shrink-0 text-sm font-semibold ${record.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}><MoneyAmount value={record.amount} /></span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </details>
 
-          {/* Closing balance: counting or manual */}
+          {/* 3) Tatsächlicher Kassenbestand: Direkt (Standard) oder Geld-Zählhilfe */}
           <div className="mb-3">
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tatsächlicher Kassenbestand</label>
               <div className="flex gap-1 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900/60">
-                <button onClick={() => setUseCounting(true)}
-                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${useCounting ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-                  <Calculator className="h-3 w-3" /> Stückeln
-                </button>
                 <button onClick={() => setUseCounting(false)}
-                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${!useCounting ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
+                  className={`flex min-h-9 items-center gap-1 rounded-md px-3 text-xs font-semibold transition ${!useCounting ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
                   Direkt
+                </button>
+                <button onClick={() => setUseCounting(true)}
+                  className={`flex min-h-9 items-center gap-1 rounded-md px-3 text-xs font-semibold transition ${useCounting ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
+                  <Calculator className="h-3 w-3" /> Geld-Zählhilfe
                 </button>
               </div>
             </div>
 
             {useCounting ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-                <DenominationGroup
-                  title="Münzen"
-                  subtitle="1 Cent bis 50 Cent"
-                  icon={<Coins className="h-4 w-4" />}
-                  denominations={COINS}
-                  counts={counts}
-                  total={coinTotal}
-                  onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))}
-                />
-                <DenominationGroup
-                  title="Scheine"
-                  subtitle="1 € bis 100 €"
-                  icon={<Banknote className="h-4 w-4" />}
-                  denominations={NOTES}
-                  counts={counts}
-                  total={noteTotal}
-                  onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))}
-                />
+                <DenominationGroup title="Münzen" subtitle="1 Cent bis 2 Euro" icon={<Coins className="h-4 w-4" />} labelClass="text-orange-700 dark:text-orange-400"
+                  denominations={COINS} counts={counts} total={coinTotal}
+                  onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
+                <DenominationGroup title="Scheine" subtitle="5 € bis 200 €" icon={<Banknote className="h-4 w-4" />} labelClass="text-green-800 dark:text-green-400"
+                  denominations={NOTES} counts={counts} total={noteTotal}
+                  onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
                 <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700">
                   <span className="text-xs text-gray-500 dark:text-gray-400">Leere Felder zählen als 0. Gesamtsumme:</span>
                   <span className="text-base font-bold text-gray-900 dark:text-gray-100"><MoneyAmount value={countedTotal} /></span>
                 </div>
               </div>
-                        ) : (
-              <output className="block w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" aria-label="Rechnerischer Kassenbestand - nicht editierbar">
-                {formatCurrency(expected)}
-              </output>
+            ) : (
+              <input value={manualInput} onChange={(event) => { setManualInput(event.target.value.replace(/[^\d.,]/g, '')); setCloseError(null); }}
+                inputMode="decimal" placeholder={`${formatCurrency(expected)} (leer = erwarteter Bestand)`} aria-label="Tatsächlicher Kassenbestand in Euro"
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-base font-bold text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
             )}
           </div>
 
@@ -431,7 +417,7 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
             </div>
           )}
 
-          {useCounting && hasInput && Math.abs(diff) > 0.01 && (
+          {hasInput && Math.abs(diff) > 0.01 && (
             <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Begruendung der Kassenabweichung (Pflichtfeld)
               <textarea value={differenceReason} onChange={event => setDifferenceReason(event.target.value)}
@@ -442,78 +428,65 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
 
           {hasInput && !isNaN(closingBalance) && Math.abs(diff) <= 0.01 && (
             <div className="mb-3 flex items-center gap-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-              <Check className="h-4 w-4" />
-              Kassenbestand stimmt mit dem errechneten Bestand überein.
+              <Check className="h-4 w-4" /> Kassenbestand stimmt mit dem erwarteten Bestand überein.
             </div>
           )}
-
-          <div className="mb-3 rounded-xl bg-green-50 p-3 dark:bg-green-900/30">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-500">Tagesumsatz</p>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-sm text-green-700 dark:text-green-400">
-                <span>Brutto-Umsatz (ohne Pfand)</span>
-                <span className="text-lg font-bold text-green-700 dark:text-green-400"><MoneyAmount value={txTotal} /></span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>davon Barumsatz (ohne Pfand)</span>
-                <span className="font-medium"><MoneyAmount value={cashTxTotal} /></span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>davon Kartenumsatz (ohne Pfand)</span>
-                <span className="font-medium"><MoneyAmount value={cardTxTotal} /></span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>Netto-Umsatz (inkl. Pfand)</span>
-                <span className="font-medium"><MoneyAmount value={totalNet} /></span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-green-700/80 dark:text-green-500">
-                <span>Enthaltene Mehrwertsteuer (Ware + Pfand)</span>
-                <span className="font-medium"><MoneyAmount value={totalTax} /></span>
-              </div>
-            </div>
-          </div>
 
           {!hasInput && (
             <div className="mb-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
-              Keine Stückelung eingegeben. Beim Abschließen wird der errechnete Bestand (<MoneyAmount value={expected} />) als Ist-Bestand übernommen.
+              Kein Betrag eingegeben. Beim Abschließen wird der erwartete Bestand (<MoneyAmount value={expected} />) als Ist-Bestand übernommen.
             </div>
           )}
 
-          {closeError && (
+          {closeError && !withdrawalStep && (
             <div className="mb-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300">
               {closeError}
             </div>
           )}
 
-          {withdrawalStep && (
-            <div className="mb-3 rounded-2xl border border-red-300 bg-red-50 p-4 text-sm dark:border-red-800 dark:bg-red-900/20">
-              <p className="font-bold text-red-900 dark:text-red-100">Entnahme zum Tagesabschluss</p>
-              <p className="mt-1 text-red-800 dark:text-red-200">Möchten Sie Geld aus der Kasse entnehmen? Ein Grund ist nicht erforderlich. Der Rest wird als Anfangsbestand für die nächste Kassenöffnung an diesem Standort vorgeschlagen.</p>
-              <label className="mt-3 block font-medium text-gray-700 dark:text-gray-200">Entnahmebetrag (€)
-                <input value={closingWithdrawalInput} onChange={(event) => { setClosingWithdrawalInput(event.target.value); setCloseError(null); }} placeholder="0,00 (keine Entnahme)" inputMode="decimal" className="mt-1.5 w-full rounded-xl border border-red-300 bg-white px-3 py-2.5 text-base text-gray-900 dark:border-red-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <div className="mt-3 space-y-1 rounded-xl bg-white/70 p-3 dark:bg-gray-900/50">
-                <Row label="Kassenbestand vor Entnahme" value={<MoneyAmount value={expected} />} />
-                <Row label="Entnahme" value={`- ${formatCurrency(closingWithdrawalAmount)}`} />
-                <Row label="Restbestand / nächster Anfangsbestand" value={<MoneyAmount value={remainingCash} />} bold />
-              </div>
-            </div>
-          )}
-
           <label className="mb-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="h-4 w-4 rounded accent-blue-600" />
+            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="h-5 w-5 rounded accent-blue-600" />
             Ich bestätige, dass der Tagesabschluss korrekt ist. Nach dem Abschließen ist er nicht mehr änderbar.
           </label>
         </div>
+
+        {/* 4) Eigener Dialog: optionale Entnahme, erst hier wird endgültig abgeschlossen */}
+        {withdrawalStep && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-gray-800">
+              <p className="text-lg font-bold text-gray-900 dark:text-gray-100">Entnahme zum Tagesabschluss · {session.location}</p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Optional: Geld aus der Kasse nehmen. Der Rest wird als Anfangsbestand für die nächste Kassenöffnung an diesem Standort vorgeschlagen.</p>
+              <label className="mt-3 block text-sm font-medium text-gray-700 dark:text-gray-200">Entnahmebetrag (€)
+                <input value={closingWithdrawalInput} onChange={(event) => { setClosingWithdrawalInput(event.target.value.replace(/[^\d.,]/g, '')); setCloseError(null); }} placeholder="0,00 (keine Entnahme)" inputMode="decimal"
+                  className="mt-1.5 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <div className="mt-3 space-y-1 rounded-xl bg-gray-50 p-3 dark:bg-gray-900/50">
+                <Row label="Tatsächlicher Bestand vor Entnahme" value={<MoneyAmount value={closingBalance} />} />
+                <Row label="Entnahme" value={`- ${formatCurrency(closingWithdrawalAmount)}`} />
+                <Row label="Restbestand = nächster Anfangsbestand" value={<MoneyAmount value={remainingCash} />} bold />
+              </div>
+              {remainingCash < 0 && <p className="mt-2 text-sm font-semibold text-red-600 dark:text-red-400">Die Entnahme ist höher als der Kassenbestand.</p>}
+              {closeError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{closeError}</p>}
+              <div className="mt-4 flex gap-2">
+                <button type="button" onClick={() => { setWithdrawalStep(false); setCloseError(null); }} disabled={isFinalizing}
+                  className="flex-1 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-200">Zurück</button>
+                <button type="button" onClick={() => void handleClose()} disabled={isFinalizing || remainingCash < 0}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-blue-700 disabled:opacity-50">
+                  <Check className="h-4 w-4" /> {isFinalizing ? 'Beleg wird erstellt …' : closingWithdrawalAmount > 0 ? 'Mit Entnahme abschließen' : 'Ohne Entnahme abschließen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2 border-t border-gray-200 p-4 dark:border-gray-700">
           <button onClick={handlePDFExport}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
             <FileDown className="h-4 w-4" /> PDF-Export
           </button>
-          <button onClick={() => withdrawalStep ? void handleClose() : beginClose()} disabled={isFinalizing || isNaN(closingBalance) || closingBalance < 0 || !confirmed}
+          <button onClick={beginClose} disabled={isFinalizing || isNaN(closingBalance) || closingBalance < 0 || !confirmed}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 active:scale-95 disabled:opacity-50">
-            <Check className="h-4 w-4" /> {isFinalizing ? 'Beleg wird erstellt …' : withdrawalStep ? 'Mit Entnahme endgültig abschließen' : 'Endgültig abschließen'}
+            <Check className="h-4 w-4" /> Endgültig abschließen
           </button>
         </div>
       </div>
@@ -522,6 +495,7 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
 }
 
 function DenominationGroup({
+  labelClass = 'text-gray-700 dark:text-gray-300',
   title,
   subtitle,
   icon,
@@ -533,6 +507,7 @@ function DenominationGroup({
   title: string;
   subtitle: string;
   icon: ReactNode;
+  labelClass?: string;
   denominations: typeof DENOMINATIONS;
   counts: Record<number, string>;
   total: number;
@@ -554,7 +529,7 @@ function DenominationGroup({
           const itemTotal = Number.isNaN(quantity) || quantity < 1 ? 0 : quantity * denomination.value;
           return (
             <label key={denomination.value} className="rounded-lg bg-gray-50 px-2 py-1.5 dark:bg-gray-900/60">
-              <span className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-gray-200">
+              <span className={`mb-1 flex items-center justify-between text-xs font-bold ${labelClass}`}>
                 {denomination.label}
                 <span className="font-normal text-gray-500 dark:text-gray-400"><MoneyAmount value={itemTotal} /></span>
               </span>
