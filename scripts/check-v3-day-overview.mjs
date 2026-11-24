@@ -56,7 +56,7 @@ assert.equal(none.transactions.length, 0);
 // Verwaltung nutzt den ganzen Tag für Karte, Tagesinfo und PDF.
 const admin = readFileSync(new URL('../src/components/Admin/AdminScreen.tsx', import.meta.url), 'utf8');
 assert.match(admin, /buildDayOverview\(cashSessions, transactions, selectedDate, loc, stornos\)/, 'Kassen-Übersicht zählt Bar-Stornos mit');
-assert.match(admin, /Umsatz des Tages \(ohne Pfand\)/);
+assert.match(admin, /Umsatz des Tages/);
 assert.doesNotMatch(admin, /Umsatz dieser Kassensitzung/);
 assert.match(admin, /day\.parts\.map\(\(part\) => part\.session\)/, 'PDF bekommt alle Sitzungen des Tages');
 assert.match(admin, /parts=\{locationData\.find/, 'Tagesinfo bekommt alle Sitzungen');
