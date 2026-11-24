@@ -5,7 +5,7 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
-import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
+import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
 import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
 import { computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
 import { JournalPreviewDialog } from '@/components/Journal/JournalPreviewDialog';
