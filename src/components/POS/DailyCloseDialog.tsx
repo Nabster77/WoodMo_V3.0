@@ -256,6 +256,7 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
             <div className="border-t border-gray-200 pt-1.5 dark:border-gray-700">
               <Row label="= Erwarteter Kassenbestand" value={<MoneyAmount value={expected} />} bold />
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Kartenzahlungen zählen zum Umsatz, nicht zum Bargeld.</p>
             {/* 2) Tagesumsatz direkt darunter, im selben Block (Karte zählt zum Umsatz, nicht zum Bargeld) */}
             <div className="mt-2 rounded-xl bg-green-50 p-3 dark:bg-green-900/30">
               <p className="mb-1.5 text-sm font-bold text-green-700 dark:text-green-400">Tagesumsatz</p>
