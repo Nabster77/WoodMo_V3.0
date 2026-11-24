@@ -1,14 +1,16 @@
 {
-  "title": "WOODMO Update: Journal, Favoriten, Update-Ablauf",
+  "title": "WOODMO Update 3.39: Kassenübersicht, Berichte, Update-Hinweis",
   "notes": [
-    "Journal: „Filter“ bündelt Standort (auch alle Standorte), Zeitraum und Auswertung. Datum per ‹ ›, Kalender oder Wischen; „Letzter Umsatztag“.",
-    "Kassen-Übersicht zeigt zuerst den ausgewählten Standort (umschaltbar auf alle) mit derselben Datumsnavigation.",
-    "Warenkorb kompakt: „+ Pfand“, „+ n× Schuss Sorte“; Schussauswahl nennt den Standort; Bon und Journal zeigen Schusssorte und Anzahl.",
-    "Favoritenkacheln lassen sich mit Maus und Touch verschieben. Ihre Reihenfolge wird separat gespeichert.",
-    "Beim Start prüft die App im Hintergrund auf Updates und gleicht die Kassendaten automatisch ab.",
-    "Updates werden nach Ordnerprüfung, erfolgreicher Cloud-Synchronisierung und Bestätigung aktiviert.",
-    "Kachelreihenfolge, Favoriten und Bildschalter pro Warengruppe bleiben erhalten. Neue Artikel stehen am Ende ihrer Warengruppe.",
-    "Offene Übertragungen erhalten zusätzlich eine Wiederherstellungskopie im gewählten Kassenordner.",
-    "Manuelle Cloud-Abgleiche laufen über „Synchronisieren“."
+    "Kassen-Übersicht: Umsatz brutto, Pfand eingenommen, Pfandretoure, MwSt. je Steuersatz und Netto auf einen Blick; Verkäufe einklappbar.",
+    "Tagesabschlüsse des Tages über das Klappmenü „Berichte“ (sortierbar). Eine über Nacht offene Kasse erscheint unter dem heutigen Datum.",
+    "Admins wechseln per Klick auf die Kassenkarte den Standort und können die ausgewählte Kasse direkt weiterführen oder eröffnen.",
+    "Tagesinfo: Bar- und Kartenzahlungen ausgeschrieben, Kassensitzungen, Warengruppen, Artikel und Verkäufe einklappbar.",
+    "Pfandübersicht in Berichten und Journalen gilt nur für Standort und gewählten Zeitraum.",
+    "Excel-Export im Journal; PDF in Standortfarben.",
+    "Tagesabschluss kompakter mit Geld-Zählhilfe; Abschlussdatum ist der Tag der endgültigen Buchung.",
+    "Schussauswahl bleibt offen, zeigt die Anzahl je Sorte, Papierkorb und „Fertig“.",
+    "Update-Hinweis mittig mit „Später“ (Erinnerung nach 10 Minuten); Prüfung auch beim Öffnen und bei Rückkehr zum Startbildschirm. Eine offene Kasse blockiert das Update nicht mehr.",
+    "Veraltete Kassenstände auf einem Gerät blockieren die Synchronisierung nicht mehr.",
+    "Neue Optik: Standortfarben, 3D-Buttons, WOODMO-Schriftzug, kompakte Kasseneröffnung."
   ]
 }
