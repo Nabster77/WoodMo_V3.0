@@ -293,14 +293,14 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
 
             {useCounting ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-                <DenominationGroup title="Münzen" subtitle="1 Cent bis 2 Euro" icon={<Coins className="h-4 w-4" />} labelClass="text-amber-800 dark:text-amber-500"
+                <DenominationGroup title="Münzen" icon={<Coins className="h-4 w-4" />} labelClass="text-amber-800 dark:text-amber-500"
                   denominations={COINS} counts={counts} total={coinTotal}
                   onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
-                <DenominationGroup title="Scheine" subtitle="5 € bis 200 €" icon={<Banknote className="h-4 w-4" />} labelClass="text-green-800 dark:text-green-500"
+                <DenominationGroup title="Scheine" icon={<Banknote className="h-4 w-4" />} labelClass="text-green-800 dark:text-green-500"
                   denominations={NOTES} counts={counts} total={noteTotal}
                   onChange={(value, quantity) => setCounts((previous) => ({ ...previous, [value]: quantity }))} />
                 <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Leere Felder zählen als 0. Gesamtsumme:</span>
+                  <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Gesamtsumme</span>
                   <span className="text-base font-bold text-gray-900 dark:text-gray-100"><MoneyAmount value={countedTotal} /></span>
                 </div>
               </div>
@@ -398,7 +398,6 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
 function DenominationGroup({
   labelClass = 'text-gray-700 dark:text-gray-300',
   title,
-  subtitle,
   icon,
   denominations,
   counts,
@@ -406,7 +405,6 @@ function DenominationGroup({
   onChange,
 }: {
   title: string;
-  subtitle: string;
   icon: ReactNode;
   labelClass?: string;
   denominations: typeof DENOMINATIONS;
@@ -417,10 +415,10 @@ function DenominationGroup({
   return (
     <section className="mb-3 rounded-xl border border-gray-200 bg-white p-2.5 dark:border-gray-700 dark:bg-gray-800/60">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-sm font-bold text-gray-800 dark:text-gray-100">
-          <span className="text-blue-600 dark:text-blue-400">{icon}</span>
+        {/* 24.11.: Überschrift in der Farbe der Werte (Münzen braunorange, Scheine grün). */}
+        <div className={`flex items-center gap-1.5 text-sm font-bold ${labelClass}`}>
+          <span>{icon}</span>
           <span>{title}</span>
-          <span className="text-xs font-normal text-gray-500 dark:text-gray-400">· {subtitle}</span>
         </div>
         <span className="text-sm font-bold text-gray-800 dark:text-gray-100"><MoneyAmount value={total} /></span>
       </div>

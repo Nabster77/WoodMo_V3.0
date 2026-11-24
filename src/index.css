@@ -92,3 +92,15 @@
 @media (prefers-reduced-motion: reduce) {
   .woodmo-loc-pulse { animation: none; box-shadow: 0 0 0 3px var(--loc-strong), 0 0 12px 2px var(--loc-border); }
 }
+
+/* 24.11.: Schuss-Meldung gleitet nach rechts aus dem Bild (blockiert nichts). */
+@keyframes woodmo-shot-toast {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  70% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+.woodmo-shot-toast { animation: woodmo-shot-toast 1.8s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .woodmo-shot-toast { animation: none; }
+}

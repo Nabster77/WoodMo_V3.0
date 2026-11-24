@@ -1186,6 +1186,17 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
   onInfo: () => void;
 }) {
   const rates = LOCATION_TAX_RATES[loc];
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsAsc, setReportsAsc] = useState(true);
+  const closeLabels = closes.map((c) => ({
+    session: c,
+    label: formatDailyCloseReceiptNumber(c.dailyCloseReceiptNumber!, c.dailyCloseReceiptLocation ?? c.location, c.dailyCloseFinalizedAt ?? c.closedAt ?? c.openedAt, c.dailyCloseReceiptYear) ?? String(c.dailyCloseReceiptNumber),
+  }));
+  // Sortierung über den numerischen Teil am Ende der TA-Nummer.
+  const sortedCloses = [...closeLabels].sort((x, y) => {
+    const nx = Number(/(\d+)\D*$/.exec(x.label)?.[1] ?? 0), ny = Number(/(\d+)\D*$/.exec(y.label)?.[1] ?? 0);
+    return reportsAsc ? nx - ny : ny - nx;
+  });
   const finalized = !!session?.dailyCloseFinalizedAt;
   const [salesOpen, setSalesOpen] = useState(false);
   const isClosed = !!session?.closed;
@@ -1215,17 +1226,32 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             </p>
           </div>
         </div>
-        {/* Mitte: TA-Nummer(n) mit Bericht-Button oder Hinweis (24.11.) */}
-        <div className="flex flex-1 flex-wrap items-center justify-center gap-2">
-          {closes.map((c) => (
-            <span key={c.id} className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{formatDailyCloseReceiptNumber(c.dailyCloseReceiptNumber!, c.dailyCloseReceiptLocation ?? c.location, c.dailyCloseFinalizedAt ?? c.closedAt ?? c.openedAt, c.dailyCloseReceiptYear) ?? c.dailyCloseReceiptNumber}</span>
-              <button type="button" onClick={(e) => { e.stopPropagation(); onReport(c); }}
-                className="flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700">
-                <FileText className="h-3.5 w-3.5" /> Bericht
+        {/* Mitte: Klappmenü „Berichte“ mit den TA-Nummern dieses Standorts/Tages (24.11.) */}
+        <div className="relative flex flex-1 items-center justify-center" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          {closeLabels.length > 0 && (
+            <>
+              <button type="button" onClick={() => setReportsOpen((v) => !v)} aria-expanded={reportsOpen}
+                className="flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700">
+                <FileText className="h-3.5 w-3.5" /> Berichte ({closeLabels.length})
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
               </button>
-            </span>
-          ))}
+              {reportsOpen && (
+                <div className="absolute left-1/2 top-full z-30 mt-1 w-64 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+                  <button type="button" onClick={() => setReportsAsc((v) => !v)}
+                    className="mb-1 flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
+                    Sortierung: {reportsAsc ? 'aufsteigend' : 'absteigend'}
+                    <ChevronDown className={`h-3.5 w-3.5 ${reportsAsc ? 'rotate-180' : ''}`} />
+                  </button>
+                  {sortedCloses.map(({ session: c, label }) => (
+                    <button key={c.id} type="button" onClick={() => { setReportsOpen(false); onReport(c); }}
+                      className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-gray-800 hover:bg-blue-50 dark:text-gray-100 dark:hover:bg-blue-900/30">
+                      <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
           {closes.length === 0 && txToday.length === 0 && (
             <span className="text-center text-xs font-semibold text-gray-400">Keine Buchungen an diesem Tag!</span>
           )}

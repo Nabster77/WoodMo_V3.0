@@ -9,7 +9,7 @@ import { CashEntryDialog } from './CashEntryDialog';
 import { CashCorrectionDialog } from './CashCorrectionDialog';
 import { DailyCloseDialog } from './DailyCloseDialog';
 import { ShotSelectionDialog } from './ShotSelectionDialog';
-import { applyShotChoice } from '@/lib/shotCombine';
+import { applyShotChoice, REMOVE_ALL_SHOTS_ID, shotParts } from '@/lib/shotCombine';
 import { PfandRetoureDialog } from './PfandRetoureDialog';
 import { BonlisteDialog } from './BonlisteDialog';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -419,8 +419,40 @@ export function POSScreen({
     }
   }
 
+  // 24.11.: Kleine Meldung je hinzugefügtem Schuss (gleitet nach rechts raus,
+  // ohne Fokus, blockiert keine Klicks).
+  const [shotToast, setShotToast] = useState<{ id: number; text: string } | null>(null);
+  const shotToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showShotToast(text: string) {
+    if (shotToastTimer.current) clearTimeout(shotToastTimer.current);
+    setShotToast({ id: Date.now(), text });
+    shotToastTimer.current = setTimeout(() => setShotToast(null), 1800);
+  }
+
   function handleShotSelect(shot: ShotOption) {
-    if (shotCartIndex !== null) {
+    // 24.11.: Fenster bleibt nach einer Auswahl offen (mehrfach dieselbe Sorte
+    // oder verschiedene Sorten nacheinander). Nur „Alle Schüsse entfernen“ schließt.
+    const target = shotCartIndex !== null ? cart[shotCartIndex] : undefined;
+    if (shotCartIndex !== null && target && !target.isPfandRetoure && shot.id !== REMOVE_ALL_SHOTS_ID) {
+      const nextShot = applyShotChoice(target.shot, shot);
+      const changed = (nextShot?.id ?? 'none') !== ((target.shot && target.shot.id !== 'none') ? target.shot.id : 'none');
+      if (changed) {
+        const count = shotParts(nextShot).filter((name) => name === shot.name).length;
+        showShotToast(`Schuss ${shot.name} hinzugefügt · ${count}× ${shot.name}`);
+        // Bei Menge > 1 wird ein Getränk abgetrennt und steht direkt dahinter.
+        const nextIndex = target.quantity > 1 ? shotCartIndex + 1 : shotCartIndex;
+        applyShotToCart(shotCartIndex, shot);
+        setShotCartIndex(nextIndex);
+      }
+      return;
+    }
+    if (shotCartIndex !== null) applyShotToCart(shotCartIndex, shot);
+    setShotProduct(null);
+    setShotCartIndex(null);
+  }
+
+  function applyShotToCart(shotCartIndex: number, shot: ShotOption) {
+    {
       setCart((prev) => prev.flatMap((item, index) => {
         if (index !== shotCartIndex || item.isPfandRetoure) return [item];
         const oldShotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
@@ -432,8 +464,6 @@ export function POSScreen({
         return item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }, updated] : [updated];
       }));
     }
-    setShotProduct(null);
-    setShotCartIndex(null);
   }
 
   function inc(index: number) {
@@ -834,6 +864,12 @@ export function POSScreen({
       )}
       {shotProduct && (
         <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} current={shotCartIndex !== null ? cart[shotCartIndex]?.shot ?? null : null} onSelect={handleShotSelect} onCancel={() => { setShotProduct(null); setShotCartIndex(null); }} />
+      )}
+      {shotToast && (
+        <div key={shotToast.id} role="status" aria-live="polite"
+          className="woodmo-shot-toast pointer-events-none fixed right-4 top-20 z-[60] rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg">
+          {shotToast.text}
+        </div>
       )}
       {priceEntryProduct && (
         <IndividualPriceDialog
