@@ -87,3 +87,16 @@ check('14 Bezahlen: kein Extra-Fenster, Warenkorb wird sofort geleert, keine Dop
   assert.match(pos,/pointer-events-none fixed left-1\/2 top-1\/2/,'success hint centered, never blocks the next tap');
 });
 console.log('WOODMO V3 OFFLINE-RESET-QUARANTÄNE: '+passed+'/'+passed+' VERHALTENSTESTS BESTANDEN.');
+
+// 24.11.: Überholter offener Kassenstand (Cloud hat die Kasse schon abgeschlossen)
+// zählt nicht als „nicht übertragen“ und blockiert das Löschen nach dem Sichern nicht.
+{
+  const superseded = { key: 'superseded:1', archivedAt: 1, targetGeneration: 8, kind: 'superseded-session',
+    entry: { table: 'pos_cash_sessions', row: { id: 'session-alt', booking_generation: 8, location: 'Bregenz', data: { closed: false } } } };
+  const info = summarizeResetQuarantine([superseded]);
+  assert.equal(info.pendingSessions, 0);
+  assert.equal(info.pendingReceipts, 0);
+  assert.deepEqual(canClearResetQuarantine([superseded], ['superseded:1']), { ok: true });
+  assert.equal(canClearResetQuarantine([superseded], null).ok, false);
+  console.log('WOODMO V3 ÜBERHOLTE KASSENSTÄNDE: Archiv ohne Warnhinweis geprüft.');
+}

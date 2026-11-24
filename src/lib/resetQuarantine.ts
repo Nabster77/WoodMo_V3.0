@@ -4,7 +4,9 @@ export type ResetQuarantineEntry = {
   key: string;
   archivedAt: number;
   targetGeneration: number;
-  kind: 'pending-outbox' | 'local-snapshot';
+  /** superseded-session (24.11.): offener Kassenstand, den die Cloud bereits
+   * abgeschlossen hat. Reine Kopie, kein nicht übertragener Beleg. */
+  kind: 'pending-outbox' | 'local-snapshot' | 'superseded-session';
   entry?: OutboxEntry;
   transactions?: unknown[];
   cashSessions?: unknown[];
@@ -30,7 +32,7 @@ export function canClearResetQuarantine(
   exportedKeys: readonly string[] | null,
 ): { ok: true } | { ok: false; reason: string } {
   if (entries.length === 0) return { ok: false, reason: 'Die Offline-Quarantäne ist bereits leer.' };
-  if (entries.some(record => record.kind !== 'local-snapshot')) {
+  if (entries.some(record => record.kind === 'pending-outbox')) {
     return { ok: false, reason: 'Löschen gesperrt: Die Quarantäne enthält nicht übertragene Bons oder Kassensitzungen. Diese zuerst prüfen lassen.' };
   }
   if (!exportedKeys) {

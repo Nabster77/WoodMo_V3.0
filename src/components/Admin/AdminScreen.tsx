@@ -1117,7 +1117,8 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             key={data.loc}
             loc={data.loc}
             session={data.session}
-            sessionCount={data.day.parts.length}
+            // 24.11.: nur Sitzungen mit Buchungen an diesem Tag oder noch offen (nicht: nur heute abgeschlossen).
+            sessionCount={data.day.parts.filter((part) => part.transactions.length > 0 || !part.session.closed).length}
             total={data.total}
             count={data.count}
             pfandCollected={data.pfandCollected}

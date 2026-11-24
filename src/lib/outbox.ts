@@ -270,6 +270,38 @@ async function uploadQueuedBatch(): Promise<number> {
       !session.closedAt && !session.dailyCloseFinalizedAt && !session.dailyCloseSnapshot;
   };
   const openingSessions = queuedSessions.filter(active);
+  // 24.11.: Ein offener Kassenstand, den die Cloud für DIESELBE Kasse bereits
+  // abgeschlossen hat, ist überholt (z. B. alter Browser-Tab). Er darf die
+  // Warteschlange nicht blockieren: ins Archiv („überholt“), nicht löschen,
+  // nicht hochladen. Buchungen dieser Kasse werden normal weiter hochgeladen.
+  if (openingSessions.length) {
+    const { data: sameCloud, error: sameError } = await supabase
+      .from('pos_cash_sessions')
+      .select('id,data')
+      .in('id', openingSessions.map((row) => row.id));
+    if (sameError) throw sameError;
+    const closedInCloud = new Set((sameCloud ?? [])
+      .filter((row) => !active({ id: row.id, booking_generation: 0, location: '', data: row.data }))
+      .map((row) => row.id as string));
+    if (closedInCloud.size) {
+      const tx = db.transaction([STORE, QUARANTINE_STORE], 'readwrite');
+      const store = tx.objectStore(STORE);
+      const quarantine = tx.objectStore(QUARANTINE_STORE);
+      const when = Date.now();
+      entries.forEach((entry, index) => {
+        if (entry.table !== 'pos_cash_sessions' || !closedInCloud.has(entry.row.id) || !active(entry.row)) return;
+        quarantine.put({
+          key: 'superseded:' + crypto.randomUUID(), archivedAt: when,
+          targetGeneration: Number(entry.row.booking_generation) || 0, kind: 'superseded-session', entry,
+        } satisfies ResetQuarantineEntry);
+        store.delete(keys[index]);
+      });
+      await transactionDone(tx);
+      window.dispatchEvent(new Event(RESET_QUARANTINE_EVENT));
+      // Diesen Durchlauf neu beginnen, damit nur die verbliebenen Einträge zählen.
+      return uploadQueuedBatch();
+    }
+  }
   if (openingSessions.length) {
     const locations = [...new Set(openingSessions.map((row) => String(row.location)))];
     const generation = openingSessions[0].booking_generation;
