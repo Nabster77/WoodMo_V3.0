@@ -17,7 +17,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -1164,6 +1164,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
   onInfo: () => void;
 }) {
   const rateKeys = sortedRateKeys(taxByRateMap);
+  const [salesOpen, setSalesOpen] = useState(false);
   const isClosed = !!session?.closed;
   const statusLabel = isClosed ? 'ABGESCHLOSSEN' : isHistoric ? (session ? 'OFFEN' : 'KEINE KASSE') : session ? 'OFFEN' : 'GESPERRT';
   const statusClass = isClosed
@@ -1190,6 +1191,9 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
             </p>
           </div>
         </div>
+        {txToday.length === 0 && !session && (
+          <span className="hidden flex-1 text-center text-xs text-gray-400 sm:block">Keine Daten für diesen Tag</span>
+        )}
         <div className="flex items-center gap-2">
           {isSelected && (
             <span className="flex items-center gap-1 rounded-full bg-[var(--loc-strong)] px-2.5 py-1 text-xs font-bold text-white shadow-sm">
@@ -1218,28 +1222,27 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
           </div>
         )}
 
-        {/* Sales stats */}
+        {/* Umsatz des Tages (24.11.): Brutto inkl. Pfand, Pfand, MwSt, Netto */}
         <div className="mb-3 rounded-xl border border-[var(--loc-border)] bg-[var(--loc-soft)] p-3">
           <div className="mb-2 flex items-center gap-1.5">
             <TrendingUp className="h-4 w-4 text-[var(--loc-strong)] dark:text-[var(--loc-light)]" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--loc-strong)] dark:text-[var(--loc-light)]">Umsatz des Tages (ohne Pfand)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--loc-strong)] dark:text-[var(--loc-light)]">Umsatz des Tages</p>
           </div>
           {sessionCount > 1 && (
             <p className="mb-2 text-xs font-medium text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
           )}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Brutto</p>
-              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(total)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Netto inkl. Pfand</p>
-              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalNet)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt inkl. Pfand</p>
-              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalTax)}</p>
-            </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ['Umsatz brutto (inkl. Pfand)', total + totalPfand],
+              ['Davon Pfand enthalten', totalPfand],
+              ['Davon MwSt. gesamt', totalTax],
+              ['Netto-Gesamtumsatz', total + totalPfand - totalTax],
+            ].map(([label, value]) => (
+              <div key={label as string}>
+                <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
+                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value as number)}</p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1258,26 +1261,16 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
           </div>
         )}
 
-        {/* Pfand + count */}
-        <div className="mb-3 flex items-center gap-4 text-sm">
-          {totalPfand > 0 && (
-            <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <Recycle className="h-4 w-4 text-green-500" />
-              Pfand: <span className="font-bold">{formatCurrency(totalPfand)}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <ReceiptIcon className="h-4 w-4" />
-            Verkäufe: <span className="font-bold">{count}</span>
-          </div>
-        </div>
-
-        {/* Recent transactions */}
-        {txToday.length > 0 && (
-          <div className="mb-3">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Letzte Verkäufe</p>
-            <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-              {txToday.slice(0, 5).map((tx) => (
+        {/* Verkäufe: einklappbar (24.11.) */}
+        <div className="mb-3">
+          <button type="button" onClick={() => setSalesOpen((v) => !v)} disabled={txToday.length === 0} aria-expanded={salesOpen}
+            className="flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-sm text-gray-600 disabled:cursor-default dark:text-gray-400">
+            <ReceiptIcon className="h-4 w-4" /> Verkäufe: <span className="font-bold">{count}</span>
+            {txToday.length > 0 && <ChevronDown className={`h-4 w-4 transition-transform ${salesOpen ? 'rotate-180' : ''}`} />}
+          </button>
+          {salesOpen && txToday.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
+              {txToday.map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Clock className="h-3 w-3" />
@@ -1293,38 +1286,26 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Info + Export buttons */}
-        <div className="mb-2 flex gap-2">
-          <button
-            onClick={onInfo}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-95"
-          >
+        {/* Eine Zeile: Info links, PDF-Export und Drucken rechts (24.11.) */}
+        <div className="flex items-center gap-2">
+          <button onClick={onInfo}
+            className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-95">
             <Info className="h-4 w-4" /> Info
           </button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={onExport} disabled={txToday.length === 0}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+              <FileDown className="h-3.5 w-3.5" /> PDF-Export
+            </button>
+            <button onClick={onPrint} disabled={txToday.length === 0}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40">
+              <Printer className="h-3.5 w-3.5" /> Drucken
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onExport}
-            disabled={txToday.length === 0}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            <FileDown className="h-3.5 w-3.5" /> PDF-Export
-          </button>
-          <button
-            onClick={onPrint}
-            disabled={txToday.length === 0}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40"
-          >
-            <Printer className="h-3.5 w-3.5" /> Drucken
-          </button>
-        </div>
-
-        {txToday.length === 0 && !session && (
-          <p className="mt-2 text-center text-xs text-gray-400">Keine Daten für diesen Tag</p>
-        )}
       </div>
     </div>
   );
