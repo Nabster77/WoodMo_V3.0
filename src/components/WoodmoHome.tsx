@@ -28,7 +28,7 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
         </div>
         <div className="grid w-full grid-cols-2 gap-3 sm:gap-5">
           <button type="button" onClick={onCash}
-            className="relative isolate flex min-h-40 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-white/80 bg-slate-900/80 p-3 text-center shadow-lg transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98] sm:min-h-48 sm:p-6">
+            className="relative isolate flex min-h-40 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-white/80 bg-gradient-to-b from-slate-800/90 to-slate-950/90 p-3 text-center shadow-[0_2px_0_rgba(255,255,255,0.1)_inset,0_6px_14px_rgba(0,0,0,0.6)] transition hover:from-slate-700/90 active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98] sm:min-h-48 sm:p-6">
             <img src={symbol} alt="" aria-hidden="true" className={watermark} />
             <span className="relative z-10 rounded-xl bg-white/10 p-2.5">
               <img src={symbol} alt="" className="h-9 w-9 object-contain grayscale brightness-150 sm:h-11 sm:w-11" />
@@ -37,7 +37,7 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
             <span className="relative z-10 text-xs text-slate-300 sm:text-sm">{sessionOpen ? 'Kasse fortsetzen' : 'Kasse eröffnen'}</span>
           </button>
           <button type="button" onClick={onAdmin}
-            className="relative isolate flex min-h-40 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-white/40 bg-slate-900/80 p-3 text-center shadow-lg transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-200 active:scale-[0.98] sm:min-h-48 sm:p-6">
+            className="relative isolate flex min-h-40 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-white/40 bg-gradient-to-b from-slate-800/90 to-slate-950/90 p-3 text-center shadow-[0_2px_0_rgba(255,255,255,0.1)_inset,0_6px_14px_rgba(0,0,0,0.6)] transition hover:from-slate-700/90 active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-200 active:scale-[0.98] sm:min-h-48 sm:p-6">
             <img src={symbol} alt="" aria-hidden="true" className={watermark} />
             <span className="relative z-10 rounded-xl bg-white/10 p-3">
               <Settings2 className="h-8 w-8 text-slate-100 sm:h-10 sm:w-10" />

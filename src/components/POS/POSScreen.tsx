@@ -433,12 +433,12 @@ export function POSScreen({
     // 24.11.: Fenster bleibt nach einer Auswahl offen (mehrfach dieselbe Sorte
     // oder verschiedene Sorten nacheinander). Nur „Alle Schüsse entfernen“ schließt.
     const target = shotCartIndex !== null ? cart[shotCartIndex] : undefined;
-    if (shotCartIndex !== null && target && !target.isPfandRetoure && shot.id !== REMOVE_ALL_SHOTS_ID) {
+    if (shotCartIndex !== null && target && !target.isPfandRetoure) {
       const nextShot = applyShotChoice(target.shot, shot);
       const changed = (nextShot?.id ?? 'none') !== ((target.shot && target.shot.id !== 'none') ? target.shot.id : 'none');
       if (changed) {
         const count = shotParts(nextShot).filter((name) => name === shot.name).length;
-        showShotToast(`Schuss ${shot.name} hinzugefügt · ${count}× ${shot.name}`);
+        showShotToast(shot.id === REMOVE_ALL_SHOTS_ID ? 'Alle Schüsse entfernt' : `Schuss ${shot.name} hinzugefügt · ${count}× ${shot.name}`);
         // Bei Menge > 1 wird ein Getränk abgetrennt und steht direkt dahinter.
         const nextIndex = target.quantity > 1 ? shotCartIndex + 1 : shotCartIndex;
         applyShotToCart(shotCartIndex, shot);

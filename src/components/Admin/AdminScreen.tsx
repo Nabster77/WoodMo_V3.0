@@ -270,19 +270,24 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                     <Download className="h-5 w-5 shrink-0 text-white" /> Backup exportieren
                   </button>
                 )}
+                {/* 24.11.: Sicherheitsarchiv sichern und löschen in einer Zeile. */}
+                {resetQuarantineCount > 0 && (onExportResetQuarantine || onClearResetQuarantine) && (
+                  <div className="col-span-full grid grid-cols-2 gap-2">
                 {onExportResetQuarantine && resetQuarantineCount > 0 && (
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onExportResetQuarantine(); })}>
                     <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
                     Sicherheitsarchiv sichern ({resetQuarantineCount})
                   </button>
-                )}
-                {onClearResetQuarantine && resetQuarantineCount > 0 && (
+                  )}
+                  {onClearResetQuarantine && resetQuarantineCount > 0 && (
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onClearResetQuarantine(); })}>
                     <Trash2 className="h-5 w-5 shrink-0 text-amber-300" />
                     Sicherheitsarchiv löschen
                   </button>
+                  )}
+                  </div>
                 )}
                 {onResetAllData && (
                   <button type="button" className={`${adminMenuItem} border-red-700/60 text-red-300 hover:border-red-500 hover:bg-red-950/40`}
