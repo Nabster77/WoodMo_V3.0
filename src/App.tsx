@@ -293,6 +293,16 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     try { if (c) localStorage.setItem(UPDATE_LATER_KEY, JSON.stringify({ id: candidateId(c), at: Date.now() })); } catch { /* ignore */ }
   }
 
+  // 24.11.: Bei jeder Rückkehr zum Startbildschirm sofort online prüfen,
+  // ob eine neue Version bereitsteht (Dialog/Erinnerung folgen den Regeln oben).
+  useEffect(() => {
+    if (!homeVisible || currentStaff || approvedActivation()) return;
+    if (document.visibilityState === 'hidden') return;
+    void checkForUpdate(!updateDeferred.current)
+      .then(() => setReminderTick((n) => n + 1))
+      .catch(() => undefined); // offline: installierte Version läuft weiter
+  }, [homeVisible, currentStaff, checkForUpdate]);
+
   async function openUpdateFromHome() {
     updateDeferred.current = false;
     try {
