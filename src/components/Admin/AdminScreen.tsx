@@ -5,8 +5,10 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
-import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
-import { buildDailyReport } from '@/lib/dailyReport';
+import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
+import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
+import { computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
+import { JournalPreviewDialog } from '@/components/Journal/JournalPreviewDialog';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { locationStyle } from '@/lib/locationColors';
@@ -17,7 +19,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -974,7 +976,14 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   onSwitchLocation: (loc: Location) => void;
   exportedByName?: string;
 }) {
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateISO(Date.now()));
+  // 24.11.: Beim Öffnen die offene Kasse des gewählten Standorts zeigen, sonst heute.
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const now = formatDateISO(Date.now());
+    const open = cashSessions.find((s) => s.location === selectedLocation && !s.closed && !s.discarded && !s.dailyCloseFinalizedAt);
+    const day = open ? formatDateISO(open.openedAt) : now;
+    return day <= now ? day : now;
+  });
+  const [previewReport, setPreviewReport] = useState<JournalReportData | null>(null);
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1047,8 +1056,12 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
       const taxByRate: Record<number, number> = {};
       for (const [k, v] of taxByRateMap) taxByRate[k] = v;
       const cashBalance = day.latest?.cashBalance ?? 0;
+      // Pfand getrennt: eingenommen (Bar+Karte) und ausgezahlte Retoure, aus den Buchungen.
+      const pfandStats = computeJournalStats(txToday);
+      // Endgültige Tagesabschlüsse dieses Tages (jede TA-Nummer einzeln erreichbar).
+      const closes = day.parts.map((part) => part.session).filter((s) => !!s.dailyCloseFinalizedAt && !!s.dailyCloseReceiptNumber);
 
-      return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance };
+      return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance, pfandCollected: pfandStats.pfandCollected, pfandReturned: pfandStats.pfandReturned, closes };
     });
   }, [transactions, cashSessions, selectedDate, stornos]);
 
@@ -1106,7 +1119,10 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             sessionCount={data.day.parts.length}
             total={data.total}
             count={data.count}
-            totalNet={data.totalNet}
+            pfandCollected={data.pfandCollected}
+            pfandReturned={data.pfandReturned}
+            closes={data.closes}
+            onReport={(s) => setPreviewReport(closedSessionReport(s, transactions, categories, exportedByName, stornos))}
             totalTax={data.totalTax}
             totalPfand={data.totalPfand}
             cashBalance={data.cashBalance}
@@ -1139,19 +1155,23 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
           onClose={() => setInfoLocation(null)}
         />
       )}
+      {previewReport && <JournalPreviewDialog data={previewReport} onClose={() => setPreviewReport(null)} />}
     </div>
   );
 }
 
-function LocationSessionCard({ loc, session, sessionCount, total, count, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
+function LocationSessionCard({ loc, session, sessionCount, total, count, totalTax, totalPfand, pfandCollected, pfandReturned, closes, onReport, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
   loc: Location;
   session: CashSession | null;
   sessionCount: number;
   total: number;
   count: number;
-  totalNet: number;
   totalTax: number;
   totalPfand: number;
+  pfandCollected: number;
+  pfandReturned: number;
+  closes: CashSession[];
+  onReport: (session: CashSession) => void;
   cashBalance: number;
   taxByRateMap: Map<number, number>;
   txToday: Transaction[];
@@ -1163,7 +1183,8 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
   onSwitch: () => void;
   onInfo: () => void;
 }) {
-  const rateKeys = sortedRateKeys(taxByRateMap);
+  const rates = LOCATION_TAX_RATES[loc];
+  const finalized = !!session?.dailyCloseFinalizedAt;
   const [salesOpen, setSalesOpen] = useState(false);
   const isClosed = !!session?.closed;
   const statusLabel = isClosed ? 'ABGESCHLOSSEN' : isHistoric ? (session ? 'OFFEN' : 'KEINE KASSE') : session ? 'OFFEN' : 'GESPERRT';
@@ -1176,9 +1197,10 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
   return (
     <div style={locationStyle(loc)} className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
-      <button
+      <div role="button" tabIndex={0}
         onClick={onSwitch}
-        className={`flex w-full items-center justify-between px-4 py-3 text-left transition active:scale-[0.99] bg-[var(--loc-soft)] hover:brightness-110`}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitch(); } }}
+        className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left transition bg-[var(--loc-soft)] hover:brightness-110`}
       >
         <div className="flex items-center gap-2">
           <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--loc-strong)] text-white`}>
@@ -1191,9 +1213,21 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             </p>
           </div>
         </div>
-        {txToday.length === 0 && !session && (
-          <span className="hidden flex-1 text-center text-xs text-gray-400 sm:block">Keine Daten für diesen Tag</span>
-        )}
+        {/* Mitte: TA-Nummer(n) mit Bericht-Button oder Hinweis (24.11.) */}
+        <div className="flex flex-1 flex-wrap items-center justify-center gap-2">
+          {closes.map((c) => (
+            <span key={c.id} className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{formatDailyCloseReceiptNumber(c.dailyCloseReceiptNumber!, c.dailyCloseReceiptLocation ?? c.location, c.dailyCloseFinalizedAt ?? c.closedAt ?? c.openedAt, c.dailyCloseReceiptYear) ?? c.dailyCloseReceiptNumber}</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onReport(c); }}
+                className="flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700">
+                <FileText className="h-3.5 w-3.5" /> Bericht
+              </button>
+            </span>
+          ))}
+          {closes.length === 0 && txToday.length === 0 && (
+            <span className="text-center text-xs font-semibold text-gray-400">Keine Buchungen an diesem Tag!</span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {isSelected && (
             <span className="flex items-center gap-1 rounded-full bg-[var(--loc-strong)] px-2.5 py-1 text-xs font-bold text-white shadow-sm">
@@ -1204,7 +1238,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             {statusLabel}
           </span>
         </div>
-      </button>
+      </div>
 
       {/* Body */}
       <div className="p-4">
@@ -1216,8 +1250,10 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
               <p className="text-base font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p>
             </div>
             <div className="rounded-xl bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-              <p className="text-xs text-blue-400">{sessionCount > 1 ? 'Kassenbestand (letzte Kasse)' : 'Kassenbestand'}</p>
-              <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(cashBalance)}</p>
+              <p className="text-xs text-blue-400">{finalized
+                ? `Kassenendbestand vom ${new Date(session.dailyCloseFinalizedAt!).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                : 'Kassenbestand seit letzter Buchung'}</p>
+              <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(finalized ? (session.closingBalance ?? cashBalance) : cashBalance)}</p>
             </div>
           </div>
         )}
@@ -1231,35 +1267,31 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
           {sessionCount > 1 && (
             <p className="mb-2 text-xs font-medium text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
           )}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {([
               ['Umsatz brutto (inkl. Pfand)', total + totalPfand],
-              ['Davon Pfand enthalten', totalPfand],
-              ['Davon MwSt. gesamt', totalTax],
-              ['Netto-Gesamtumsatz', total + totalPfand - totalTax],
-            ].map(([label, value]) => (
-              <div key={label as string}>
+              ['Pfand eingenommen', pfandCollected],
+              ['Pfandretoure gesamt', -Math.abs(pfandReturned)],
+            ] as const).map(([label, value]) => (
+              <div key={label}>
                 <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
-                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value as number)}</p>
+                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value)}</p>
               </div>
             ))}
+            {/* MwSt.: reduziert + regulär je Standort, darunter gesamt */}
+            <div>
+              {[rates.reduced, rates.standard].map((rate) => (
+                <p key={rate} className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt. {rate} %: <span className="font-semibold">{formatCurrency(taxByRateMap.get(rate) ?? 0)}</span></p>
+              ))}
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt. gesamt</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalTax)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Netto-Gesamtumsatz</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(total + totalPfand - totalTax)}</p>
+            </div>
           </div>
         </div>
-
-        {/* Tax breakdown */}
-        {rateKeys.length > 0 && (
-          <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {rateKeys.map((rate) => (
-              <div key={rate} className="rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
-                <div className="flex items-center gap-1.5">
-                  <ReceiptIcon className={`h-3.5 w-3.5 ${isReducedRate(rate) ? 'text-amber-500' : 'text-rose-500'}`} />
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">MwSt {rate}%</span>
-                </div>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(taxByRateMap.get(rate) ?? 0)}</p>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Verkäufe: einklappbar (24.11.) */}
         <div className="mb-3">
