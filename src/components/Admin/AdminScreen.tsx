@@ -1143,7 +1143,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   );
 }
 
-function LocationSessionCard({ loc, session, sessionCount, total, count, totalNet, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
+function LocationSessionCard({ loc, session, sessionCount, total, count, totalNet: _totalNet, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
   loc: Location;
   session: CashSession | null;
   sessionCount: number;
