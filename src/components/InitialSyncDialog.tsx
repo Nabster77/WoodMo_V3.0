@@ -21,7 +21,7 @@ interface Props {
 
 export function InitialSyncDialog({ phase, version, installedVersion, notes, ready, registers, error, percent, onPrepare, onContinue, onRetry, onActivate, onDismiss, onReload }: Props) {
   const syncing = phase === 'syncing' || phase === 'sync-error' || phase === 'synced';
-  const title = phase === 'offer' ? 'Eine neue Version ist verfügbar.'
+  const title = phase === 'offer' ? 'Achtung, ein neues Update ist verfügbar.'
     : phase === 'prepared' ? 'Update vorbereitet'
     : syncing ? 'Cloud-Synchronisierung'
     : phase === 'reload' ? 'App erneut öffnen' : 'Update';
@@ -37,7 +37,6 @@ export function InitialSyncDialog({ phase, version, installedVersion, notes, rea
         className="my-auto w-full max-w-md space-y-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         <h2 id="initial-sync-title" className="text-xl font-bold">{title}</h2>
         {phase === 'offer' && <div className="space-y-2 text-sm">
-          <p className="text-base font-semibold">Möchten Sie das Update jetzt installieren?</p>
           <p>Installiert: <strong>Version {installedVersion}</strong></p>
           <p>Neu verfügbar: <strong>Version {version}</strong></p>
           {notes && notes.length > 0 && <ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-slate-600 dark:text-slate-300">
