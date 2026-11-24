@@ -1173,7 +1173,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
       : isActive ? 'bg-green-600 text-white' : session ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
 
   return (
-    <div style={locationStyle(loc)} className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'border-[var(--loc-strong)] ring-2 ring-[var(--loc-soft)]' : 'border-[var(--loc-border)]'} bg-white dark:bg-gray-800`}>
+    <div style={locationStyle(loc)} className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
       <button
         onClick={onSwitch}

@@ -82,3 +82,13 @@
   .woodmo-cat-active, .dark .woodmo-cat-active { animation: none; box-shadow: 0 0 12px 3px rgba(148,163,184,.6); }
   .woodmo-cat-pulse-text, .dark .woodmo-cat-pulse-text { animation: none; }
 }
+
+/* Kassen-Übersicht 24.11.: ausgewählte Kasse pulsiert langsam in der Standortfarbe. */
+@keyframes woodmo-loc-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--loc-strong), 0 0 0 0 var(--loc-border); }
+  50% { box-shadow: 0 0 0 2px var(--loc-strong), 0 0 18px 4px var(--loc-border); }
+}
+.woodmo-loc-pulse { animation: woodmo-loc-pulse 2.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .woodmo-loc-pulse { animation: none; box-shadow: 0 0 0 3px var(--loc-strong), 0 0 12px 2px var(--loc-border); }
+}
