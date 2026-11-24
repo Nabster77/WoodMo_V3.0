@@ -55,10 +55,15 @@ export function buildDayOverview(
     .filter((session) => session.location === location && !session.discarded && session.openedAt < next.getTime() && (session.closedAt ?? Infinity) >= start.getTime())
     .sort((a, b) => a.openedAt - b.openedAt);
   const seen = new Set<string>();
+  // 24.11.: Eine noch offene Kasse (Tagesabschluss steht aus) gehört zum heutigen
+  // Tag, auch wenn sie früher eröffnet wurde. Heute zeigt sie den bisher erfassten
+  // Umsatz der ganzen laufenden Sitzung. Frühere Tage bleiben nach Kalendertag getrennt.
+  const isTodayOrLater = Date.now() < next.getTime();
   const parts: DaySessionPart[] = sessions.map((session) => {
     const sessionTx = sessionTransactions(transactions, session);
+    const running = !session.closed && !session.dailyCloseFinalizedAt && isTodayOrLater;
     const own = sessionTx.filter((tx) =>
-      tx.timestamp >= start.getTime() && tx.timestamp < next.getTime() && !seen.has(tx.id));
+      (running || (tx.timestamp >= start.getTime() && tx.timestamp < next.getTime())) && !seen.has(tx.id));
     for (const tx of own) seen.add(tx.id);
     return { session, transactions: own, cashBalance: sessionCashBalance(session, sessionTx, next.getTime(), stornos) };
   });

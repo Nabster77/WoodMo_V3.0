@@ -125,13 +125,14 @@ export function DailyCloseDialog({ session, transactions, stornos = [], currentS
   );
   const yearlyPfandOverview = useMemo(
     () => {
-      const dayStart = new Date(session.date + 'T00:00:00').getTime();
+      // 24.11.: Abschlussdatum = heutiges lokales Datum, auch bei über Nacht offener Kasse.
+      const dayStart = new Date(new Date().toDateString()).getTime();
       return calculatePfandOverview(
         projectFinancialTransactions(transactions, stornos),
         dayStart, dayStart + 86_400_000 - 1, session.location, session.location,
         'Pfandübersicht: alle Pfandbuchungen dieses Tages am Standort (alle Kassensitzungen). Kassenbestand und Barbewegungen oben: nur diese Kassensitzung.');
     },
-    [transactions, stornos, session.date, session.location],
+    [transactions, stornos, session.location],
   );
 
   // Sales turnover never includes deposits. Deposits are neither taxable nor
@@ -594,7 +595,7 @@ async function generatePDF(
     ? `+ ${formatCurrency(yearlyPfandSaldo)}`
     : yearlyPfandSaldo < 0 ? `- ${formatCurrency(Math.abs(yearlyPfandSaldo))}` : formatCurrency(0);
   const yearlyPfandClass = yearlyPfandSaldo > 0 ? 'pfand-profit' : yearlyPfandSaldo < 0 ? 'pfand-loss' : '';
-  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>${escapeHtml(`${session.location}_Tagesabschluss_${session.date.split('-').reverse().join('-')}`)}</title><style>
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>${escapeHtml(`${session.location}_Tagesabschluss_${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\./g, '-')}`)}</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#1e293b;line-height:1.4;font-size:12px;margin:0}h1{font-size:26px;margin:0;text-align:center;color:#1e3a5f}h2{font-size:15px;margin:22px 0 7px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;break-after:avoid;page-break-after:avoid}.heading{text-align:center;margin-bottom:17px}.meta{font-size:15px;font-weight:700;color:#2563eb;margin-top:5px}.staff{font-size:13px;margin-top:4px}.status{display:inline-block;border-radius:5px;padding:4px 8px;font-weight:700;margin-bottom:8px}.draft{background:#fef3c7;color:#92400e}.final{background:#dcfce7;color:#166534}.receipt{font-size:13px;font-weight:700;color:#0f172a;margin-top:5px}.sum{display:flex;justify-content:space-between;padding:4px 0}.bold{font-weight:700;border-top:1px solid #64748b;margin-top:5px;padding-top:7px}.pfand-profit{color:#15803d}.pfand-loss{color:#dc2626}.box{border:1px solid #cbd5e1;border-radius:8px;padding:12px;margin-bottom:14px}.sales{background:#ecfdf5;border-color:#a7f3d0}.sales h2{margin-top:0;color:#047857;border-color:#a7f3d0}table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10.5px}thead{display:table-header-group}th{text-align:left;border-bottom:2px solid #334155;padding:5px 4px}td{padding:4px;border-bottom:1px solid #e2e8f0;vertical-align:top}tr{break-inside:avoid;page-break-inside:avoid}tr:nth-child(even){background:#f8fafc}.report-block{break-inside:avoid;page-break-inside:avoid}.report-block h2{break-after:avoid;page-break-after:avoid}.report-block table{break-inside:avoid;page-break-inside:avoid}.staff-times{break-inside:avoid;page-break-inside:avoid}.staff-times h2{border-bottom:0;margin-bottom:7px;break-after:avoid;page-break-after:avoid}.staff-times table{break-inside:avoid;page-break-inside:avoid}.staff-times tbody tr{break-inside:avoid;page-break-inside:avoid}
   </style></head><body>
     <div class="heading" data-pdf-page-location="${escapeHtml(session.location)}" data-pdf-page-header="${escapeHtml(`Tagesabschluss · ${session.location} · ${reportPeriodLabel}`)}"><div class="status ${statusClass}">${status}</div><h1>Tagesabschluss</h1><div class="meta">${escapeHtml(session.location)} · ${escapeHtml(reportPeriodLabel)}</div><div class="staff">Mitarbeiter: <strong>${escapeHtml(exportedByName ?? session.closedByName ?? session.openedByName ?? 'Nicht angemeldet')}</strong></div><div class="box" style="margin-top:10px;text-align:left"><div class="sum"><strong>Kasseneröffnung</strong><strong>${escapeHtml(formatCashSessionTimestamp(session.openedAt))}</strong></div><div class="sum"><strong>Endgültiger Tagesabschluss</strong><strong>${isFinal ? escapeHtml(formatCashSessionTimestamp(documentTime)) : 'Noch nicht gebucht (Entwurf)'}</strong></div></div>${receipt ? `<div class="receipt">Belegnummer: ${receipt}</div>` : isFinal ? '<div class="receipt">Belegnummer: wird bei der nächsten Synchronisierung vergeben.</div>' : '<div class="receipt">Belegnummer: wird beim endgültigen Abschluss vergeben.</div>'}</div>

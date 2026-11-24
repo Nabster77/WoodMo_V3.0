@@ -5,7 +5,7 @@ import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoRecord } from '@/lib/stornoRules';
 import { buildJournalFileName } from '@/lib/journalPdfFile';
 import { calculatePfandOverview, type CashAuditRecord, type JournalReportData, type StaffTimeRecord } from '@/lib/journalPdf';
-import { endOfDay, startOfDay } from '@/lib/format';
+import { endOfDay, formatDateISO, startOfDay } from '@/lib/format';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
 import { formatCashSessionTimestamp, verifiedCloseTimestamp } from '@/lib/cashSessionTimes';
 
@@ -128,14 +128,19 @@ export function closedSessionReport(session: CashSession, transactions: Transact
   const cashTurnover = cashTransactions.reduce((sum, transaction) => sum + transaction.total, 0);
   const openingCorrectionTotal = session.corrections.reduce((sum, correction) => sum + correction.newAmount - correction.oldAmount, 0);
   const balanceBeforeWithdrawal = Math.round((session.openingBalance + cashTurnover + deposits - normalWithdrawals) * 100) / 100;
+  // 24.11.: Abschlussdatum = lokales Datum der endgültigen Buchung (Kasse kann über
+  // Nacht offen gewesen sein). Eröffnungsdatum und Buchungszeiten bleiben unverändert.
+  const closeDate = formatDateISO(finalizedAt);
   return {
-    ...buildDailyReport(session.location, session.date, originalTransactions, categories, [session], exportedByName ?? snapshot?.finalizedByName,
+    ...buildDailyReport(session.location, closeDate, originalTransactions, categories, [session], exportedByName ?? snapshot?.finalizedByName,
       transactions, sessionStornos),
     headerLabel: `${session.location} · Abschluss ${formatCashSessionTimestamp(finalizedAt)}`,
     documentTitle: 'Tagesabschluss',
+    // Alle Barbewegungen dieser Kassensitzung, auch vom Eröffnungstag einer über Nacht offenen Kasse.
+    cashAuditRecords: cashAuditRecordsFromSessions([session]),
     documentStatus: 'Endgültig abgeschlossen',
     cashSessionPeriod: { openedAt: session.openedAt, closedAt: finalizedAt },
-    fileName: `${session.location}_Tagesabschluss_${session.date}_${formattedReceipt ?? session.id}.pdf`,
+    fileName: `${session.location}_Tagesabschluss_${closeDate}_${formattedReceipt ?? session.id}.pdf`,
     receiptNumber: formattedReceipt ?? 'wird bei der nächsten Synchronisierung vergeben',
     staffTimeRecords: staffTimesFromSession(session, finalizedAt),
     // 24.11.: Pfandübersicht nur für den Tag des Abschlusses, eingefroren
@@ -147,8 +152,8 @@ export function closedSessionReport(session: CashSession, transactions: Transact
           .filter((storno) => storno.timestamp <= finalizedAt)
           .map((storno) => [storno.id, storno])).values()],
       ),
-      startOfDay(new Date(session.date + 'T00:00:00').getTime()),
-      Math.min(endOfDay(new Date(session.date + 'T00:00:00').getTime()), finalizedAt),
+      startOfDay(new Date(closeDate + 'T00:00:00').getTime()),
+      Math.min(endOfDay(new Date(closeDate + 'T00:00:00').getTime()), finalizedAt),
       session.location, session.location,
       'Pfandübersicht: alle Pfandbuchungen dieses Tages am Standort (alle Kassensitzungen). Kassenbestand und Barbewegungen oben: nur diese Kassensitzung.',
     ),

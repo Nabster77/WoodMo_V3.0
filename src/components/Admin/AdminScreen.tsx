@@ -1059,7 +1059,8 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
       // Pfand getrennt: eingenommen (Bar+Karte) und ausgezahlte Retoure, aus den Buchungen.
       const pfandStats = computeJournalStats(txToday);
       // Endgültige Tagesabschlüsse dieses Tages (jede TA-Nummer einzeln erreichbar).
-      const closes = day.parts.map((part) => part.session).filter((s) => !!s.dailyCloseFinalizedAt && !!s.dailyCloseReceiptNumber);
+      // 24.11.: Abschluss gehört zum Tag der endgültigen Buchung (nicht zum Eröffnungstag).
+      const closes = day.parts.map((part) => part.session).filter((s) => !!s.dailyCloseFinalizedAt && !!s.dailyCloseReceiptNumber && formatDateISO(s.dailyCloseFinalizedAt) === selectedDate);
 
       return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance, pfandCollected: pfandStats.pfandCollected, pfandReturned: pfandStats.pfandReturned, closes };
     });
