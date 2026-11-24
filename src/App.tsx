@@ -223,6 +223,47 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     };
   }, [checkForUpdate]);
 
+  // 24.11.: Erinnerung. „Später“ merkt sich Zeitpunkt + Version (überlebt Neuladen).
+  // Nach 10 Minuten erneut prüfen und anbieten – nur auf dem Startbildschirm ohne
+  // angemeldeten Mitarbeiter, also ohne laufende Kassenvorgänge zu unterbrechen.
+  const UPDATE_LATER_KEY = 'woodmo-update-later';
+  const REMIND_MS = 10 * 60_000;
+  const readLater = (): { id: string; at: number } | null => {
+    try { const v = JSON.parse(localStorage.getItem(UPDATE_LATER_KEY) ?? 'null'); return v && typeof v.id === 'string' && Number.isFinite(v.at) ? v : null; } catch { return null; }
+  };
+  const candidateId = (u: PublishedUpdate) => `${u.commit}|${u.builtAt}`;
+  const [reminderTick, setReminderTick] = useState(0);
+  const autoChecking = useRef(false);
+  useEffect(() => {
+    const timer = window.setInterval(() => setReminderTick((n) => n + 1), 30_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') setReminderTick((n) => n + 1); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, []);
+  useEffect(() => {
+    // Neue Version tatsächlich installiert (Prüfung findet kein Update mehr): Erinnerung löschen.
+    if (approvedActivation() || updatePhase !== null || updateBusy.current || autoInstallPending) return; // Installation läuft: pausieren
+    if (!homeVisible || currentStaff || document.visibilityState === 'hidden') return;
+    const later = readLater();
+    if (later && Date.now() - later.at < REMIND_MS) return;
+    let active = true;
+    void checkForUpdate(false).then((update) => {
+      if (!active) return;
+      if (!update) { try { localStorage.removeItem(UPDATE_LATER_KEY); } catch { /* ignore */ } return; }
+      if (later && later.id !== candidateId(update)) { try { localStorage.removeItem(UPDATE_LATER_KEY); } catch { /* ignore */ } }
+      // Automatische Installation (alle Kassen zu) läuft gerade: nicht dazwischenfunken.
+      if (autoChecking.current || autoUpdate.current || updateBusy.current) return;
+      updateDeferred.current = false;
+      setUpdatePhase('offer');
+    }).catch(() => undefined);
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Takt, Startbildschirm und Phase genügen
+  }, [reminderTick, homeVisible, currentStaff, updatePhase, autoInstallPending]);
+  function remindLater() {
+    const c = candidateRef.current;
+    try { if (c) localStorage.setItem(UPDATE_LATER_KEY, JSON.stringify({ id: candidateId(c), at: Date.now() })); } catch { /* ignore */ }
+  }
+
   async function openUpdateFromHome() {
     updateDeferred.current = false;
     try {
@@ -251,12 +292,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
     if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
     setAutoInstallPending(false);
+    autoChecking.current = true;
     // Automatisch nur, wenn alle Kassen abgeschlossen sind; sonst wartet das Update auf „Jetzt installieren“.
     void checkRegistersClosedInCloud().then((status) => {
       if (!status.ready || !status.allClosed) return;
       autoUpdate.current = true;
       void prepareUpdate();
-    });
+    }).finally(() => { autoChecking.current = false; setReminderTick((n) => n + 1); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
   }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
 
@@ -1518,7 +1560,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
           onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
-          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
+          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; if (updatePhase === 'offer') remindLater(); setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
       {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
         firstSetup={updatePhase === 'folder' || freshSetup}
         onContinue={() => void (freshSetup && updatePhase !== 'folder' ? syncAfterFreshSetup() : syncBeforeUpdate())}
