@@ -1,5 +1,5 @@
 import { activeSessionForLocation } from '@/lib/cashSessionSelection';
-import { canDiscardCashSession, openingBalanceForLocation } from '@/lib/cashBalanceCarry';
+import { canDiscardCashSession, openingBalanceForLocation, openingBalanceCarryForLocation } from '@/lib/cashBalanceCarry';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useStore } from '@/hooks/useStore';
@@ -46,7 +46,7 @@ import { sessionTransactions } from '@/lib/sessionTransactions';
 import { archiveFolderStatus, prepareBackupTarget, requestArchiveAccess, saveBackupFile, saveJournalPdfFromTap, saveJournalPdfIfAllowed } from '@/lib/journalPdfFile';
 import type { JournalReportData } from '@/lib/journalPdf';
 import { closedSessionReport } from '@/lib/dailyReport';
-import { issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
+import { formatDailyCloseReceiptNumber, issueDailyCloseReceipt } from '@/lib/dailyCloseReceipt';
 import { buildFinalizedCashSession } from '@/lib/finalizedCashSession';
 import { persistFinalizedCashSession } from '@/lib/finalizedCashCloud';
 import { isTestMode, setTestMode, clearBookings, loadJSON, saveJSON, STORAGE_KEYS } from '@/lib/storage';
@@ -207,21 +207,101 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       if (!activationVerified(activation)) setUpdatePhase('reload');
       return;
     }
+    // 24.11.: Beim Wiederöffnen der PC-App (Chrome läuft weiter, Seite evtl. aus dem
+    // Zwischenspeicher wiederhergestellt) zuverlässig prüfen. Schlägt die Abfrage fehl
+    // (Netz nach dem Aufwachen noch nicht bereit), bald erneut versuchen statt erst
+    // nach 15 Minuten. Die installierte Version bleibt dabei unverändert nutzbar.
+    let retry: number | undefined;
+    let retryDelay = 20_000;
+    let lastCheck = 0;
     const check = () => {
       if (document.visibilityState === 'hidden') return;
+      if (Date.now() - lastCheck < 3_000) return; // focus + visibilitychange + pageshow kommen oft gleichzeitig
+      lastCheck = Date.now();
+      window.clearTimeout(retry);
       // Offer automatically only until the user chose "Später installieren".
-      void checkForUpdate(!updateDeferred.current).catch(() => undefined); // offline: keep the running app
+      void checkForUpdate(!updateDeferred.current)
+        .then(() => { retryDelay = 20_000; })
+        .catch(() => { // offline: keep the running app, try again soon
+          retry = window.setTimeout(check, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 5 * 60_000);
+        });
     };
     check();
     const timer = window.setInterval(check, 15 * 60_000);
     document.addEventListener('visibilitychange', check);
     window.addEventListener('online', check);
+    window.addEventListener('focus', check);
+    window.addEventListener('pageshow', check);
     return () => {
       window.clearInterval(timer);
+      window.clearTimeout(retry);
       document.removeEventListener('visibilitychange', check);
       window.removeEventListener('online', check);
+      window.removeEventListener('focus', check);
+      window.removeEventListener('pageshow', check);
     };
   }, [checkForUpdate]);
+
+  // 24.11.: Erinnerung. „Später“ merkt sich Zeitpunkt + Version (überlebt Neuladen).
+  // Nach 10 Minuten erneut prüfen und anbieten – nur auf dem Startbildschirm ohne
+  // angemeldeten Mitarbeiter, also ohne laufende Kassenvorgänge zu unterbrechen.
+  const UPDATE_LATER_KEY = 'woodmo-update-later';
+  const REMIND_MS = 10 * 60_000;
+  const readLater = (): { id: string; at: number } | null => {
+    try { const v = JSON.parse(localStorage.getItem(UPDATE_LATER_KEY) ?? 'null'); return v && typeof v.id === 'string' && Number.isFinite(v.at) ? v : null; } catch { return null; }
+  };
+  const candidateId = (u: PublishedUpdate) => `${u.commit}|${u.builtAt}`;
+  const [reminderTick, setReminderTick] = useState(0);
+  const autoChecking = useRef(false);
+  useEffect(() => {
+    const timer = window.setInterval(() => setReminderTick((n) => n + 1), 30_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') setReminderTick((n) => n + 1); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener('online', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('online', onVisible);
+    };
+  }, []);
+  useEffect(() => {
+    // Neue Version tatsächlich installiert (Prüfung findet kein Update mehr): Erinnerung löschen.
+    if (approvedActivation() || updatePhase !== null || updateBusy.current || autoInstallPending) return; // Installation läuft: pausieren
+    if (!homeVisible || currentStaff || document.visibilityState === 'hidden') return;
+    const later = readLater();
+    if (later && Date.now() - later.at < REMIND_MS) return;
+    let active = true;
+    void checkForUpdate(false).then((update) => {
+      if (!active) return;
+      if (!update) { try { localStorage.removeItem(UPDATE_LATER_KEY); } catch { /* ignore */ } return; }
+      if (later && later.id !== candidateId(update)) { try { localStorage.removeItem(UPDATE_LATER_KEY); } catch { /* ignore */ } }
+      // Automatische Installation (alle Kassen zu) läuft gerade: nicht dazwischenfunken.
+      if (autoChecking.current || autoUpdate.current || updateBusy.current) return;
+      updateDeferred.current = false;
+      setUpdatePhase('offer');
+    }).catch(() => undefined);
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Takt, Startbildschirm und Phase genügen
+  }, [reminderTick, homeVisible, currentStaff, updatePhase, autoInstallPending]);
+  function remindLater() {
+    const c = candidateRef.current;
+    try { if (c) localStorage.setItem(UPDATE_LATER_KEY, JSON.stringify({ id: candidateId(c), at: Date.now() })); } catch { /* ignore */ }
+  }
+
+  // 24.11.: Bei jeder Rückkehr zum Startbildschirm sofort online prüfen,
+  // ob eine neue Version bereitsteht (Dialog/Erinnerung folgen den Regeln oben).
+  useEffect(() => {
+    if (!homeVisible || currentStaff || approvedActivation()) return;
+    if (document.visibilityState === 'hidden') return;
+    void checkForUpdate(!updateDeferred.current)
+      .then(() => setReminderTick((n) => n + 1))
+      .catch(() => undefined); // offline: installierte Version läuft weiter
+  }, [homeVisible, currentStaff, checkForUpdate]);
 
   async function openUpdateFromHome() {
     updateDeferred.current = false;
@@ -251,8 +331,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
     if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
     setAutoInstallPending(false);
-    autoUpdate.current = true;
-    void prepareUpdate();
+    autoChecking.current = true;
+    // Automatisch nur, wenn alle Kassen abgeschlossen sind; sonst wartet das Update auf „Jetzt installieren“.
+    void checkRegistersClosedInCloud().then((status) => {
+      if (!status.ready || !status.allClosed) return;
+      autoUpdate.current = true;
+      void prepareUpdate();
+    }).finally(() => { autoChecking.current = false; setReminderTick((n) => n + 1); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
   }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
 
@@ -440,6 +525,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     const latestFor = (location: Location) => openingBalanceForLocation(store.cashSessions, store.transactions, location);
     return { Friedrichshafen: latestFor('Friedrichshafen'), Bregenz: latestFor('Bregenz') };
   }, [store.cashSessions, store.transactions, store.categories]);
+  // 24.11.: Datum des Abschlusses, aus dem der übertragbare Bestand stammt.
+  const openingBalanceDates = useMemo<Record<Location, number | null>>(() => ({
+    Friedrichshafen: openingBalanceCarryForLocation(store.cashSessions, store.transactions, 'Friedrichshafen').at,
+    Bregenz: openingBalanceCarryForLocation(store.cashSessions, store.transactions, 'Bregenz').at,
+  }), [store.cashSessions, store.transactions]);
 
   // The browser profile may be new while the personnel list already exists in
   // the cloud. Load it again once the cloud session is definitely available.
@@ -955,10 +1045,10 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               onClick={() => setMenuOpen(false)}
               onKeyDown={(event) => { if (event.key === 'Escape') setMenuOpen(false); }}>
               <nav role="dialog" aria-modal="true" aria-label="Kassenmenü"
-                className="w-full max-w-xl rounded-2xl border border-emerald-700/30 bg-white p-3 shadow-2xl dark:bg-slate-900"
+                className="w-full max-w-xl rounded-2xl border border-white/25 bg-slate-950 p-3 text-white shadow-2xl"
                 onClick={(event) => event.stopPropagation()}>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-bold text-slate-900 dark:text-white">Kassenmenü</h2>
+                  <h2 className="font-bold text-white">Kassenmenü</h2>
                   <button type="button" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}
                     className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-5 w-5" /></button>
                 </div>
@@ -966,18 +1056,18 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 {/* Home and Kasse stay together, also in the employee-only menu. */}
                 <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
                   <button type="button" onClick={goHome}
-                    className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-sky-500/45 bg-sky-100 p-2 text-center text-sm font-bold text-sky-900 transition hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-100 dark:hover:bg-sky-900/65">
+                    className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                     <Home className="h-5 w-5" /> <span>Startseite</span>
                   </button>
-                  <button type="button" onClick={() => navigateTo('pos')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                  <button type="button" onClick={() => navigateTo('pos')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                     <ShoppingCart className="h-5 w-5" /> Kasse
                   </button>
                   {(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) && (
                     <>
-                      <button type="button" onClick={() => navigateToProtected('journal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      <button type="button" onClick={() => navigateToProtected('journal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                         <Receipt className="h-5 w-5" /> Journal
                       </button>
-                      <button type="button" onClick={() => navigateToProtected('admin')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      <button type="button" onClick={() => navigateToProtected('admin')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                         <Settings className="h-5 w-5" /> Verwaltung
                       </button>
                     </>
@@ -986,21 +1076,21 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
 
                 {store.activeSession && currentStaff && (
                   <>
-                    <h3 className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Kassenbewegungen</h3>
+                    <h3 className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-slate-300">Kassenbewegungen</h3>
                     {/* Gleiche Kachelgröße wie oben: gleiche Spaltenzahl, gleiche Höhe, gleiche Schrift. */}
                     <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
-                      <button type="button" onClick={() => chooseCashAction('deposit')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      <button type="button" onClick={() => chooseCashAction('deposit')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                         <ArrowDownCircle className="h-5 w-5" /> Einlage
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                         <ArrowUpCircle className="h-5 w-5" /> Ausgabe
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('correction')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-slate-100 p-2 text-center text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      <button type="button" onClick={() => chooseCashAction('correction')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
                         <Settings className="h-5 w-5" /> Bestandskorrektur
                       </button>
                     </div>
                     <button type="button" onClick={() => chooseCashAction('close')}
-                      className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-amber-500/50 bg-amber-50 px-4 py-4 text-base font-bold text-amber-900 transition hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50">
+                      className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-amber-300 bg-gradient-to-b from-amber-500 to-amber-700 px-4 py-4 text-base font-bold text-white shadow-[0_2px_0_rgba(255,255,255,0.25)_inset,0_4px_10px_rgba(0,0,0,0.5)] transition hover:from-amber-400 active:translate-y-px active:shadow-none">
                       <LockKeyhole className="h-7 w-7 shrink-0" />
                       <span>Tagesabschlussbuchung vornehmen</span>
                     </button>
@@ -1114,10 +1204,10 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 // Test mode is a simulation only: no Cloud receipt number,
                 // final Cloud write, or official persisted close/PDF.
                 store.closeCashSession(session.id, bal, currentStaff, closingWithdrawalAmount, undefined, stornoLedger.records);
-                return { ok: true };
+                return { ok: true, receiptLabel: 'Testmodus (ohne Belegnummer)', synced: false };
               }
               if (!online || !navigator.onLine) {
-                return { ok: false, error: 'Beleg konnte nicht erstellt werden, da keine Internetverbindung besteht. Bitte Internetverbindung prüfen und erneut versuchen.' };
+                return { ok: false, error: 'Keine Internetverbindung: Der Tagesabschluss wurde NICHT gebucht – die Abschlussnummer kommt aus der Cloud. Bitte stelle die Internetverbindung der App wieder her und schließe dann erneut ab. Die Kasse bleibt bis dahin offen, es geht nichts verloren.' };
               }
               if (stornoLedger.status !== 'ready') {
                 return { ok: false, error: 'Stornojournal nicht sicher synchronisiert. Vor endgültigem Tagesabschluss zuerst Cloud und Stornobelege prüfen.' };
@@ -1164,7 +1254,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                   console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
                   setPendingClosePdf(closeReport);
                 }
-                return { ok: true };
+                // persistFinalizedCashSession hat den Abschluss in der Cloud gespeichert UND zurückgelesen:
+                // „Synchronisiert“ ist damit bestätigt. Die Belegnummer ist je Kasse eindeutig (idempotent).
+                return { ok: true, synced: true, receiptLabel: formatDailyCloseReceiptNumber(closed.dailyCloseReceiptNumber, closed.dailyCloseReceiptLocation ?? closed.location, finalizedAt, closed.dailyCloseReceiptYear) ?? undefined };
               } catch (error) {
                 console.warn('Tagesabschluss ohne Belegnummer abgelehnt.', error);
                 return { ok: false, error: `Tagesabschluss konnte nicht sicher bestätigt werden: ${readableSyncError(error)} Bitte vor weiteren Buchungen den Cloud-Status prüfen und erneut synchronisieren; keine zweite Abschlussbuchung erzwingen.` };
@@ -1193,6 +1285,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             onDiscardEmptySession={discardUnusedSession}
             onHome={goHome}
             openingBalanceSuggestions={openingBalanceSuggestions}
+            openingBalanceDates={openingBalanceDates}
             openSessionsByLocation={openSessionsByLocation}
             onContinueSessionAt={continueOpenSessionAt}
           />
@@ -1219,6 +1312,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               activeSession={store.activeSession}
               selectedLocation={store.selectedLocation}
               onSwitchLocation={store.switchLocation}
+              // 24.11.: Ausgewählte Kasse aus der Kassen-Übersicht bedienen (bestehender Ablauf wie Kachel „Kasse“).
+              onOpenCash={() => {
+                navigateTo('pos');
+                if (!store.activeSession || !currentStaff) setCashierLoginRequest((n) => n + 1);
+              }}
               onAddCategory={store.addCategory}
               onUpdateCategory={store.updateCategory}
               onDeleteCategory={store.deleteCategory}
@@ -1512,7 +1610,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
           onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
           onRetry={() => void syncBeforeUpdate()} onActivate={() => void finishUpdate()}
-          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
+          onDismiss={() => { autoUpdate.current = false; updateDeferred.current = true; if (updatePhase === 'offer') remindLater(); setUpdatePhase(null); }} onReload={() => window.location.reload()} />}
       {canOpenSetup && (updatePhase === 'folder' || deviceSetupOpen) && <DeviceSetupDialog warning={pdfArchiveWarning}
         firstSetup={updatePhase === 'folder' || freshSetup}
         onContinue={() => void (freshSetup && updatePhase !== 'folder' ? syncAfterFreshSetup() : syncBeforeUpdate())}

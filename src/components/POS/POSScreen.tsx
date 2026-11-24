@@ -9,7 +9,7 @@ import { CashEntryDialog } from './CashEntryDialog';
 import { CashCorrectionDialog } from './CashCorrectionDialog';
 import { DailyCloseDialog } from './DailyCloseDialog';
 import { ShotSelectionDialog } from './ShotSelectionDialog';
-import { applyShotChoice } from '@/lib/shotCombine';
+import { applyShotChoice, REMOVE_ALL_SHOTS_ID, shotParts } from '@/lib/shotCombine';
 import { PfandRetoureDialog } from './PfandRetoureDialog';
 import { BonlisteDialog } from './BonlisteDialog';
 import type { StornoRecord } from '@/lib/stornoRules';
@@ -48,7 +48,7 @@ interface Props {
   onOpenCash: (location: Location, openingBalance: number) => Promise<boolean>;
   onCorrectOpening: (newAmount: number, reason: string) => void;
   onCashEntry: (type: 'deposit' | 'withdrawal', amount: number, reason: string, isPfandRetoure?: boolean) => void;
-  onCloseCash: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string }>;
+  onCloseCash: (closingBalance: number, closingWithdrawalAmount: number, countDifferenceReason?: string) => Promise<{ ok: boolean; error?: string; receiptLabel?: string; synced?: boolean }>;
   transactions: Transaction[];
   stornos: StornoRecord[];
   stornoStatus: StornoCloudState;
@@ -73,6 +73,7 @@ interface Props {
   onDiscardEmptySession: () => Promise<void>;
   onHome?: () => void;
   openingBalanceSuggestions?: Record<Location, number | null>;
+  openingBalanceDates?: Record<Location, number | null>;
   /** Offene Kasse je Standort; im Eröffnungsfenster „weiterführen“ für den gewählten Standort. */
   openSessionsByLocation?: Record<Location, CashSession | null>;
   /** Gerät auf den Standort einer dort offenen Kasse umstellen (weiterführen statt neu eröffnen). */
@@ -96,7 +97,7 @@ const PFAND_RETOURE_PRODUCT: Product = {
 export function POSScreen({
   categories, products, shotOptions, activeSession, onCheckout,
   onOpenCash, onCorrectOpening, onCashEntry, onCloseCash, transactions, stornos, stornoStatus, stornoError, stornoServiceReady, testMode, onCommitStorno, onMoveProduct,
-  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openSessionsByLocation, onContinueSessionAt,
+  headerAction, onHeaderActionConsumed, loginRequest, selectedLocation, pfandSettings, staffUsers, currentStaff, online, onStaffAuthenticated, onSetInitialCredentials, onConfigureStaffSecurity, onResetStaffPassword, lastStaffId, onDiscardEmptySession, onHome, openingBalanceSuggestions, openingBalanceDates, openSessionsByLocation, onContinueSessionAt,
 }: Props) {
   const [activeCat, setActiveCat] = useState<string>(categories[0]?.id ?? '');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -134,6 +135,7 @@ export function POSScreen({
   const [cashEntryType, setCashEntryType] = useState<'deposit' | 'withdrawal' | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [shotProduct, setShotProduct] = useState<Product | null>(null);
+  const [closeNotice, setCloseNotice] = useState<{ receipt?: string; synced: boolean; withdrawal: number } | null>(null);
   const [shotCartIndex, setShotCartIndex] = useState<number | null>(null);
   const [showPfandRetoure, setShowPfandRetoure] = useState(false);
   const [showBonliste, setShowBonliste] = useState(false);
@@ -418,8 +420,40 @@ export function POSScreen({
     }
   }
 
+  // 24.11.: Kleine Meldung je hinzugefügtem Schuss (gleitet nach rechts raus,
+  // ohne Fokus, blockiert keine Klicks).
+  const [shotToast, setShotToast] = useState<{ id: number; text: string } | null>(null);
+  const shotToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showShotToast(text: string) {
+    if (shotToastTimer.current) clearTimeout(shotToastTimer.current);
+    setShotToast({ id: Date.now(), text });
+    shotToastTimer.current = setTimeout(() => setShotToast(null), 1800);
+  }
+
   function handleShotSelect(shot: ShotOption) {
-    if (shotCartIndex !== null) {
+    // 24.11.: Fenster bleibt nach einer Auswahl offen (mehrfach dieselbe Sorte
+    // oder verschiedene Sorten nacheinander). Nur „Alle Schüsse entfernen“ schließt.
+    const target = shotCartIndex !== null ? cart[shotCartIndex] : undefined;
+    if (shotCartIndex !== null && target && !target.isPfandRetoure) {
+      const nextShot = applyShotChoice(target.shot, shot);
+      const changed = (nextShot?.id ?? 'none') !== ((target.shot && target.shot.id !== 'none') ? target.shot.id : 'none');
+      if (changed) {
+        const count = shotParts(nextShot).filter((name) => name === shot.name).length;
+        showShotToast(shot.id === REMOVE_ALL_SHOTS_ID ? 'Alle Schüsse entfernt' : `Schuss ${shot.name} hinzugefügt · ${count}× ${shot.name}`);
+        // Bei Menge > 1 wird ein Getränk abgetrennt und steht direkt dahinter.
+        const nextIndex = target.quantity > 1 ? shotCartIndex + 1 : shotCartIndex;
+        applyShotToCart(shotCartIndex, shot);
+        setShotCartIndex(nextIndex);
+      }
+      return;
+    }
+    if (shotCartIndex !== null) applyShotToCart(shotCartIndex, shot);
+    setShotProduct(null);
+    setShotCartIndex(null);
+  }
+
+  function applyShotToCart(shotCartIndex: number, shot: ShotOption) {
+    {
       setCart((prev) => prev.flatMap((item, index) => {
         if (index !== shotCartIndex || item.isPfandRetoure) return [item];
         const oldShotPrice = item.shot && item.shot.id !== 'none' ? item.shot.price : 0;
@@ -431,8 +465,6 @@ export function POSScreen({
         return item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }, updated] : [updated];
       }));
     }
-    setShotProduct(null);
-    setShotCartIndex(null);
   }
 
   function inc(index: number) {
@@ -770,7 +802,7 @@ export function POSScreen({
 
       {/* Dialogs */}
       {showOpenDialog && (
-        <CashOpeningDialog existingSession={activeSession} openSessions={openSessionsByLocation} onContinueAt={(loc) => { onContinueSessionAt?.(loc); setShowOpenDialog(false); }} onSave={async (loc, bal) => { if (!activeSession) { const ok = await onOpenCash(loc, bal); if (!ok) return false; } setShowOpenDialog(false); return true; }} onClose={() => { setShowOpenDialog(false); onHome?.(); }} defaultLocation={currentLocation} staffUsers={staffUsers} currentStaff={currentStaff} online={online} lastStaffId={lastStaffId} onStaffAuthenticated={onStaffAuthenticated} onSetInitialCredentials={onSetInitialCredentials} onConfigureSecurity={onConfigureStaffSecurity} onResetStaffPassword={onResetStaffPassword} openingBalanceSuggestions={openingBalanceSuggestions} />
+        <CashOpeningDialog existingSession={activeSession} openSessions={openSessionsByLocation} onContinueAt={(loc) => { onContinueSessionAt?.(loc); setShowOpenDialog(false); }} onSave={async (loc, bal) => { if (!activeSession) { const ok = await onOpenCash(loc, bal); if (!ok) return false; } setShowOpenDialog(false); return true; }} onClose={() => { setShowOpenDialog(false); onHome?.(); }} defaultLocation={currentLocation} staffUsers={staffUsers} currentStaff={currentStaff} online={online} lastStaffId={lastStaffId} onStaffAuthenticated={onStaffAuthenticated} onSetInitialCredentials={onSetInitialCredentials} onConfigureSecurity={onConfigureStaffSecurity} onResetStaffPassword={onResetStaffPassword} openingBalanceSuggestions={openingBalanceSuggestions} openingBalanceDates={openingBalanceDates} />
       )}
       {showCorrection && activeSession && (
         <CashCorrectionDialog session={activeSession} currentCashBalance={currentCashBalance} onSave={(amt, reason) => { onCorrectOpening(amt, reason); setShowCorrection(false); }} onClose={() => setShowCorrection(false)} />
@@ -804,6 +836,18 @@ export function POSScreen({
           onClose={() => setShowPfandRetoure(false)}
         />
       )}
+      {closeNotice && (
+        <div className="fixed inset-x-0 top-4 z-[70] flex justify-center px-4">
+          <div role="status" className="w-full max-w-md rounded-2xl border-2 border-green-500 bg-white p-4 shadow-2xl dark:bg-gray-900">
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100">Tagesabschluss {closeNotice.receipt ?? ''} abgeschlossen</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{closeNotice.withdrawal > 0 ? `Mit Entnahme ${closeNotice.withdrawal.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}.` : 'Ohne Entnahme.'}</p>
+            <p className={`mt-1 text-sm font-bold ${closeNotice.synced ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {closeNotice.synced ? '✓ Synchronisiert – in der Cloud bestätigt' : 'Testmodus – nicht in der Cloud gespeichert'}
+            </p>
+            <button type="button" onClick={() => setCloseNotice(null)} className="mt-3 w-full rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white dark:bg-white dark:text-slate-900">OK</button>
+          </div>
+        </div>
+      )}
       {showCloseDialog && activeSession && (
         <DailyCloseDialog session={activeSession} transactions={transactions} stornos={stornos} currentStaff={currentStaff} onClose={async (bal, closingWithdrawalAmount, reason) => {
           // Set BEFORE awaiting: the active session can already disappear while the
@@ -812,6 +856,7 @@ export function POSScreen({
           const result = await onCloseCash(bal, closingWithdrawalAmount, reason);
           if (result.ok) {
             setShowCloseDialog(false);
+            setCloseNotice({ receipt: result.receiptLabel, synced: !!result.synced, withdrawal: closingWithdrawalAmount });
           } else {
             openDialogAfterConfirmedClose.current = false;
           }
@@ -820,6 +865,12 @@ export function POSScreen({
       )}
       {shotProduct && (
         <ShotSelectionDialog product={shotProduct} options={shotOptions} location={currentLocation} current={shotCartIndex !== null ? cart[shotCartIndex]?.shot ?? null : null} onSelect={handleShotSelect} onCancel={() => { setShotProduct(null); setShotCartIndex(null); }} />
+      )}
+      {shotToast && (
+        <div key={shotToast.id} role="status" aria-live="polite"
+          className="woodmo-shot-toast pointer-events-none fixed right-4 top-20 z-[60] rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg">
+          {shotToast.text}
+        </div>
       )}
       {priceEntryProduct && (
         <IndividualPriceDialog

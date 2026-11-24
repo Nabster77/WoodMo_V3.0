@@ -5,10 +5,13 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
-import { mergeTaxByRate, sortedRateKeys, isReducedRate, transactionNet } from '@/lib/tax';
-import { buildDailyReport } from '@/lib/dailyReport';
+import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
+import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
+import { computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
+import { JournalPreviewDialog } from '@/components/Journal/JournalPreviewDialog';
 import { buildDayOverview, type DaySessionPart } from '@/lib/dayOverview';
 import { formatDailyCloseReceiptNumber } from '@/lib/dailyCloseReceipt';
+import { locationStyle } from '@/lib/locationColors';
 import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { openingCorrectionView, signedAmountLabel } from '@/lib/openingCorrection';
 import { exportJournalPdf, openJournalPrintDialog } from '@/lib/journalPdfFile';
@@ -16,7 +19,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -41,6 +44,7 @@ interface Props {
   activeSession: CashSession | null;
   selectedLocation: Location;
   onSwitchLocation: (loc: Location) => void;
+  onOpenCash?: () => void;
   onAddCategory: (data: Omit<Category, 'id'>) => void;
   onUpdateCategory: (id: string, data: Partial<Omit<Category, 'id'>>) => void;
   onDeleteCategory: (id: string) => void;
@@ -144,9 +148,10 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     onCloseMenu();
     action();
   };
-  const adminMenuItem = 'flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-700/50 px-3 py-2.5 text-left text-sm font-semibold text-slate-100 transition hover:border-emerald-600/60 hover:bg-emerald-900/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400';
-  const activeAdminMenuItem = 'border-blue-500 bg-blue-600/30 text-white';
-  const adminMenuHeading = 'mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-emerald-300';
+  // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
+  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
+  const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
+  const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
@@ -188,12 +193,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             aria-modal="true"
             aria-label="Verwaltungsmenü"
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-emerald-600/40 bg-[#0c1729] p-4 text-white shadow-2xl"
+            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-4 text-white shadow-2xl"
           >
-            <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-700 pb-3">
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
               <div>
                 <h2 className="text-lg font-bold">Verwaltungsmenü</h2>
-                <p className="text-xs text-slate-400">Wähle den gewünschten Bereich oder eine Aktion.</p>
               </div>
               <button type="button" aria-label="Verwaltungsmenü schließen" onClick={onCloseMenu}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 text-slate-200 hover:bg-slate-700">
@@ -205,22 +209,22 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-admin-navigation" className={adminMenuHeading}>Verwaltungsbereiche</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" aria-current={menuItemChosen && tab === 'sessions' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'sessions' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('sessions')}>
-                  <MonitorDot className="h-5 w-5 shrink-0 text-blue-300" /> Kassen-Übersicht
+                  <MonitorDot className="h-5 w-5 shrink-0 text-white" /> Kassen-Übersicht
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'categories' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'categories' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('categories')}>
-                  <Tag className="h-5 w-5 shrink-0 text-blue-300" /> Warengruppen
+                  <Tag className="h-5 w-5 shrink-0 text-white" /> Warengruppen
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'products' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'products' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('products')}>
-                  <Package className="h-5 w-5 shrink-0 text-blue-300" /> Artikel
+                  <Package className="h-5 w-5 shrink-0 text-white" /> Artikel
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'shots' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'shots' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('shots')}>
-                  <Wine className="h-5 w-5 shrink-0 text-blue-300" /> SCHUSS
+                  <Wine className="h-5 w-5 shrink-0 text-white" /> SCHUSS
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'staff' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'staff' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('staff')}>
-                  <ShieldCheck className="h-5 w-5 shrink-0 text-blue-300" /> Benutzer
+                  <ShieldCheck className="h-5 w-5 shrink-0 text-white" /> Benutzer
                 </button>
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onOpenJournal)}>
-                  <ReceiptIcon className="h-5 w-5 shrink-0 text-blue-300" /> Journal
+                  <ReceiptIcon className="h-5 w-5 shrink-0 text-white" /> Journal
                 </button>
               </div>
             </section>
@@ -230,7 +234,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowReleaseInfo(true))}>
-                  <Info className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true" /> Info
+                  <Info className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Info
                   {unreadRelease && <>
                     <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
                     <span className="sr-only">Neue Versionshinweise</span>
@@ -238,12 +242,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
-                    <Settings className="h-5 w-5 shrink-0 text-emerald-300" /> Setup / PDF-Ordner
+                    <Settings className="h-5 w-5 shrink-0 text-white" /> Setup / PDF-Ordner
                   </button>
                 )}
                 {onToggleMode && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onToggleMode)}>
-                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" /> : <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />}
+                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0 text-white" /> : <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />}
                     {testMode ? 'Auf aktiven Modus wechseln' : 'Auf Testmodus wechseln'}
                   </button>
                 )}
@@ -254,31 +258,36 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-import-export" className={adminMenuHeading}>Import / Export</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowCatalogTransfer(true))}>
-                  <FileDown className="h-5 w-5 shrink-0 text-cyan-300" /> Excel-Import / Export
+                  <FileDown className="h-5 w-5 shrink-0 text-white" /> Excel-Import / Export
                 </button>
                 {onImportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowImport(true))}>
-                    <FileUp className="h-5 w-5 shrink-0 text-cyan-300" /> Backup importieren
+                    <FileUp className="h-5 w-5 shrink-0 text-white" /> Backup importieren
                   </button>
                 )}
                 {onExportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void onExportBackup(); })}>
-                    <Download className="h-5 w-5 shrink-0 text-cyan-300" /> Backup exportieren
+                    <Download className="h-5 w-5 shrink-0 text-white" /> Backup exportieren
                   </button>
                 )}
+                {/* 24.11.: Sicherheitsarchiv sichern und löschen in einer Zeile. */}
+                {resetQuarantineCount > 0 && (onExportResetQuarantine || onClearResetQuarantine) && (
+                  <div className="col-span-full grid grid-cols-2 gap-2">
                 {onExportResetQuarantine && resetQuarantineCount > 0 && (
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onExportResetQuarantine(); })}>
                     <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
                     Sicherheitsarchiv sichern ({resetQuarantineCount})
                   </button>
-                )}
-                {onClearResetQuarantine && resetQuarantineCount > 0 && (
+                  )}
+                  {onClearResetQuarantine && resetQuarantineCount > 0 && (
                   <button type="button" className={adminMenuItem}
                     onClick={() => openAdminAction(() => { void onClearResetQuarantine(); })}>
                     <Trash2 className="h-5 w-5 shrink-0 text-amber-300" />
                     Sicherheitsarchiv löschen
                   </button>
+                  )}
+                  </div>
                 )}
                 {onResetAllData && (
                   <button type="button" className={`${adminMenuItem} border-red-700/60 text-red-300 hover:border-red-500 hover:bg-red-950/40`}
@@ -287,13 +296,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   </button>
                 )}
               </div>
-              <p className="mt-2 text-xs text-slate-400">Das Zurücksetzen öffnet weiterhin die vorhandene Sicherheitsbestätigung.</p>
             </section>
           </nav>
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} stornos={props.stornos} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} exportedByName={props.currentStaff?.name} />
+        {tab === 'sessions' ? <LiveSessionOverview transactions={overviewTransactions} cashSessions={props.cashSessions} stornos={props.stornos} categories={props.categories} activeSession={props.activeSession} selectedLocation={props.selectedLocation} onSwitchLocation={props.onSwitchLocation} onOpenCash={props.onOpenCash} exportedByName={props.currentStaff?.name} />
           : tab === 'categories' ? <CategoryManager {...props} />
             : tab === 'products' ? <ProductManager {...props} testMode={testMode} />
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
@@ -964,7 +972,7 @@ function ProductModal({ product, categories, pfandSettings, onSave, onClose }: {
 
 // ---- Live Session Overview ----
 
-function LiveSessionOverview({ transactions, cashSessions, stornos, categories, activeSession, selectedLocation, onSwitchLocation, exportedByName }: {
+function LiveSessionOverview({ transactions, cashSessions, stornos, categories, activeSession, selectedLocation, onSwitchLocation, onOpenCash, exportedByName }: {
   transactions: Transaction[];
   stornos: StornoRecord[];
   cashSessions: CashSession[];
@@ -972,9 +980,17 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   activeSession: CashSession | null;
   selectedLocation: Location;
   onSwitchLocation: (loc: Location) => void;
+  onOpenCash?: () => void;
   exportedByName?: string;
 }) {
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateISO(Date.now()));
+  // 24.11.: Beim Öffnen die offene Kasse des gewählten Standorts zeigen, sonst heute.
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const now = formatDateISO(Date.now());
+    const open = cashSessions.find((s) => s.location === selectedLocation && !s.closed && !s.discarded && !s.dailyCloseFinalizedAt);
+    const day = open ? formatDateISO(open.openedAt) : now;
+    return day <= now ? day : now;
+  });
+  const [previewReport, setPreviewReport] = useState<JournalReportData | null>(null);
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1047,8 +1063,13 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
       const taxByRate: Record<number, number> = {};
       for (const [k, v] of taxByRateMap) taxByRate[k] = v;
       const cashBalance = day.latest?.cashBalance ?? 0;
+      // Pfand getrennt: eingenommen (Bar+Karte) und ausgezahlte Retoure, aus den Buchungen.
+      const pfandStats = computeJournalStats(txToday);
+      // Endgültige Tagesabschlüsse dieses Tages (jede TA-Nummer einzeln erreichbar).
+      // 24.11.: Abschluss gehört zum Tag der endgültigen Buchung (nicht zum Eröffnungstag).
+      const closes = day.parts.map((part) => part.session).filter((s) => !!s.dailyCloseFinalizedAt && !!s.dailyCloseReceiptNumber && formatDateISO(s.dailyCloseFinalizedAt) === selectedDate);
 
-      return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance };
+      return { loc, session, day, txToday, taxByRateMap, total, count, totalNet, totalTax, totalPfand, taxByRate, cashBalance, pfandCollected: pfandStats.pfandCollected, pfandReturned: pfandStats.pfandReturned, closes };
     });
   }, [transactions, cashSessions, selectedDate, stornos]);
 
@@ -1084,14 +1105,14 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
         {/* Standort direkt in der Verwaltung wechseln (24.11.) oder beide anzeigen. */}
         <div role="group" aria-label="Standort" className="flex h-10 overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
           {LOCATIONS.map((loc) => (
-            <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc}
+            <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc} style={locationStyle(loc)}
               onClick={() => { setShowAllLocations(false); handleSwitch(loc); }}
-              className={`px-3 ${!showAllLocations && selectedLocation === loc ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+              className={`px-3 ${!showAllLocations && selectedLocation === loc ? 'bg-[var(--loc-strong)] text-white' : 'text-[var(--loc-strong)] hover:bg-[var(--loc-soft)] dark:text-[var(--loc-light)]'}`}>
               {loc}
             </button>
           ))}
           <button type="button" aria-pressed={showAllLocations} onClick={() => setShowAllLocations(true)}
-            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-gradient-to-r from-[#16a34a] to-[#2563eb] text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
             Alle
           </button>
         </div>
@@ -1103,10 +1124,14 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             key={data.loc}
             loc={data.loc}
             session={data.session}
-            sessionCount={data.day.parts.length}
+            // 24.11.: nur Sitzungen mit Buchungen an diesem Tag oder noch offen (nicht: nur heute abgeschlossen).
+            sessionCount={data.day.parts.filter((part) => part.transactions.length > 0 || !part.session.closed).length}
             total={data.total}
             count={data.count}
-            totalNet={data.totalNet}
+            pfandCollected={data.pfandCollected}
+            pfandReturned={data.pfandReturned}
+            closes={data.closes}
+            onReport={(s) => setPreviewReport(closedSessionReport(s, transactions, categories, exportedByName, stornos))}
             totalTax={data.totalTax}
             totalPfand={data.totalPfand}
             cashBalance={data.cashBalance}
@@ -1118,6 +1143,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             onExport={() => exportLocation(data.loc, data.txToday)}
             onPrint={() => printLocation(data.loc, data.txToday)}
             onSwitch={() => handleSwitch(data.loc)}
+            onOpenCash={isToday && selectedLocation === data.loc ? onOpenCash : undefined}
             onInfo={() => setInfoLocation(data.loc)}
           />
         ))}
@@ -1139,19 +1165,24 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
           onClose={() => setInfoLocation(null)}
         />
       )}
+      {previewReport && <JournalPreviewDialog data={previewReport} onClose={() => setPreviewReport(null)} />}
     </div>
   );
 }
 
-function LocationSessionCard({ loc, session, sessionCount, total, count, totalNet, totalTax, totalPfand, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
+function LocationSessionCard({ loc, session, sessionCount, total, count, totalTax, totalPfand, pfandCollected, pfandReturned, closes, onReport, onOpenCash, cashBalance, taxByRateMap, txToday, isActive, isSelected, isHistoric, onExport, onPrint, onSwitch, onInfo }: {
   loc: Location;
   session: CashSession | null;
   sessionCount: number;
   total: number;
   count: number;
-  totalNet: number;
   totalTax: number;
   totalPfand: number;
+  pfandCollected: number;
+  pfandReturned: number;
+  closes: CashSession[];
+  onReport: (session: CashSession) => void;
+  onOpenCash?: () => void;
   cashBalance: number;
   taxByRateMap: Map<number, number>;
   txToday: Transaction[];
@@ -1163,7 +1194,20 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
   onSwitch: () => void;
   onInfo: () => void;
 }) {
-  const rateKeys = sortedRateKeys(taxByRateMap);
+  const rates = LOCATION_TAX_RATES[loc];
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsAsc, setReportsAsc] = useState(true);
+  const closeLabels = closes.map((c) => ({
+    session: c,
+    label: formatDailyCloseReceiptNumber(c.dailyCloseReceiptNumber!, c.dailyCloseReceiptLocation ?? c.location, c.dailyCloseFinalizedAt ?? c.closedAt ?? c.openedAt, c.dailyCloseReceiptYear) ?? String(c.dailyCloseReceiptNumber),
+  }));
+  // Sortierung über den numerischen Teil am Ende der TA-Nummer.
+  const sortedCloses = [...closeLabels].sort((x, y) => {
+    const nx = Number(/(\d+)\D*$/.exec(x.label)?.[1] ?? 0), ny = Number(/(\d+)\D*$/.exec(y.label)?.[1] ?? 0);
+    return reportsAsc ? nx - ny : ny - nx;
+  });
+  const finalized = !!session?.dailyCloseFinalizedAt;
+  const [salesOpen, setSalesOpen] = useState(false);
   const isClosed = !!session?.closed;
   const statusLabel = isClosed ? 'ABGESCHLOSSEN' : isHistoric ? (session ? 'OFFEN' : 'KEINE KASSE') : session ? 'OFFEN' : 'GESPERRT';
   const statusClass = isClosed
@@ -1173,14 +1217,19 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
       : isActive ? 'bg-green-600 text-white' : session ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
 
   return (
-    <div className={`overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'border-green-500 dark:border-green-600 ring-2 ring-green-300/40 dark:ring-green-700/30' : isActive ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-800`}>
+    <div style={locationStyle(loc)} onClick={(e) => {
+        // 24.11.: Freie Kartenfläche wählt den Standort; Bedienelemente behalten ihre eigene Aktion.
+        if (isSelected || (e.target as HTMLElement).closest('button, a, input, select, summary, [role="dialog"]')) return;
+        onSwitch();
+      }} className={`${isSelected ? '' : 'cursor-pointer '}overflow-hidden rounded-2xl border-2 shadow-sm transition dark:shadow-lg ${isSelected ? 'woodmo-loc-pulse border-[var(--loc-strong)]' : 'border-[var(--loc-border)] opacity-90 [filter:grayscale(.4)_brightness(.92)]'} bg-white dark:bg-gray-800`}>
       {/* Header — clickable to select this location */}
-      <button
-        onClick={onSwitch}
-        className={`flex w-full items-center justify-between px-4 py-3 text-left transition active:scale-[0.99] ${isSelected ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/10' : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/40 dark:hover:bg-gray-900/70'}`}
+      <div role="button" tabIndex={0}
+        onClick={(e) => { e.stopPropagation(); onSwitch(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitch(); } }}
+        className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left transition bg-[var(--loc-soft)] hover:brightness-110`}
       >
         <div className="flex items-center gap-2">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${isSelected || isActive ? 'bg-green-600' : 'bg-gray-400'} text-white`}>
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--loc-strong)] text-white`}>
             <MapPin className="h-5 w-5" />
           </div>
           <div>
@@ -1190,9 +1239,39 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
             </p>
           </div>
         </div>
+        {/* Mitte: Klappmenü „Berichte“ mit den TA-Nummern dieses Standorts/Tages (24.11.) */}
+        <div className="relative flex flex-1 items-center justify-center" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          {closeLabels.length > 0 && (
+            <>
+              <button type="button" onClick={() => setReportsOpen((v) => !v)} aria-expanded={reportsOpen}
+                className="flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700">
+                <FileText className="h-3.5 w-3.5" /> Berichte ({closeLabels.length})
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {reportsOpen && (
+                <div className="absolute left-1/2 top-full z-30 mt-1 w-64 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+                  <button type="button" onClick={() => setReportsAsc((v) => !v)}
+                    className="mb-1 flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
+                    Sortierung: {reportsAsc ? 'aufsteigend' : 'absteigend'}
+                    <ChevronDown className={`h-3.5 w-3.5 ${reportsAsc ? 'rotate-180' : ''}`} />
+                  </button>
+                  {sortedCloses.map(({ session: c, label }) => (
+                    <button key={c.id} type="button" onClick={() => { setReportsOpen(false); onReport(c); }}
+                      className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-gray-800 hover:bg-blue-50 dark:text-gray-100 dark:hover:bg-blue-900/30">
+                      <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {closes.length === 0 && txToday.length === 0 && (
+            <span className="text-center text-xs font-semibold text-gray-400">Keine Buchungen an diesem Tag!</span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {isSelected && (
-            <span className="flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+            <span className="flex items-center gap-1 rounded-full bg-[var(--loc-strong)] px-2.5 py-1 text-xs font-bold text-white shadow-sm">
               <Check className="h-3 w-3" /> AUSGEWÄHLT
             </span>
           )}
@@ -1200,7 +1279,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
             {statusLabel}
           </span>
         </div>
-      </button>
+      </div>
 
       {/* Body */}
       <div className="p-4">
@@ -1212,72 +1291,59 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
               <p className="text-base font-bold text-gray-900 dark:text-gray-100">{formatCurrency(session.openingBalance)}</p>
             </div>
             <div className="rounded-xl bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-              <p className="text-xs text-blue-400">{sessionCount > 1 ? 'Kassenbestand (letzte Kasse)' : 'Kassenbestand'}</p>
-              <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(cashBalance)}</p>
+              <p className="text-xs text-blue-400">{finalized
+                ? `Kassenendbestand vom ${new Date(session.dailyCloseFinalizedAt!).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                : 'Kassenbestand seit letzter Buchung'}</p>
+              <p className="text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(finalized ? (session.closingBalance ?? cashBalance) : cashBalance)}</p>
             </div>
           </div>
         )}
 
-        {/* Sales stats */}
-        <div className="mb-3 rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-emerald-50 p-3 dark:border-green-800 dark:from-green-900/20 dark:to-emerald-900/10">
+        {/* Umsatz des Tages (24.11.): Brutto inkl. Pfand, Pfand, MwSt, Netto */}
+        <div className="mb-3 rounded-xl border border-[var(--loc-border)] bg-[var(--loc-soft)] p-3">
           <div className="mb-2 flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Umsatz des Tages (ohne Pfand)</p>
+            <TrendingUp className="h-4 w-4 text-[var(--loc-strong)] dark:text-[var(--loc-light)]" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--loc-strong)] dark:text-[var(--loc-light)]">Umsatz des Tages</p>
           </div>
           {sessionCount > 1 && (
-            <p className="mb-2 text-xs font-medium text-green-800/80 dark:text-green-300/80">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
+            <p className="mb-2 text-xs font-medium text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{sessionCount} Kassensitzungen an diesem Tag · Umsatz zusammengerechnet</p>
           )}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">Brutto</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(total)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">Netto inkl. Pfand</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalNet)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-green-700/70 dark:text-green-400/70">MwSt inkl. Pfand</p>
-              <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(totalTax)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tax breakdown */}
-        {rateKeys.length > 0 && (
-          <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {rateKeys.map((rate) => (
-              <div key={rate} className="rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
-                <div className="flex items-center gap-1.5">
-                  <ReceiptIcon className={`h-3.5 w-3.5 ${isReducedRate(rate) ? 'text-amber-500' : 'text-rose-500'}`} />
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">MwSt {rate}%</span>
-                </div>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(taxByRateMap.get(rate) ?? 0)}</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {([
+              ['Umsatz brutto (inkl. Pfand)', total + totalPfand],
+              ['Pfand eingenommen', pfandCollected],
+              ['Pfandretoure gesamt', pfandReturned === 0 ? 0 : -Math.abs(pfandReturned)],
+            ] as const).map(([label, value]) => (
+              <div key={label}>
+                <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
+                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value)}</p>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Pfand + count */}
-        <div className="mb-3 flex items-center gap-4 text-sm">
-          {totalPfand > 0 && (
-            <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <Recycle className="h-4 w-4 text-green-500" />
-              Pfand: <span className="font-bold">{formatCurrency(totalPfand)}</span>
+            {/* MwSt.: reduziert + regulär je Standort, darunter gesamt */}
+            <div>
+              {[rates.reduced, rates.standard].map((rate) => (
+                <p key={rate} className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt. {rate} %: <span className="font-semibold">{formatCurrency(taxByRateMap.get(rate) ?? 0)}</span></p>
+              ))}
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">MwSt. gesamt</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(totalTax)}</p>
             </div>
-          )}
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <ReceiptIcon className="h-4 w-4" />
-            Verkäufe: <span className="font-bold">{count}</span>
+            <div>
+              <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">Netto-Gesamtumsatz</p>
+              <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(total + totalPfand - totalTax)}</p>
+            </div>
           </div>
         </div>
 
-        {/* Recent transactions */}
-        {txToday.length > 0 && (
-          <div className="mb-3">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Letzte Verkäufe</p>
-            <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-              {txToday.slice(0, 5).map((tx) => (
+        {/* Verkäufe: einklappbar (24.11.) */}
+        <div className="mb-3">
+          <button type="button" onClick={() => setSalesOpen((v) => !v)} disabled={txToday.length === 0} aria-expanded={salesOpen}
+            className="flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-sm text-gray-600 disabled:cursor-default dark:text-gray-400">
+            <ReceiptIcon className="h-4 w-4" /> Verkäufe: <span className="font-bold">{count}</span>
+            {txToday.length > 0 && <ChevronDown className={`h-4 w-4 transition-transform ${salesOpen ? 'rotate-180' : ''}`} />}
+          </button>
+          {salesOpen && txToday.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
+              {txToday.map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Clock className="h-3 w-3" />
@@ -1293,38 +1359,33 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalNe
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Info + Export buttons */}
-        <div className="mb-2 flex gap-2">
-          <button
-            onClick={onInfo}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-95"
-          >
+        {/* Eine Zeile: Info links, PDF-Export und Drucken rechts (24.11.) */}
+        <div className="flex items-center gap-2">
+          <button onClick={onInfo}
+            className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-95">
             <Info className="h-4 w-4" /> Info
           </button>
+          {/* 24.11.: Ausgewählte Kasse bedienen – öffnet nur die Kasse bzw. den bestehenden Eröffnungsablauf. */}
+          {onOpenCash && (
+            <button type="button" onClick={onOpenCash}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[var(--loc-strong)] px-4 text-sm font-bold text-white transition hover:brightness-110 active:scale-95">
+              <MonitorDot className="h-4 w-4" /> {session && !session.closed ? 'Kasse weiterführen' : 'Kasse eröffnen'}
+            </button>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button onClick={onExport} disabled={txToday.length === 0}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+              <FileDown className="h-3.5 w-3.5" /> PDF-Export
+            </button>
+            <button onClick={onPrint} disabled={txToday.length === 0}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40">
+              <Printer className="h-3.5 w-3.5" /> Drucken
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onExport}
-            disabled={txToday.length === 0}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            <FileDown className="h-3.5 w-3.5" /> PDF-Export
-          </button>
-          <button
-            onClick={onPrint}
-            disabled={txToday.length === 0}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40"
-          >
-            <Printer className="h-3.5 w-3.5" /> Drucken
-          </button>
-        </div>
-
-        {txToday.length === 0 && !session && (
-          <p className="mt-2 text-center text-xs text-gray-400">Keine Daten für diesen Tag</p>
-        )}
       </div>
     </div>
   );
@@ -1445,11 +1506,11 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 dark:border-gray-700">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300"><Euro className="h-4 w-4 text-green-600" /> Bar</span>
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cashCount}× · {formatCurrency(cashTotal)}</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cashCount} {cashCount === 1 ? 'Barzahlung' : 'Barzahlungen'} · {formatCurrency(cashTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 dark:border-gray-700">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300"><ReceiptIcon className="h-4 w-4 text-blue-600" /> Karte</span>
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cardCount}× · {formatCurrency(cardTotal)}</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cardCount} {cardCount === 1 ? 'Kartenzahlung' : 'Kartenzahlungen'} · {formatCurrency(cardTotal)}</span>
                 </div>
               </div>
 
@@ -1468,6 +1529,11 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 </div>
               )}
 
+              {/* 24.11.: Kassensitzungen einklappbar, damit das Fenster kleiner bleibt. */}
+              {parts.length > 0 && (
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Kassensitzungen ({parts.length})</summary>
+                  <div className="space-y-3">
               {parts.length > 1 && (
                 <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-900/20 dark:text-blue-200">{parts.length} Kassensitzungen an diesem Tag. Umsatz und Warengruppen sind zusammengerechnet, Bestände stehen je Sitzung.</p>
               )}
@@ -1525,11 +1591,14 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                   )}
                 </div>
               ))}
+                  </div>
+                </details>
+              )}
 
               {/* Category breakdown */}
               {categoryAgg.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Warengruppen</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Warengruppen</summary>
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-gray-900/40">
@@ -1552,13 +1621,13 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </details>
               )}
 
               {/* Product breakdown */}
               {productAgg.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Artikel-Detail</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Artikel-Detail</summary>
                   <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-gray-900/40">
@@ -1583,13 +1652,13 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </details>
               )}
 
               {/* Transactions list */}
               {transactions.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Alle Verkäufe ({transactions.length})</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
                       <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
@@ -1607,7 +1676,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </div>
                     ))}
                   </div>
-                </div>
+                </details>
               )}
             </>
           )}

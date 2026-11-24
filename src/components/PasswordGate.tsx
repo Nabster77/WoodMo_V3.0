@@ -108,11 +108,11 @@ export function PasswordGate({ onSuccess, title, onStaffLogin, onCancel, adminis
           <button
             onClick={handleSubmit}
             disabled={checking}
-            className="w-full rounded-xl bg-slate-900 py-3 text-base font-bold text-white shadow-md transition hover:bg-slate-800 dark:bg-white dark:!text-slate-900 dark:hover:bg-slate-200 active:scale-95 disabled:opacity-60"
+            className="w-full rounded-xl py-3 text-base font-bold border border-white bg-gradient-to-b from-white to-slate-200 text-slate-900 shadow-[0_2px_0_rgba(255,255,255,0.6)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:to-slate-100 active:translate-y-px active:shadow-none disabled:opacity-60"
           >
             {checking ? <Loader2 className="mr-1.5 inline h-5 w-5 animate-spin" /> : <Check className="mr-1.5 inline h-5 w-5" />} Entsperren
           </button>
-          {onCancel && <button type="button" onClick={onCancel} disabled={checking} className="w-full rounded-xl border border-gray-300 py-2.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-200 disabled:opacity-60">Abbrechen</button>}
+          {onCancel && <button type="button" onClick={onCancel} disabled={checking} className="w-full rounded-xl py-2.5 text-sm font-semibold border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none disabled:opacity-60">Abbrechen</button>}
           {onStaffLogin && <button onClick={onStaffLogin} className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 text-sm font-semibold text-slate-800 dark:border-white/40 dark:bg-white/5 dark:text-slate-100">Als Administrator anmelden</button>}
         </div>}
         {accessDenied && onCancel && <button type="button" onClick={onCancel} className="mt-4 w-full rounded-xl border border-gray-300 py-2.5 text-sm font-semibold dark:border-gray-600 dark:text-gray-200">Abbrechen</button>}

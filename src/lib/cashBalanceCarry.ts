@@ -14,10 +14,16 @@ export function canDiscardCashSession(session: CashSession, transactions: Transa
 }
 
 export function openingBalanceForLocation(sessions: CashSession[], transactions: Transaction[], location: Location): number | null {
+  return openingBalanceCarryForLocation(sessions, transactions, location).amount;
+}
+
+/** 24.11.: Übertragbarer Bestand samt Zeitpunkt des Abschlusses, aus dem er stammt. */
+export function openingBalanceCarryForLocation(sessions: CashSession[], transactions: Transaction[], location: Location): { amount: number | null; at: number | null } {
   const atLocation = sessions.filter(session => session.location === location);
   const terminal = atLocation.filter(session => session.closed || session.discarded || session.dailyCloseFinalizedAt)
     .sort((a, b) => (a.closedAt ?? a.dailyCloseFinalizedAt ?? a.openedAt) - (b.closedAt ?? b.dailyCloseFinalizedAt ?? b.openedAt) || a.openedAt - b.openedAt);
   let carry: number | null = null;
+  let carryAt: number | null = null;
   for (const session of terminal) {
     const nextOpening = Math.min(...atLocation.filter(next => next.openedAt > session.openedAt).map(next => next.openedAt));
     const until = Math.min(session.closedAt ?? Infinity, nextOpening - 1);
@@ -26,6 +32,7 @@ export function openingBalanceForLocation(sessions: CashSession[], transactions:
     if (!session.discarded && !session.dailyCloseSnapshot && session.dailyCloseReceiptNumber && Number.isFinite(session.closingBalance) &&
         (financial || session.closingBalance !== 0)) {
       carry = Math.round(session.closingBalance! * 100) / 100;
+      carryAt = session.dailyCloseFinalizedAt ?? session.closedAt ?? session.openedAt;
       continue;
     }
     if (session.discarded) continue;
@@ -40,7 +47,7 @@ export function openingBalanceForLocation(sessions: CashSession[], transactions:
         : Number.isFinite(session.openingBalance) && session.openingBalance > 0
           ? session.openingBalance
           : null;
-      if (typeof candidate === 'number') carry = Math.round(candidate * 100) / 100;
+      if (typeof candidate === 'number') { carry = Math.round(candidate * 100) / 100; carryAt = session.dailyCloseFinalizedAt ?? session.closedAt ?? session.openedAt; }
       continue;
     }
     let remainder: number | undefined;
@@ -50,7 +57,7 @@ export function openingBalanceForLocation(sessions: CashSession[], transactions:
       // A saved close remains authoritative while cloud transactions load.
       remainder = session.closingBalance;
     }
-    if (typeof remainder === 'number' && Number.isFinite(remainder)) carry = Math.round(remainder * 100) / 100;
+    if (typeof remainder === 'number' && Number.isFinite(remainder)) { carry = Math.round(remainder * 100) / 100; carryAt = session.dailyCloseFinalizedAt ?? session.closedAt ?? session.openedAt; }
   }
-  return carry;
+  return { amount: carry, at: carryAt };
 }

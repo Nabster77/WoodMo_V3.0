@@ -9,6 +9,8 @@ import { escapeHtml } from '@/lib/escapeHtml';
 import { formatCashSessionTimestamp } from '@/lib/cashSessionTimes';
 
 export interface JournalReportData {
+  /** Kennzeichnung Schnaps/Likör je Artikel-ID (aus dem Katalog), nur für die Anzeige. */
+  spiritById?: Record<string, 'likoer' | 'schnaps'>;
   headerLabel: string;
   location: string;
   transactions: Transaction[];
@@ -62,6 +64,39 @@ export interface YearlyPfandOverview {
   pfandCollected: number;
   pfandReturned: number;
   pfandSaldo: number;
+  /** 24.11.: konkreter Berichtszeitraum, z. B. „24.11.2026“ oder „21.11.2026 – 23.11.2026“. */
+  periodLabel?: string;
+  /** Hinweis, z. B. dass der Kassenbestand nur die einzelne Kassensitzung betrifft. */
+  note?: string;
+}
+
+/**
+ * 24.11.: Pfandübersicht nur für Standort und Berichtszeitraum (Start und Ende
+ * einschließlich). Gleiche Zählweise wie die Jahresübersicht.
+ */
+export function calculatePfandOverview(
+  transactions: Transaction[],
+  startMs: number,
+  endMsInclusive: number,
+  location: Location | 'all',
+  scopeLabel: string = location === 'all' ? 'Alle Standorte' : location,
+  note?: string,
+): YearlyPfandOverview {
+  const inRange = transactions.filter((t) => t.timestamp >= startMs && t.timestamp <= endMsInclusive);
+  const fmt = (ms: number) => new Date(ms).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const from = fmt(startMs), to = fmt(endMsInclusive);
+  const base = calculateYearlyPfandOverview(inRange, new Date(startMs).getFullYear(), location, scopeLabel);
+  // Jahresfilter in der Basisfunktion darf einen Zeitraum über den Jahreswechsel nicht kürzen.
+  if (new Date(startMs).getFullYear() !== new Date(endMsInclusive).getFullYear()) {
+    let collected = 0, returned = 0;
+    for (const y of new Set(inRange.map((t) => new Date(t.timestamp).getFullYear()))) {
+      const part = calculateYearlyPfandOverview(inRange, y, location, scopeLabel);
+      collected += part.pfandCollected; returned += part.pfandReturned;
+    }
+    base.pfandCollected = collected; base.pfandReturned = returned;
+    base.pfandSaldo = Math.round((collected - returned) * 100) / 100;
+  }
+  return { ...base, periodLabel: from === to ? from : `${from} – ${to}`, note };
 }
 
 export interface CashAuditRecord {
@@ -97,9 +132,20 @@ interface LocationStats {
   taxByRate: Record<number, number>;
 }
 
+/** Artikelname mit farbig markiertem Schuss-Anteil („Glühwein + 2× Rum“). */
+let spiritLookup: Record<string, 'likoer' | 'schnaps'> = {};
+function itemNameHtml(name: string, productId?: string): string {
+  const parts = name.split(' + ');
+  const spirit = productId ? spiritLookup[productId] : undefined;
+  const badge = spirit ? ` <span class="tag tag-${spirit}">${spirit === 'likoer' ? 'LIKÖR' : 'SCHNAPS'}</span>` : '';
+  if (parts.length < 2) return escapeHtml(name) + badge;
+  return `${escapeHtml(parts[0])}${badge} <span class="tag tag-shot">+ ${escapeHtml(parts.slice(1).join(' + '))}</span>`;
+}
+
 const LOCATION_META: Record<Location, { sub: string; color: string; bar: string }> = {
-  Friedrichshafen: { sub: 'Friedrichshafen', color: '#1e3a5f', bar: '#2563eb' },
-  Bregenz: { sub: 'Bregenz', color: '#0f766e', bar: '#0d9488' },
+  // 24.11.: gleiche Standortfarben wie in der App (Friedrichshafen grün, Bregenz blau).
+  Friedrichshafen: { sub: 'Friedrichshafen', color: '#14532d', bar: '#16a34a' },
+  Bregenz: { sub: 'Bregenz', color: '#1e3a8a', bar: '#2563eb' },
 };
 
 export function computeJournalStats(txs: Transaction[]): LocationStats {
@@ -178,11 +224,11 @@ function categoryRows(txs: Transaction[], categories: Category[], sort?: Journal
     }
   }
   return [...map.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total)
-    .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right">${pfandSaldoCell(g.pfand)}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g) => `<tr><td>${itemNameHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right">${pfandSaldoCell(g.pfand)}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
 }
 
-function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number }> } {
+function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; bestRows: string; artMap: Map<string, { name: string; count: number; total: number; taxRate: number; productId?: string }> } {
   const pricesByProduct = new Map<string, Set<number>>();
   for (const tx of txs) {
     for (const item of tx.items) {
@@ -192,7 +238,7 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
       pricesByProduct.set(item.productId, set);
     }
   }
-  const artMap = new Map<string, { name: string; count: number; total: number; taxRate: number }>();
+  const artMap = new Map<string, { name: string; count: number; total: number; taxRate: number; productId?: string }>();
   for (const tx of txs) {
     for (const item of tx.items) {
       if (item.isPfandRetoure) continue;
@@ -202,7 +248,7 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
       const variable = (pricesByProduct.get(item.productId)?.size ?? 0) > 1;
       const label = !sort && variable ? `${item.name} (${formatCurrency(item.price)})` : item.name;
       const isTaxFree = isTaxFreeItem(item);
-      if (!artMap.has(key)) artMap.set(key, { name: label, count: 0, total: 0, taxRate: isTaxFree ? 0 : item.taxRate });
+      if (!artMap.has(key)) artMap.set(key, { name: label, count: 0, total: 0, taxRate: isTaxFree ? 0 : item.taxRate, productId: item.productId });
       const g = artMap.get(key)!;
       g.count += item.quantity;
       g.total += item.price * item.quantity;
@@ -210,10 +256,10 @@ function articleRows(txs: Transaction[], sort?: JournalSort): { rows: string; be
   }
   const ordered = [...artMap.values()].sort((a, b) => sort ? compareJournalRows(a, b, sort) : b.total - a.total);
   const rows = ordered
-    .map((g) => `<tr><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g) => `<tr><td>${itemNameHtml(g.name, g.productId)}</td><td style="text-align:right">${g.taxRate === 0 ? 'steuerfrei' : `${g.taxRate}%`}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   const bestRows = (sort ? ordered : [...artMap.values()].filter(g => g.total > 0).sort((a, b) => b.count - a.count).slice(0, 10))
-    .map((g, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(g.name)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
+    .map((g, i) => `<tr><td>${i + 1}</td><td>${itemNameHtml(g.name, g.productId)}</td><td style="text-align:right">${g.count}</td><td style="text-align:right"><b>${formatCurrency(g.total)}</b></td></tr>`)
     .join('');
   return { rows, bestRows, artMap };
 }
@@ -441,14 +487,15 @@ function dailyCloseCashSection(cash?: JournalReportData['dailyCloseCash']): stri
 function yearlyPfandOverviewSection(overview?: YearlyPfandOverview): string {
   if (!overview) return '';
   return `<section class="report-table-section table-block yearly-pfand-overview">
-    <h2>Pfand-Kontrollübersicht ${overview.year}</h2>
-    <p class="pfand-control-note">${escapeHtml(overview.scopeLabel)} · alle Buchungen im Kalenderjahr</p>
+    <h2>${overview.periodLabel ? `Pfandübersicht · ${escapeHtml(overview.scopeLabel)} · ${escapeHtml(overview.periodLabel)}` : `Pfand-Kontrollübersicht ${overview.year}`}</h2>
+    ${overview.periodLabel ? '' : `<p class="pfand-control-note">${escapeHtml(overview.scopeLabel)} · alle Buchungen im Kalenderjahr</p>`}
     <table><tbody>
       <tr><td>Pfandeinnahmen</td><td style="text-align:right"><b>+ ${formatCurrency(overview.pfandCollected)}</b></td></tr>
       <tr><td>Pfandretouren</td><td style="text-align:right"><b>- ${formatCurrency(overview.pfandReturned)}</b></td></tr>
-      <tr><td><b>${pfandSaldoLabel(overview.pfandSaldo)}</b></td><td style="text-align:right">${pfandSaldoCell(overview.pfandSaldo)}</td></tr>
+      <tr><td><b>${overview.periodLabel ? 'Pfandsaldo' : pfandSaldoLabel(overview.pfandSaldo)}</b></td><td style="text-align:right">${pfandSaldoCell(overview.pfandSaldo)}</td></tr>
     </tbody></table>
-    <p class="pfand-control-note">Der Saldo wird aus den vorhandenen Buchungen berechnet und beim Zurücksetzen der Buchungen automatisch zurückgesetzt.</p>
+    ${overview.note ? `<p class="pfand-control-note"><b>${escapeHtml(overview.note)}</b></p>` : ''}
+    <p class="pfand-control-note">Pfandsaldo = Pfandeinnahmen minus Pfandretouren, berechnet aus den Buchungen ${overview.periodLabel ? 'dieses Zeitraums und Standorts' : 'des Kalenderjahres'}.</p>
   </section>`;
 }
 
@@ -564,10 +611,13 @@ function selectedJournalSection(data: JournalReportData, view: NonNullable<Journ
 
 export function buildJournalHTML(data: JournalReportData): string {
   const { headerLabel, location, transactions, stornos = [], categories, fileName, exportedByName, cashAuditRecords = [], staffTimeRecords = [], documentTitle = 'Kassenjournal', documentStatus, receiptNumber, cashSessionPeriod, dailyCloseCash, yearlyPfandOverview } = data;
+  spiritLookup = data.spiritById ?? {};
   const generatedAt = new Date().toLocaleString('de-DE');
   const generatedTime = new Date().toLocaleTimeString('de-DE');
   const isBregenzReport = location.toLowerCase().includes('bregenz');
-  const reportAccent = isBregenzReport ? '#0f766e' : '#2563eb';
+  const reportAccent = isBregenzReport ? '#2563eb' : '#16a34a';
+  // Alle Standorte: Verlauf aus allen Standortfarben (24.11.).
+  const reportAccentAll = 'linear-gradient(90deg, #16a34a, #2563eb)';
 
   const isBoth = location.includes('Beide') || location.includes('Kasse 1 + Kasse 2') || location.toLowerCase().includes('alle');
 
@@ -633,6 +683,10 @@ export function buildJournalHTML(data: JournalReportData): string {
     .header .cash-session-period { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 22px; margin-top: 9px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-weight: 700; color: #1e293b; }
     .header .cash-session-period span { white-space: nowrap; }
     .print-running-header, .print-running-footer { display: none; }
+    .tag { display: inline-block; border-radius: 4px; padding: 0 5px; font-size: 10px; font-weight: 700; color: #fff; }
+    .tag-shot { background: #b45309; }
+    .tag-schnaps { background: #ef4444; }
+    .tag-likoer { background: #8b5cf6; }
     h2 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     caption { caption-side: top; text-align: left; font-size: 16px; font-weight: bold; margin-top: 20px; margin-bottom: 8px; color: #1e3a5f; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
     .table-title-row th { text-align: left; text-transform: none; font-size: 16px; color: #1e3a5f; background: transparent; border-bottom: 1px solid #cbd5e1; padding: 20px 0 8px; }
@@ -719,7 +773,7 @@ export function buildJournalHTML(data: JournalReportData): string {
   </style></head><body>
   <div class="print-running-header"><strong>${escapeHtml(documentTitle)}</strong><span>${escapeHtml(headerLabel)} · ${escapeHtml(location)}</span></div>
   <div class="print-running-footer"><span>${escapeHtml(documentTitle)} automatisch generiert · ${generatedAt}</span><span class="page-count"></span></div>
-  <div class="header" style="--report-accent:${reportAccent}"${documentTitle === 'Tagesabschluss' ? ` data-pdf-page-header="${escapeHtml(`${documentTitle} · ${headerLabel}`)}" data-pdf-page-location="${escapeHtml(location)}"` : ''}>
+  <div class="header" style="--report-accent:${reportAccent}"${documentTitle === 'Tagesabschluss' ? ` data-pdf-page-header="${escapeHtml(`${documentTitle} · ${headerLabel}`)}" data-pdf-page-location="${escapeHtml(location)}"` : ''}>${isBoth ? `<div style="height:6px;border-radius:3px;background:${reportAccentAll};margin:0 0 8px"></div>` : ''}
     ${documentStatus ? `<div class="report-employee"><strong>${escapeHtml(documentStatus)}</strong></div>` : ''}
     <h1>${escapeHtml(documentTitle)}</h1>
     <div class="report-period">${escapeHtml(headerLabel)}</div>
