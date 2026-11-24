@@ -1486,11 +1486,11 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 dark:border-gray-700">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300"><Euro className="h-4 w-4 text-green-600" /> Bar</span>
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cashCount}× · {formatCurrency(cashTotal)}</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cashCount} {cashCount === 1 ? 'Barzahlung' : 'Barzahlungen'} · {formatCurrency(cashTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 dark:border-gray-700">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300"><ReceiptIcon className="h-4 w-4 text-blue-600" /> Karte</span>
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cardCount}× · {formatCurrency(cardTotal)}</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{cardCount} {cardCount === 1 ? 'Kartenzahlung' : 'Kartenzahlungen'} · {formatCurrency(cardTotal)}</span>
                 </div>
               </div>
 
@@ -1509,6 +1509,11 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 </div>
               )}
 
+              {/* 24.11.: Kassensitzungen einklappbar, damit das Fenster kleiner bleibt. */}
+              {parts.length > 0 && (
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Kassensitzungen ({parts.length})</summary>
+                  <div className="space-y-3">
               {parts.length > 1 && (
                 <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-900/20 dark:text-blue-200">{parts.length} Kassensitzungen an diesem Tag. Umsatz und Warengruppen sind zusammengerechnet, Bestände stehen je Sitzung.</p>
               )}
@@ -1566,11 +1571,14 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                   )}
                 </div>
               ))}
+                  </div>
+                </details>
+              )}
 
               {/* Category breakdown */}
               {categoryAgg.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Warengruppen</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Warengruppen</summary>
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-gray-900/40">
@@ -1593,13 +1601,13 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </details>
               )}
 
               {/* Product breakdown */}
               {productAgg.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Artikel-Detail</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Artikel-Detail</summary>
                   <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-gray-900/40">
@@ -1624,13 +1632,13 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </details>
               )}
 
               {/* Transactions list */}
               {transactions.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Alle Verkäufe ({transactions.length})</p>
+                <details className="group">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
                       <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
@@ -1648,7 +1656,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       </div>
                     ))}
                   </div>
-                </div>
+                </details>
               )}
             </>
           )}
