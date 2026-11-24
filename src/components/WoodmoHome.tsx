@@ -59,7 +59,7 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
         <div className="relative flex w-full items-center justify-center">
           {onUpdate && <button type="button" onClick={onUpdate}
             title={updateWaiting ? `Update ${updateWaiting} wartet auf Installation` : 'Nach Updates suchen'}
-            className={`absolute left-0 min-h-8 rounded-lg px-2 text-[11px] font-semibold hover:bg-white/10 hover:text-white ${updateWaiting ? 'text-emerald-300' : 'text-slate-400'}`}>
+            className={`absolute left-0 min-h-8 rounded-lg px-2 text-[11px] font-semibold hover:bg-white/10 hover:text-white ${updateWaiting ? 'text-emerald-300 motion-safe:animate-pulse' : 'text-slate-400'}`}>
             {updateWaiting ? '● Update wartet' : 'Update'}
           </button>}
           <p className="px-24 text-center text-[11px] font-semibold text-slate-500">Holz trifft Code · by Nabster77</p>

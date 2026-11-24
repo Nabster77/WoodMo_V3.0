@@ -21,7 +21,7 @@ interface Props {
 
 export function InitialSyncDialog({ phase, version, installedVersion, notes, ready, registers, error, percent, onPrepare, onContinue, onRetry, onActivate, onDismiss, onReload }: Props) {
   const syncing = phase === 'syncing' || phase === 'sync-error' || phase === 'synced';
-  const title = phase === 'offer' ? 'Achtung, ein neues Update ist verfügbar.'
+  const title = phase === 'offer' ? 'Achtung, ein neues Update ist verfügbar'
     : phase === 'prepared' ? 'Update vorbereitet'
     : syncing ? 'Cloud-Synchronisierung'
     : phase === 'reload' ? 'App erneut öffnen' : 'Update';
