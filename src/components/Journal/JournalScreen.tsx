@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DateNav, shiftIsoDay, useDaySwipe } from '@/components/DateNav';
 import { SpiritBadge } from '@/components/POS/ProductTile';
+import { locationStyle } from '@/lib/locationColors';
 import { compareJournalRows, compareJournalTransactions, type JournalSort } from '@/lib/journalOrdering';
 import { openingBalanceOfDays } from '@/lib/dayOverview';
 import { loadDailyCloseArchive, sessionCloseArchiveKey } from '@/lib/dailyCloseArchive';
@@ -406,7 +407,10 @@ export function JournalScreen({ transactions: storedTransactions, stornos, categ
         </div>
       )}
 
-      <div className="mb-3 overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-4 shadow-sm dark:border-green-800 dark:from-green-900/30 dark:to-emerald-900/20">
+      <div style={locationFilter === 'all' ? undefined : locationStyle(locationFilter)}
+        className={`mb-3 overflow-hidden rounded-2xl border p-4 shadow-sm ${locationFilter === 'all'
+          ? 'border-[#16a34a]/50 bg-gradient-to-r from-[#16a34a]/20 to-[#2563eb]/20'
+          : 'border-[var(--loc-border)] bg-[var(--loc-soft)]'}`}>
         <div className="mb-2 flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
           <p className="text-sm font-bold text-green-700 dark:text-green-400">{summaryTitle}</p>

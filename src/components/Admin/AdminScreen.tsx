@@ -1091,7 +1091,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
             </button>
           ))}
           <button type="button" aria-pressed={showAllLocations} onClick={() => setShowAllLocations(true)}
-            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-slate-700 text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+            className={`border-l border-gray-300 px-3 dark:border-gray-600 ${showAllLocations ? 'bg-gradient-to-r from-[#16a34a] to-[#2563eb] text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
             Alle
           </button>
         </div>

@@ -576,6 +576,8 @@ export function buildJournalHTML(data: JournalReportData): string {
   const generatedTime = new Date().toLocaleTimeString('de-DE');
   const isBregenzReport = location.toLowerCase().includes('bregenz');
   const reportAccent = isBregenzReport ? '#2563eb' : '#16a34a';
+  // Alle Standorte: Verlauf aus allen Standortfarben (24.11.).
+  const reportAccentAll = 'linear-gradient(90deg, #16a34a, #2563eb)';
 
   const isBoth = location.includes('Beide') || location.includes('Kasse 1 + Kasse 2') || location.toLowerCase().includes('alle');
 
@@ -729,7 +731,7 @@ export function buildJournalHTML(data: JournalReportData): string {
   </style></head><body>
   <div class="print-running-header"><strong>${escapeHtml(documentTitle)}</strong><span>${escapeHtml(headerLabel)} · ${escapeHtml(location)}</span></div>
   <div class="print-running-footer"><span>${escapeHtml(documentTitle)} automatisch generiert · ${generatedAt}</span><span class="page-count"></span></div>
-  <div class="header" style="--report-accent:${reportAccent}"${documentTitle === 'Tagesabschluss' ? ` data-pdf-page-header="${escapeHtml(`${documentTitle} · ${headerLabel}`)}" data-pdf-page-location="${escapeHtml(location)}"` : ''}>
+  <div class="header" style="--report-accent:${reportAccent}"${documentTitle === 'Tagesabschluss' ? ` data-pdf-page-header="${escapeHtml(`${documentTitle} · ${headerLabel}`)}" data-pdf-page-location="${escapeHtml(location)}"` : ''}>${isBoth ? `<div style="height:6px;border-radius:3px;background:${reportAccentAll};margin:0 0 8px"></div>` : ''}
     ${documentStatus ? `<div class="report-employee"><strong>${escapeHtml(documentStatus)}</strong></div>` : ''}
     <h1>${escapeHtml(documentTitle)}</h1>
     <div class="report-period">${escapeHtml(headerLabel)}</div>
