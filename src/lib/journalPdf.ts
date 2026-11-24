@@ -9,6 +9,8 @@ import { escapeHtml } from '@/lib/escapeHtml';
 import { formatCashSessionTimestamp } from '@/lib/cashSessionTimes';
 
 export interface JournalReportData {
+  /** Kennzeichnung Schnaps/Likör je Artikel-ID (aus dem Katalog), nur für die Anzeige. */
+  spiritById?: Record<string, 'likoer' | 'schnaps'>;
   headerLabel: string;
   location: string;
   transactions: Transaction[];
@@ -57,8 +59,6 @@ export interface JournalReportData {
 
 export interface YearlyPfandOverview {
   year: number;
-  /** Kennzeichnung Schnaps/Likör je Artikel-ID (aus dem Katalog), nur für die Anzeige. */
-  spiritById?: Record<string, 'likoer' | 'schnaps'>;
   /** Human-readable scope, e.g. Friedrichshafen or Alle Standorte. */
   scopeLabel: string;
   pfandCollected: number;
