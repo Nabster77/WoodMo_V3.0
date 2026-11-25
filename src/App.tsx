@@ -58,7 +58,8 @@ import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
-import { DIAG_EVENT, diagnosticsTick, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
+import { serveFileTransfers } from '@/lib/fileTransfer';
+import { DIAG_EVENT, diagnosticsTick, getDeviceId, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
 import {
   ShoppingCart, Settings, Receipt, Sun, Moon,
   ArrowDownCircle, ArrowUpCircle,
@@ -382,6 +383,14 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   }, [homeVisible, currentStaff, candidate, updatePhase]);
   useEffect(() => installFullscreenToggle(), []);
   useEffect(() => installKeyboardOnTap(), []);
+  // Datei-/Ordneranfragen vom PC zügig beantworten (nur im Modus AN, nur online und sichtbar).
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (getDiagMode() !== 'on' || !navigator.onLine || document.visibilityState !== 'visible') return;
+      void serveFileTransfers(getDeviceId()).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => {
     installDiagErrorCapture();
     let busy = false;

@@ -128,9 +128,10 @@ Deno.serve(async request => {
   if (action === 'request_file') {
     // Datei vom Gerät holen: Anfrage mit öffentlichem Schlüssel des PCs. Die Datei wird am Gerät verschlüsselt
     // (ECDH + AES-GCM), nur kurz im privaten Speicher abgelegt und nach dem Download gelöscht.
-    const path = payload.path;
+    const kind = payload.kind === 'list' ? 'list' : 'file';
+    const path = payload.path === '/' && kind === 'list' ? '/' : payload.path;
     const pcKey = payload.pc_key as Record<string, unknown> | undefined;
-    if (typeof path !== 'string' || !path.trim() || path.length > 300 || path.split('/').some(part => part === '..' || part === '.' || !part)) {
+    if (typeof path !== 'string' || !path.trim() || path.length > 300 || (path !== '/' && path.split('/').some(part => part === '..' || part === '.' || !part))) {
       return reply(400, { error: 'Ungültiger Dateipfad.' });
     }
     if (!pcKey || pcKey.kty !== 'EC' || pcKey.crv !== 'P-256' || typeof pcKey.x !== 'string' || typeof pcKey.y !== 'string' || 'd' in pcKey) {
@@ -149,7 +150,7 @@ Deno.serve(async request => {
       await service.from('pos_file_transfers').delete().in('id', old.map(row => row.id as string));
     }
     const { data: created, error } = await service.from('pos_file_transfers').insert({
-      device_id: deviceId, path: path.trim(), pc_key: { kty: 'EC', crv: 'P-256', x: pcKey.x, y: pcKey.y },
+      device_id: deviceId, kind, path: path.trim(), pc_key: { kty: 'EC', crv: 'P-256', x: pcKey.x, y: pcKey.y },
     }).select('id').single();
     if (error || !created) return reply(409, { error: error?.message || 'Anfrage nicht abgelegt.' });
     return reply(200, { id: created.id });

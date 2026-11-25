@@ -8,6 +8,7 @@ import {
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION, latestPublishedVersion } from '@/lib/appVersion';
 import { requestFileFromDevice } from '@/lib/fileTransfer';
+import { RemoteFolderDialog } from './RemoteFolderDialog';
 import { FolderExplorerDialog } from './FolderExplorerDialog';
 import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
 
@@ -89,6 +90,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
       setTransfer({ key, text: error instanceof Error ? error.message : 'Übertragung fehlgeschlagen.', ok: false });
     }
   };
+  const [remoteFolder, setRemoteFolder] = useState<{ id: string; name: string } | null>(null);
   const [showExplorer, setShowExplorer] = useState(false);
   const [folderExists, setFolderExists] = useState<boolean | null>(null);
   useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
@@ -218,8 +220,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
 
         <div className="space-y-2">
           <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Geräte</h3>
-          {rows.length === 0 && <p className="text-sm text-slate-500">Noch kein Gerät gemeldet.</p>}
-          {rows.map((row) => {
+          {rows.filter((row) => row.device_id !== myId).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät gemeldet.</p>}
+          {rows.filter((row) => row.device_id !== myId).map((row) => {
             const seen = ago(row.reported_at);
             const own = row.device_id === myId;
             return (
@@ -264,6 +266,10 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(() => setRemoteMode(row.device_id, 'ready', password), `${row.label || 'Gerät'}: auf BEREIT gestellt.`, true)}
                         className="min-h-10 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">Auf BEREIT</button>
                     )}
+                    {row.mode === 'on' && seen.online && (
+                      <button type="button" disabled={busy} onClick={() => setRemoteFolder({ id: row.device_id, name: row.label || 'Gerät' })}
+                        className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">Ordner öffnen</button>
+                    )}
                     {row.mode === 'on' && seen.online && latest && row.app_version !== latest && (
                       <button type="button" disabled={busy || row.pending_command === 'update-install'}
                         onClick={() => void guarded(async () => { await sendRemoteCommand(row.device_id, 'update-install', password, false); }, `Update ${latest} an ${row.label || 'Gerät'} gesendet.`, true)}
@@ -290,6 +296,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </button>
         </div>
       </section>
+      {remoteFolder && <RemoteFolderDialog deviceId={remoteFolder.id} deviceName={remoteFolder.name} password={password} onClose={() => setRemoteFolder(null)} />}
       {showExplorer && <FolderExplorerDialog deviceName={getDeviceLabel()} onClose={() => setShowExplorer(false)} />}
     </div>
   );
