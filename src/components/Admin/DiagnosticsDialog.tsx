@@ -204,7 +204,10 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
               <div key={row.device_id} className="space-y-2 rounded-xl border border-slate-300 p-3 text-sm dark:border-slate-700">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-bold">{row.label || 'Gerät'}{own ? ' (dieses)' : ''}</p>
-                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${seen.online ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'}`}>{seen.online ? 'online' : 'nicht erreichbar'}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${seen.online ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'}`}>{seen.online ? 'online' : 'nicht erreichbar'}</span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold text-white ${row.mode === 'on' ? 'bg-blue-600' : row.mode === 'ready' ? 'bg-amber-600' : 'bg-red-700'}`}>{row.mode === 'on' ? 'AN' : row.mode === 'ready' ? 'BEREIT' : 'AUS'}</span>
+                  </span>
                 </div>
                 <p className="text-xs text-slate-500">Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
                 {summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
