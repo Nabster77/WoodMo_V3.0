@@ -16,7 +16,7 @@ interface DirLike {
   getDirectoryHandle(name: string): Promise<DirLike>;
   getFileHandle(name: string): Promise<FileLike>;
 }
-interface TransferRow { id: string; path: string; kind: 'file' | 'list'; pc_key: JsonWebKey }
+interface TransferRow { created_at: string; id: string; path: string; kind: 'file' | 'list'; pc_key: JsonWebKey }
 export interface RemoteEntry { n: string; k: 'd' | 'f'; s: number; t: number }
 type Gateway = (body: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
@@ -39,7 +39,7 @@ export async function serveFileTransfers(deviceId: string): Promise<void> {
 async function serveOnce(deviceId: string): Promise<void> {
   if (!supabase) return;
   const since = new Date(Date.now() - 15 * 60_000).toISOString();
-  const { data, error } = await supabase.from(TABLE).select('id, path, kind, pc_key')
+  const { data, error } = await supabase.from(TABLE).select('id, path, kind, pc_key, created_at')
     .eq('device_id', deviceId).eq('status', 'requested').gte('created_at', since).limit(2);
   if (error || !data?.length) return;
   for (const row of data as TransferRow[]) {
@@ -50,7 +50,11 @@ async function serveOnce(deviceId: string): Promise<void> {
       const root = await loadExportFolder() as unknown as DirLike | null;
       if (!root) { await fail('Am Gerät ist kein Speicherordner festgelegt.'); continue; }
       const permission = await root.queryPermission?.({ mode: 'readwrite' });
-      if (permission !== undefined && permission !== 'granted') { await fail(`Zugriff auf den Speicherordner fehlt (${permission}): am Gerät „Zugriff auf Speicherordner erlauben“ tippen.`); continue; }
+      if (permission !== undefined && permission !== 'granted') {
+        // Ein anderes geöffnetes Fenster dieser App (mit Erlaubnis) kann die Anfrage übernehmen: erst nach 25 s aufgeben.
+        if (Date.now() - new Date(row.created_at).getTime() < 25_000) continue;
+        await fail(`Zugriff auf den Speicherordner fehlt (${permission}): am Gerät „Zugriff auf Speicherordner erlauben“ tippen.`); continue;
+      }
       const parts = row.path.split('/').filter(Boolean);
       let plain: ArrayBuffer;
       let plainSize: number;
