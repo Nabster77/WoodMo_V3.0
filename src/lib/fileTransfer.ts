@@ -3,7 +3,7 @@
 // Das Gerät verschlüsselt die Datei lokal und legt sie nur kurz im privaten Speicher ab, der PC lädt sie, entschlüsselt
 // lokal und löscht sie danach sofort wieder. Der Server sieht nie den Klartext oder den geheimen Schlüssel.
 import { supabase } from './supabaseClient';
-import { loadExportFolder } from './journalPdfFile';
+import { forgetGrantedArchiveRoot, getGrantedArchiveRoot, loadExportFolder } from './journalPdfFile';
 
 const BUCKET = 'diag-transfer';
 const TABLE = 'pos_file_transfers';
@@ -47,9 +47,16 @@ async function serveOnce(deviceId: string): Promise<void> {
       await supabase!.from(TABLE).update({ status: 'failed', error: text.slice(0, 200), updated_at: new Date().toISOString() }).eq('id', row.id).eq('status', 'requested');
     };
     try {
-      const root = await loadExportFolder() as unknown as DirLike | null;
+      let root = (getGrantedArchiveRoot() ?? await loadExportFolder()) as unknown as DirLike | null;
       if (!root) { await fail('Am Gerät ist kein Speicherordner festgelegt.'); continue; }
-      const permission = await root.queryPermission?.({ mode: 'readwrite' });
+      let permission = await root.queryPermission?.({ mode: 'readwrite' });
+      if (permission !== undefined && permission !== 'granted' && getGrantedArchiveRoot()) {
+        // Gemerktes Objekt ist nicht mehr erlaubt: frisch aus dem Speicher laden und noch einmal prüfen.
+        forgetGrantedArchiveRoot();
+        root = await loadExportFolder() as unknown as DirLike | null;
+        if (!root) { await fail('Am Gerät ist kein Speicherordner festgelegt.'); continue; }
+        permission = await root.queryPermission?.({ mode: 'readwrite' });
+      }
       if (permission !== undefined && permission !== 'granted') {
         // Ein anderes geöffnetes Fenster dieser App (mit Erlaubnis) kann die Anfrage übernehmen: erst nach 25 s aufgeben.
         if (Date.now() - new Date(row.created_at).getTime() < 25_000) continue;

@@ -230,13 +230,21 @@ export async function grantArchiveFolder(): Promise<boolean> {
 }
 
 /** Nur die Zugriffs-Erlaubnis für den schon festgelegten Ordner abfragen (aus einem Tipp). Legt nichts an. */
+let grantedRoot: WritableDirectoryHandle | null = null;
+/** Der zuletzt per Tipp erlaubte Ordner (gleiches Objekt weiterverwenden: Chrome bindet die Erlaubnis oft an das Objekt). */
+export function getGrantedArchiveRoot(): FileSystemDirectoryHandle | null {
+  return grantedRoot as unknown as FileSystemDirectoryHandle | null;
+}
+export function forgetGrantedArchiveRoot(): void { grantedRoot = null; }
+
 export async function requestArchivePermission(): Promise<'granted' | 'denied' | 'none'> {
   const folder = await loadExportFolder() as WritableDirectoryHandle | null;
   if (!folder) return 'none';
   try {
     let permission = await folder.queryPermission?.({ mode: 'readwrite' });
     if (permission !== 'granted') permission = await folder.requestPermission?.({ mode: 'readwrite' });
-    return permission === 'granted' ? 'granted' : 'denied';
+    if (permission === 'granted') { grantedRoot = folder; return 'granted'; }
+    return 'denied';
   } catch { return 'denied'; }
 }
 
