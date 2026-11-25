@@ -229,6 +229,17 @@ export async function grantArchiveFolder(): Promise<boolean> {
   return true;
 }
 
+/** Nur die Zugriffs-Erlaubnis für den schon festgelegten Ordner abfragen (aus einem Tipp). Legt nichts an. */
+export async function requestArchivePermission(): Promise<'granted' | 'denied' | 'none'> {
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return 'none';
+  try {
+    let permission = await folder.queryPermission?.({ mode: 'readwrite' });
+    if (permission !== 'granted') permission = await folder.requestPermission?.({ mode: 'readwrite' });
+    return permission === 'granted' ? 'granted' : 'denied';
+  } catch { return 'denied'; }
+}
+
 /**
  * Call as the FIRST thing in a tap that will save files later (daily close,
  * backup). Android Chrome forgets folder access after a reload and only

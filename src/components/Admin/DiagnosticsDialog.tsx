@@ -7,7 +7,7 @@ import {
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION } from '@/lib/appVersion';
-import { grantArchiveFolder } from '@/lib/journalPdfFile';
+import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
 
 const MODE_TEXT: Record<DiagMode, string> = { off: 'AUS', ready: 'BEREIT', on: 'AN' };
 const COMMANDS: { id: DiagCommand; label: string }[] = [
@@ -65,6 +65,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   const mode = useMode();
   const myId = getDeviceId();
   const [label, setLabel] = useState(getDeviceLabel());
+  const [folderExists, setFolderExists] = useState<boolean | null>(null);
+  useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
   const [password, setPassword] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [rows, setRows] = useState<DiagRow[]>([]);
@@ -164,13 +166,20 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                 className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Speichern</button>
             </div>
           </div>
-          <div>
-            <button type="button" onClick={async () => {
-              const ok = await grantArchiveFolder().catch(() => false);
-              resetFolderCache();
-              setMessage(ok ? { ok: true, text: 'Zugriff auf den Speicherordner erlaubt.' } : { ok: false, text: 'Zugriff nicht erteilt oder kein Speicherordner festgelegt (Einrichtung / Dateiablage).' });
-            }} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Zugriff auf Speicherordner erlauben</button>
-          </div>
+          {folderExists === false && (
+            <p className="text-xs text-slate-600 dark:text-slate-300">Speicherordner: noch keiner angelegt. Der Zugriff wird erst geprüft, wenn ein Ordner festgelegt ist.</p>
+          )}
+          {folderExists && (
+            <div>
+              <button type="button" onClick={async () => {
+                const result = await requestArchivePermission();
+                resetFolderCache();
+                setMessage(result === 'granted' ? { ok: true, text: 'Zugriff auf den Speicherordner erlaubt.' }
+                  : result === 'none' ? { ok: false, text: 'Noch kein Speicherordner festgelegt.' }
+                  : { ok: false, text: 'Zugriff nicht erteilt.' });
+              }} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Zugriff auf Speicherordner erlauben</button>
+            </div>
+          )}
           <div className="flex gap-2">
             {modeButton('off', 'AUS', () => void guarded(() => setLocalMode('off', location), 'Diagnose ist aus.', false))}
             {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false))}
