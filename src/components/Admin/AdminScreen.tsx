@@ -5,6 +5,7 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
+import { DiagnosticsDialog } from './DiagnosticsDialog';
 import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
 import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
 import { computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
@@ -19,7 +20,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Activity, Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -154,6 +155,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
   const unreadRelease = APP_RELEASE_NOTES.length > 0 && readRelease !== RELEASE_ID;
   function closeReleaseInfo() {
@@ -173,12 +175,13 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   // header. Closing that modal restores the previously active admin section.
   useEffect(() => {
     const activeTitle = showReleaseInfo ? 'Info'
+      : showDiagnostics ? 'Diagnose'
       : showCatalogTransfer ? 'Excel-Import / Export'
       : showImport ? 'Backup importieren'
       : showReset ? 'Buchungen zurücksetzen'
       : ADMIN_SECTION_TITLES[tab];
     onAdminSectionChange(activeTitle);
-  }, [tab, showReleaseInfo, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
+  }, [tab, showReleaseInfo, showDiagnostics, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
 
   return (
     <div className="flex h-full flex-col">
@@ -239,6 +242,10 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                     <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
                     <span className="sr-only">Neue Versionshinweise</span>
                   </>}
+                </button>
+                <button type="button" className={adminMenuItem} aria-haspopup="dialog"
+                  onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
+                  <Activity className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Diagnose
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
@@ -307,6 +314,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
               : props.onCreateStaff && props.onUpdateStaff && props.onSetStaffPassword && props.onDeleteStaff ? <div className="space-y-4"><StaffManager users={props.staffUsers ?? []} online={props.staffOnline ?? navigator.onLine} onCreate={props.onCreateStaff} onUpdate={props.onUpdateStaff} onSetPassword={props.onSetStaffPassword} onDelete={props.onDeleteStaff} />{props.administratorTools}</div> : null}
       </div>
+      {showDiagnostics && <DiagnosticsDialog location={props.selectedLocation ?? null} onClose={() => setShowDiagnostics(false)} />}
       {showReleaseInfo && (
         <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]"
           onClick={closeReleaseInfo} onKeyDown={event => { if (event.key === 'Escape') closeReleaseInfo(); }}>

@@ -56,6 +56,7 @@ import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafe
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
+import { DIAG_EVENT, diagnosticsTick, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
 import {
   ShoppingCart, Settings, Receipt, Sun, Moon,
   ArrowDownCircle, ArrowUpCircle,
@@ -313,6 +314,77 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
     }
   }
+
+  // Geräte-Diagnose (25.11.): Lebenszeichen/Statusbericht und Fernbefehle, nur wenn am Gerät
+  // BEREIT/AN gewählt ist. Befehle laufen nur im sicheren Zustand (Startbildschirm, niemand angemeldet,
+  // nichts im Upload) und benutzen denselben Update-Ablauf wie „Jetzt installieren“.
+  const lastBooking = useMemo(() => {
+    let best: { at: number; total: number } | null = null;
+    for (const tx of store.transactions) {
+      if (!best || tx.timestamp > best.at) best = { at: tx.timestamp, total: tx.total };
+    }
+    return best;
+  }, [store.transactions]);
+  const diagCtxRef = useRef<DiagContext>({ location: null, online: true, homeVisible: true, staffLoggedIn: false, lastBooking: null, updateWaiting: null, syncStatus: '' });
+  diagCtxRef.current = {
+    location: store.activeSession?.location ?? store.selectedLocation ?? null,
+    online, homeVisible, staffLoggedIn: !!currentStaff, lastBooking,
+    updateWaiting: candidate?.version ?? null, syncStatus: catalog.syncStatus,
+  };
+  const diagHandlersRef = useRef<DiagHandlers>({ run: async () => ({ done: true, text: '' }) });
+  diagHandlersRef.current = {
+    async run(command: DiagCommand) {
+      if (command === 'status') return { done: true, text: 'Status gesendet' };
+      if (command === 'update-check') {
+        try {
+          const update = await checkForUpdate(false);
+          return { done: true, text: update ? `Update ${update.version} wartet` : `Version ${APP_VERSION} ist aktuell` };
+        } catch (error) { return { done: true, text: 'Prüfung nicht möglich: ' + readableSyncError(error) }; }
+      }
+      // reload und update-install nur im sicheren Zustand
+      let pending = 0;
+      try { pending = (await readPendingOutbox()).length; } catch { pending = -1; }
+      if (!homeVisible || currentStaff || updatePhase || pending !== 0 || updateBusy.current) {
+        return { done: false, text: 'Zurückgestellt: Gerät in Benutzung oder Upload offen' };
+      }
+      if (command === 'reload') {
+        window.setTimeout(() => window.location.reload(), 2500);
+        return { done: true, text: 'Lädt neu' };
+      }
+      // update-install
+      try {
+        const update = candidateRef.current ?? await checkForUpdate(false);
+        if (!update) return { done: true, text: `Kein Update, Version ${APP_VERSION}` };
+        if (!candidate) return { done: false, text: 'Update wird vorbereitet, nächster Versuch folgt' };
+        autoUpdate.current = true;
+        void prepareUpdate();
+        return { done: true, text: `Update ${update.version} gestartet` };
+      } catch (error) { return { done: false, text: 'Update nicht gestartet: ' + readableSyncError(error) }; }
+    },
+  };
+  useEffect(() => {
+    installDiagErrorCapture();
+    let busy = false;
+    let lastRun = 0;
+    const run = async (force: boolean) => {
+      const mode = getDiagMode();
+      if (mode === 'off' || busy) return;
+      if (!force && mode === 'ready' && Date.now() - lastRun < 55_000) return;
+      busy = true;
+      try { await diagnosticsTick(diagCtxRef.current, diagHandlersRef.current); } catch { /* still: nächster Durchlauf */ }
+      finally { busy = false; lastRun = Date.now(); }
+    };
+    const timer = window.setInterval(() => { void run(false); }, 30_000);
+    const soon = () => { window.setTimeout(() => { void run(true); }, 1500); };
+    window.addEventListener(DIAG_EVENT, soon);
+    window.addEventListener('online', soon);
+    soon();
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(DIAG_EVENT, soon);
+      window.removeEventListener('online', soon);
+    };
+  }, []);
 
   // Fix 23.11.: Ein Tipp auf „Jetzt installieren“ führt den ganzen vorhandenen Ablauf
   // selbst durch (prüfen -> Speicherort -> Cloud-Abgleich -> aktivieren -> Neustart).
