@@ -206,7 +206,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                   <p className="font-bold">{row.label || 'Gerät'}{own ? ' (dieses)' : ''}</p>
                   <span className={`rounded px-2 py-0.5 text-xs font-bold ${seen.online ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'}`}>{seen.online ? 'online' : 'nicht erreichbar'}</span>
                 </div>
-                <p className="text-xs text-slate-500">{row.location ? `Standort ${row.location} · ` : ''}Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
+                <p className="text-xs text-slate-500">Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
                 {summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
                 {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
                 {row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
