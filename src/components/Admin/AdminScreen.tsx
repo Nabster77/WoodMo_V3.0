@@ -1661,19 +1661,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                   <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
-                      <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
-                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(tx.timestamp)}
-                          <span className="rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                            {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
-                          </span>
-                          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
-                        </div>
-                      </div>
+                      <SaleRow key={tx.id} tx={tx} />
                     ))}
                   </div>
                 </details>
@@ -1682,6 +1670,60 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Verkaufszeile mit aufklappbaren Bon-Details (25.11.): zeigt, wie sich der Betrag zusammensetzt.
+function SaleRow({ tx }: { tx: Transaction }) {
+  const [open, setOpen] = useState(false);
+  const goods = tx.items.filter((i) => !i.isPfandRetoure);
+  const retoures = tx.items.filter((i) => i.isPfandRetoure);
+  const retoureQty = retoures.reduce((sum, i) => sum + i.quantity, 0);
+  const goodsQty = goods.reduce((sum, i) => sum + i.quantity, 0);
+  const goodsSum = goods.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const pfandOut = goods.reduce((sum, i) => sum + (i.pfand || 0), 0);
+  const pfandBack = retoures.reduce((sum, i) => sum + Math.abs(i.pfand || 0), 0);
+  const summary = [
+    goods.length === 1 ? goods[0].name : goods.length > 1 ? `${goods.length} Artikel` : '',
+    retoureQty > 0 ? `${retoureQty}× Pfand zurück` : '',
+  ].filter(Boolean).join(' + ');
+  const money = (v: number) => formatCurrency(Math.round(v * 100) / 100);
+  return (
+    <div className="border-b border-gray-50 text-xs last:border-0 dark:border-gray-700/50">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-1.5 text-left">
+        <div className="flex min-w-0 items-center gap-2 text-gray-500 dark:text-gray-400">
+          <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <span className="shrink-0">{formatTime(tx.timestamp)}</span>
+          <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{summary || `${tx.items.length} Art.`}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+            {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
+          </span>
+          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+        </div>
+      </button>
+      {open && (
+        <div className="mx-3 mb-2 space-y-0.5 rounded-lg bg-gray-50 px-3 py-2 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+          {goods.map((i, idx) => (
+            <div key={`g-${idx}`} className="flex justify-between"><span>{i.quantity} × {i.name}</span><span>{money(i.price * i.quantity)}</span></div>
+          ))}
+          {pfandOut > 0 && (
+            <div className="flex justify-between"><span>Pfand für {goodsQty > 0 ? `${goods.filter((i) => (i.pfand || 0) > 0).reduce((n, i) => n + i.quantity, 0)} Becher` : 'Becher'}</span><span>+ {money(pfandOut)}</span></div>
+          )}
+          {pfandBack > 0 && (
+            <div className="flex justify-between text-green-700 dark:text-green-400"><span>Pfand-Retoure {retoureQty} ×</span><span>− {money(pfandBack)}</span></div>
+          )}
+          <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900 dark:border-gray-700 dark:text-gray-100">
+            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span>{formatCurrency(tx.total)}</span>
+          </div>
+          {Math.abs(goodsSum + pfandOut - pfandBack - tx.total) > 0.01 && (
+            <div className="text-[10px] text-amber-600 dark:text-amber-400">Hinweis: Teilbetrag einer geteilten Zahlung, Rest steht in einer eigenen Zeile.</div>
+          )}
+          <div className="pt-1 text-[10px] text-gray-400 dark:text-gray-500">{tx.employeeName ? `${tx.employeeName} · ` : ''}Bon {tx.id.slice(-6)}</div>
+        </div>
+      )}
     </div>
   );
 }
