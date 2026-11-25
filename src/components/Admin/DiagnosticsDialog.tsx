@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Activity, X, Loader2, Check } from 'lucide-react';
+import { Activity, X, Loader2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
   resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
@@ -73,6 +73,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
     const timer = window.setInterval(load, 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  const [openRows, setOpenRows] = useState<Set<string>>(new Set());
+  const toggleRow = (id: string) => setOpenRows((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const [showExplorer, setShowExplorer] = useState(false);
   const [folderExists, setFolderExists] = useState<boolean | null>(null);
   useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
@@ -154,7 +156,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
       onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="woodmo-diag-title" onClick={(event) => event.stopPropagation()}
         className="max-h-[92dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-slate-300 bg-white p-5 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-        <div className="flex items-center justify-between gap-3">
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between gap-3 bg-white px-5 pb-2 pt-5 dark:bg-slate-900">
           <h2 id="woodmo-diag-title" className="flex items-center gap-2 text-xl font-bold"><Activity className="h-5 w-5" /> Diagnose</h2>
           <button type="button" aria-label="Diagnose schließen" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-400"><X className="h-5 w-5" /></button>
         </div>
@@ -216,9 +218,13 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
-                {summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
+                <button type="button" aria-expanded={openRows.has(row.device_id)} onClick={() => toggleRow(row.device_id)}
+                  className="flex min-h-9 items-center gap-1 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
+                  Eigenschaften {openRows.has(row.device_id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {openRows.has(row.device_id) && summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
                 {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
-                {row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
+                {openRows.has(row.device_id) && row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
                 {!own && (
                   <div className="flex flex-wrap gap-2">
                     {row.mode !== 'on' && (
