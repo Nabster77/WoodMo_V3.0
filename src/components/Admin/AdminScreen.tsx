@@ -149,7 +149,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     action();
   };
   // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
-  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
+  const adminMenuItem = 'flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-700 to-slate-900 px-4 py-3 text-left text-base font-semibold text-white transition hover:border-white/60 hover:from-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
   const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
   const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
@@ -193,7 +193,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             aria-modal="true"
             aria-label="Verwaltungsmenü"
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-4 text-white shadow-2xl"
+            className="max-h-full w-full max-w-3xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-6 text-white shadow-2xl"
           >
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
               <div>
@@ -585,6 +585,21 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
     setPfandB(String(pfandSettings.Bregenz));
   }, [pfandSettings, pfandEditing, pfandPhase]);
 
+  // Automatisch speichern (25.11.): kurz nach der letzten Eingabe oder beim Verlassen des Feldes.
+  const pfandValid = parsePfandAmount(pfandF) !== null && parsePfandAmount(pfandB) !== null;
+  useEffect(() => {
+    if (pfandPhase !== 'dirty' || !pfandValid) return;
+    const timer = window.setTimeout(() => { void savePfandSettings(); }, 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pfandPhase, pfandF, pfandB, pfandValid]);
+  // Die Meldung „Gespeichert“ blendet sich nach einigen Sekunden wieder aus.
+  useEffect(() => {
+    if (pfandPhase !== 'cloud' && pfandPhase !== 'local') return;
+    const timer = window.setTimeout(() => setPfandPhase('idle'), 4000);
+    return () => window.clearTimeout(timer);
+  }, [pfandPhase]);
+
   const sorted = [...products].sort(sortMode === 'alphabetical'
     ? (a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
     : sortMode === 'reverse'
@@ -627,7 +642,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
       </div>
 
       {/* Global pfand settings */}
-      <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
+      <div className="mb-4 w-fit max-w-full rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
         <div className="mb-2 flex items-center gap-2">
           <Recycle className="h-5 w-5 text-green-600 dark:text-green-400" />
           <p className="text-sm font-bold text-green-800 dark:text-green-300">Globaler Pfandbetrag</p>
@@ -642,7 +657,8 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
                 <label className="mb-1 block text-xs font-semibold text-green-700 dark:text-green-400">{loc}</label>
       <div className="flex items-center gap-1">
                   <input value={val} onChange={(e) => { setVal(e.target.value); setPfandEditing(true); setPfandPhase('dirty'); setPfandError(''); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePfandSettings(); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (pfandValid) void savePfandSettings(); } }}
+                    onBlur={() => { if (pfandPhase === 'dirty' && pfandValid) void savePfandSettings(); }}
                     placeholder="0,00" inputMode="decimal" disabled={pfandPhase === 'saving'}
                     aria-label={`Pfandbetrag ${loc} in Euro`}
                     className="w-24 rounded-lg border border-green-300 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-green-500 focus:outline-none disabled:opacity-50 dark:border-green-700 dark:bg-gray-900 dark:text-gray-100" />
@@ -651,16 +667,11 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
               </div>
             );
           })}
-          <button type="button" onClick={() => void savePfandSettings()} disabled={pfandPhase === 'saving'}
-            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-95 disabled:opacity-50">
-            {pfandPhase === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {pfandPhase === 'saving' ? 'Cloud wird geprüft …' : 'Speichern'}
-          </button>
           <span role="status" aria-live="polite" className="text-xs font-semibold">
-            {pfandPhase === 'cloud' && <span className="flex items-center gap-1 text-green-700 dark:text-green-400"><Check className="h-3.5 w-3.5" /> Cloud gespeichert und überprüft</span>}
-            {pfandPhase === 'local' && <span className="text-amber-700 dark:text-amber-400">Nur lokal übernommen – Testmodus, kein Cloud-Abgleich</span>}
-            {pfandPhase === 'dirty' && <span className="text-slate-600 dark:text-slate-300">Noch nicht gespeichert</span>}
-            {pfandPhase === 'saving' && <span className="text-amber-700 dark:text-amber-400">Lokaler Wert übernommen, Cloud-Bestätigung ausstehend</span>}
+            {pfandPhase === 'cloud' && <span className="flex items-center gap-1 text-green-700 dark:text-green-400"><Check className="h-3.5 w-3.5" /> Gespeichert</span>}
+            {pfandPhase === 'local' && <span className="text-amber-700 dark:text-amber-400">Gespeichert (nur lokal, Testmodus)</span>}
+            {pfandPhase === 'dirty' && !pfandValid && <span className="text-amber-700 dark:text-amber-400">Bitte einen gültigen Betrag eingeben (z. B. 3 oder 3,50)</span>}
+            {pfandPhase === 'saving' && <span className="text-amber-700 dark:text-amber-400">Wird gespeichert …</span>}
             {pfandPhase === 'error' && <span role="alert" className="text-red-700 dark:text-red-400">{pfandError}</span>}
             {pfandPhase === 'idle' && testMode && <span className="text-amber-700 dark:text-amber-400">Testmodus: Einstellungen werden nicht in die Cloud hochgeladen</span>}
           </span>
@@ -1103,7 +1114,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
         </div>
         <DateNav value={selectedDate} onChange={setOverviewDate} max={today} lastSalesDay={lastSalesDay} />
         {/* Standort direkt in der Verwaltung wechseln (24.11.) oder beide anzeigen. */}
-        <div role="group" aria-label="Standort" className="flex h-10 overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
+        <div role="group" aria-label="Standort" className="flex h-[46px] overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
           {LOCATIONS.map((loc) => (
             <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc} style={locationStyle(loc)}
               onClick={() => { setShowAllLocations(false); handleSwitch(loc); }}
@@ -1684,10 +1695,6 @@ function SaleRow({ tx }: { tx: Transaction }) {
   const goodsSum = goods.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const pfandOut = goods.reduce((sum, i) => sum + (i.pfand || 0), 0);
   const pfandBack = retoures.reduce((sum, i) => sum + Math.abs(i.pfand || 0), 0);
-  const summary = [
-    goods.length === 1 ? goods[0].name : goods.length > 1 ? `${goods.length} Artikel` : '',
-    retoureQty > 0 ? `${retoureQty}× Pfand zurück` : '',
-  ].filter(Boolean).join(' + ');
   const money = (v: number) => formatCurrency(Math.round(v * 100) / 100);
   return (
     <div className="border-b border-gray-50 text-xs last:border-0 dark:border-gray-700/50">
@@ -1695,7 +1702,7 @@ function SaleRow({ tx }: { tx: Transaction }) {
         <div className="flex min-w-0 items-center gap-2 text-gray-500 dark:text-gray-400">
           <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
           <span className="shrink-0">{formatTime(tx.timestamp)}</span>
-          <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{summary || `${tx.items.length} Art.`}</span>
+          <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>

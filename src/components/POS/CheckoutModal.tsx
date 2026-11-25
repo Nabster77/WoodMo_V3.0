@@ -156,7 +156,7 @@ export function CheckoutModal({ items, location, onComplete, onPaid, onCancel, c
           {paymentMethod === 'cash' && (
             <div className="space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben (€) <span className="font-normal text-gray-500 dark:text-gray-400">– optional, leer = passend</span></label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Gegeben</label>
                 <input
                   value={givenAmount}
                   onChange={(e) => setGivenAmount(e.target.value)}
