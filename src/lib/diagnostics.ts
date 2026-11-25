@@ -5,6 +5,7 @@
 import { supabase } from './supabaseClient';
 import { APP_VERSION } from './appVersion';
 import { readPendingOutbox } from './outbox';
+import { describeArchiveFolder } from './journalPdfFile';
 
 export type DiagMode = 'off' | 'ready' | 'on';
 export type DiagCommand = 'status' | 'update-check' | 'reload' | 'update-install';
@@ -113,9 +114,16 @@ function readErrors(): { at: number; msg: string }[] {
   } catch { return []; }
 }
 
+let folderCache: { at: number; value: Awaited<ReturnType<typeof describeArchiveFolder>> } | null = null;
+
 export async function buildReport(ctx: DiagContext): Promise<Record<string, unknown>> {
   let outbox = -1;
   try { outbox = (await readPendingOutbox()).length; } catch { /* unbekannt */ }
+  // Ordnerliste höchstens alle 5 Minuten neu einlesen (Dateien zählen kostet Zeit).
+  if (!folderCache || Date.now() - folderCache.at > 5 * 60_000) {
+    try { folderCache = { at: Date.now(), value: await describeArchiveFolder() }; } catch { /* alter Wert bleibt */ }
+  }
+  const folder = folderCache?.value ?? null;
   return {
     version: APP_VERSION,
     online: ctx.online,
@@ -126,6 +134,7 @@ export async function buildReport(ctx: DiagContext): Promise<Record<string, unkn
     outbox,
     lastBooking: ctx.lastBooking,
     updateWaiting: ctx.updateWaiting,
+    folder,
     errors: readErrors(),
     sentAt: Date.now(),
   };

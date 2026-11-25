@@ -44,6 +44,15 @@ function summary(report: Record<string, unknown> | null): string[] {
     lines.push(`Letzte Buchung: ${formatDateTime(last.at)} · ${formatCurrency(last.total)}`);
   }
   if (typeof report.updateWaiting === 'string' && report.updateWaiting) lines.push(`Update wartet: ${report.updateWaiting}`);
+  const folder = report.folder as { mode?: string; status?: string; name?: string | null; files?: number; newest?: { path: string; size: number; at: number }[] } | null | undefined;
+  if (folder) {
+    if (folder.mode === 'downloads') lines.push('Speicherort: Downloads des Browsers (kein Ordner gewählt)');
+    else {
+      const state = folder.status === 'ok' ? 'in Ordnung' : folder.status === 'needs-permission' ? 'Zugriff muss am Gerät neu erlaubt werden' : 'Ordner nicht gefunden';
+      lines.push(`Speicherort: ${folder.name ?? '?'} · ${state} · ${folder.files ?? 0} Dateien`);
+      for (const file of (folder.newest ?? []).slice(0, 3)) lines.push(`  ${file.path} · ${formatDateTime(file.at)} · ${Math.max(1, Math.round(file.size / 1024))} KB`);
+    }
+  }
   if (report.home === false) lines.push('Gerät in Benutzung');
   if (report.staffLoggedIn === true) lines.push('Mitarbeiter angemeldet');
   const errors = Array.isArray(report.errors) ? report.errors as { at?: number; msg?: string }[] : [];
