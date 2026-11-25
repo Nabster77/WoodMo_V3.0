@@ -149,7 +149,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     action();
   };
   // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
-  const adminMenuItem = 'flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-700 to-slate-900 px-4 py-3 text-left text-base font-semibold text-white transition hover:border-white/60 hover:from-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
+  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-700 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:border-white/60 hover:from-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
   const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
   const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
@@ -193,11 +193,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             aria-modal="true"
             aria-label="Verwaltungsmenü"
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full w-full max-w-3xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-6 text-white shadow-2xl"
+            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-4 text-white shadow-2xl"
           >
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
               <div>
-                <h2 className="text-lg font-bold">Verwaltungsmenü</h2>
+                <h2 className="text-2xl font-bold">Verwaltungsmenü</h2>
               </div>
               <button type="button" aria-label="Verwaltungsmenü schließen" onClick={onCloseMenu}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 text-slate-200 hover:bg-slate-700">
