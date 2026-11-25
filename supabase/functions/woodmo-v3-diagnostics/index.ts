@@ -125,5 +125,34 @@ Deno.serve(async request => {
     if (error) return reply(409, { error: error.message || 'Befehl nicht abgelegt.' });
     return reply(200, { device_id: deviceId, command, command_id: commandId });
   }
+  if (action === 'request_file') {
+    // Datei vom Gerät holen: Anfrage mit öffentlichem Schlüssel des PCs. Die Datei wird am Gerät verschlüsselt
+    // (ECDH + AES-GCM), nur kurz im privaten Speicher abgelegt und nach dem Download gelöscht.
+    const path = payload.path;
+    const pcKey = payload.pc_key as Record<string, unknown> | undefined;
+    if (typeof path !== 'string' || !path.trim() || path.length > 300 || path.split('/').some(part => part === '..' || part === '.' || !part)) {
+      return reply(400, { error: 'Ungültiger Dateipfad.' });
+    }
+    if (!pcKey || pcKey.kty !== 'EC' || pcKey.crv !== 'P-256' || typeof pcKey.x !== 'string' || typeof pcKey.y !== 'string' || 'd' in pcKey) {
+      return reply(400, { error: 'Ungültiger Schlüssel.' });
+    }
+    const { data: current, error: readError } = await service.from('pos_device_diagnostics')
+      .select('mode').eq('device_id', deviceId).maybeSingle();
+    if (readError) return reply(503, { error: 'Gerät nicht lesbar.' });
+    if (!current) return reply(404, { error: 'Gerät unbekannt.' });
+    if (current.mode !== 'on') return reply(409, { error: 'Dateien nur, wenn das Gerät auf AN steht.' });
+    // Aufräumen: alte Anfragen samt Dateien entfernen (Anfragen/Übertragungen älter als 15 Minuten).
+    const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+    const { data: old } = await service.from('pos_file_transfers').select('id').lt('created_at', cutoff).limit(100);
+    if (old?.length) {
+      await service.storage.from('diag-transfer').remove(old.map(row => row.id as string)).catch(() => undefined);
+      await service.from('pos_file_transfers').delete().in('id', old.map(row => row.id as string));
+    }
+    const { data: created, error } = await service.from('pos_file_transfers').insert({
+      device_id: deviceId, path: path.trim(), pc_key: { kty: 'EC', crv: 'P-256', x: pcKey.x, y: pcKey.y },
+    }).select('id').single();
+    if (error || !created) return reply(409, { error: error?.message || 'Anfrage nicht abgelegt.' });
+    return reply(200, { id: created.id });
+  }
   return reply(400, { error: 'Unbekannte Aktion.' });
 });

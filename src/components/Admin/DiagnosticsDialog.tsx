@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
+  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
   resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION, latestPublishedVersion } from '@/lib/appVersion';
+import { requestFileFromDevice } from '@/lib/fileTransfer';
 import { FolderExplorerDialog } from './FolderExplorerDialog';
 import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
 
@@ -52,7 +53,6 @@ function summary(report: Record<string, unknown> | null): string[] {
     else {
       const state = folder.status === 'ok' ? 'in Ordnung' : folder.status === 'needs-permission' ? 'Zugriff muss am Gerät neu erlaubt werden' : 'Ordner nicht gefunden';
       lines.push(`Speicherort: ${folder.name ?? '?'} · ${state} · ${folder.files ?? 0} Dateien`);
-      for (const file of (folder.newest ?? []).slice(0, 3)) lines.push(`  ${file.path} · ${formatDateTime(file.at)} · ${Math.max(1, Math.round(file.size / 1024))} KB`);
     }
   }
   if (report.home === false) lines.push('Gerät in Benutzung');
@@ -75,6 +75,20 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   }, []);
   const [openRows, setOpenRows] = useState<Set<string>>(new Set());
   const toggleRow = (id: string) => setOpenRows((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const [transfer, setTransfer] = useState<{ key: string; text: string; ok?: boolean } | null>(null);
+  const fetchFile = async (deviceId: string, path: string) => {
+    const key = deviceId + '|' + path;
+    setTransfer({ key, text: 'Starte …' });
+    try {
+      const { name, blob } = await requestFileFromDevice(invokeGateway, deviceId, path, password, (text) => setTransfer({ key, text }));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = name; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setTransfer({ key, text: 'Gespeichert: ' + name + ' (Server-Kopie gelöscht).', ok: true });
+    } catch (error) {
+      setTransfer({ key, text: error instanceof Error ? error.message : 'Übertragung fehlgeschlagen.', ok: false });
+    }
+  };
   const [showExplorer, setShowExplorer] = useState(false);
   const [folderExists, setFolderExists] = useState<boolean | null>(null);
   useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
@@ -223,6 +237,19 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                   Eigenschaften {openRows.has(row.device_id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
                 {openRows.has(row.device_id) && summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
+                {openRows.has(row.device_id) && !own && row.mode === 'on' && ((row.report as { folder?: { newest?: { path: string; size: number; at: number }[] } } | null)?.folder?.newest ?? []).map((file) => {
+                  const key = row.device_id + '|' + file.path;
+                  const active = transfer?.key === key;
+                  return (
+                    <div key={file.path} className="space-y-1 rounded-lg border border-slate-300 p-2 text-xs dark:border-slate-700">
+                      <p className="break-all font-semibold">{file.path}</p>
+                      <p className="text-slate-500">{formatDateTime(file.at)} · {Math.max(1, Math.round(file.size / 1024))} KB</p>
+                      <button type="button" disabled={!!transfer && transfer.ok === undefined} onClick={() => void fetchFile(row.device_id, file.path)}
+                        className="rounded-md bg-blue-600 px-2.5 py-1.5 font-bold text-white disabled:opacity-40">Holen (verschlüsselt)</button>
+                      {active && <p role="status" className={transfer?.ok === false ? 'font-semibold text-red-600' : transfer?.ok ? 'font-semibold text-emerald-600' : 'text-slate-500'}>{transfer?.text}</p>}
+                    </div>
+                  );
+                })}
                 {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
                 {openRows.has(row.device_id) && row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
                 {!own && (

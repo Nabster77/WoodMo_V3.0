@@ -6,6 +6,7 @@ import { supabase } from './supabaseClient';
 import { APP_VERSION } from './appVersion';
 import { readPendingOutbox } from './outbox';
 import { describeArchiveFolder } from './journalPdfFile';
+import { serveFileTransfers } from './fileTransfer';
 
 export type DiagMode = 'off' | 'ready' | 'on';
 export type DiagCommand = 'status' | 'update-check' | 'reload' | 'update-install';
@@ -152,7 +153,7 @@ export async function listDevices(): Promise<DiagRow[]> {
   return (data ?? []) as DiagRow[];
 }
 
-async function invokeGateway(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function invokeGateway(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (!supabase) throw new Error('Cloud ist nicht konfiguriert.');
   const { data, error } = await supabase.functions.invoke('woodmo-v3-diagnostics', { body });
   if (error) {
@@ -245,6 +246,7 @@ export async function diagnosticsTick(ctx: DiagContext, handlers: DiagHandlers):
   };
   const report = mode === 'on' ? await buildReport(ctx) : { online: true, version: APP_VERSION, sentAt: Date.now() };
   await supabase.from(TABLE).update({ ...base, report }).eq('device_id', id);
+  if (mode === 'on') { try { await serveFileTransfers(id); } catch { /* nächster Durchlauf */ } }
   if (mode !== 'on' || !current.pending_command) return;
 
   const outcome = await handlers.run(current.pending_command, current.command_force === true);
