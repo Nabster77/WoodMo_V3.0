@@ -55,7 +55,7 @@ async function copyEntry(entry: AnyEntry, target: DirEntry): Promise<void> {
   for await (const child of entry.values()) await copyEntry(child, created);
 }
 
-export function FolderExplorerDialog({ onClose }: { onClose: () => void }) {
+export function FolderExplorerDialog({ onClose, deviceName }: { onClose: () => void; deviceName: string }) {
   const [root, setRoot] = useState<DirEntry | null>(null);
   const [stack, setStack] = useState<DirEntry[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
@@ -110,7 +110,7 @@ export function FolderExplorerDialog({ onClose }: { onClose: () => void }) {
 
   const chosen = rows.filter((row) => selected.has(row.entry.name)).map((row) => row.entry);
   const toggle = (name: string) => setSelected((old) => { const next = new Set(old); if (next.has(name)) next.delete(name); else next.add(name); return next; });
-  const pathText = ['Speicherordner', ...stack.map((dir) => dir.name)].join(' / ');
+  const pathText = [root?.name ?? 'Speicherordner', ...stack.map((dir) => dir.name)].join(' / ');
 
   const openFile = async (entry: FileEntry) => {
     try { const url = URL.createObjectURL(await entry.getFile()); window.open(url, '_blank'); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }
@@ -146,10 +146,10 @@ export function FolderExplorerDialog({ onClose }: { onClose: () => void }) {
       <section role="dialog" aria-modal="true" aria-labelledby="woodmo-explorer-title" onClick={(event) => event.stopPropagation()}
         className="flex max-h-[92dvh] w-full max-w-2xl flex-col gap-3 rounded-2xl border border-slate-300 bg-white p-4 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="woodmo-explorer-title" className="flex items-center gap-2 text-xl font-bold"><Folder className="h-5 w-5" /> Speicherordner</h2>
+          <h2 id="woodmo-explorer-title" className="flex items-center gap-2 text-xl font-bold"><Folder className="h-5 w-5" /> Speicherordner · {deviceName}</h2>
           <button type="button" aria-label="Schließen" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-400"><X className="h-5 w-5" /></button>
         </div>
-        <p className="break-all text-xs text-slate-600 dark:text-slate-300">{pathText}</p>
+        <p className="break-all text-xs text-slate-600 dark:text-slate-300"><span className="font-bold">{deviceName}</span> · {pathText}</p>
 
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={busy || !stack.length} onClick={() => setStack((old) => old.slice(0, -1))} className={`${button} bg-slate-700`}><ArrowUp className="h-4 w-4" /> Zurück</button>

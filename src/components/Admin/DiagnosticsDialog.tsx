@@ -263,7 +263,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </button>
         </div>
       </section>
-      {showExplorer && <FolderExplorerDialog onClose={() => setShowExplorer(false)} />}
+      {showExplorer && <FolderExplorerDialog deviceName={getDeviceLabel()} onClose={() => setShowExplorer(false)} />}
     </div>
   );
 }
