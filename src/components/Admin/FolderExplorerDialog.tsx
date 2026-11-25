@@ -138,7 +138,8 @@ export function FolderExplorerDialog({ onClose, deviceName }: { onClose: () => v
     return `${count} Eintrag/Einträge eingefügt.`;
   });
 
-  const button = 'flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold text-white disabled:opacity-40';
+  const tool = 'flex h-9 items-center gap-1.5 rounded-md bg-white px-2.5 text-xs font-semibold text-slate-900 shadow-sm disabled:opacity-35 dark:bg-slate-700 dark:text-white';
+  const sep = 'mx-0.5 h-6 w-px bg-slate-300 dark:bg-slate-600';
 
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]" onClick={(event) => { event.stopPropagation(); onClose(); }}
@@ -151,19 +152,16 @@ export function FolderExplorerDialog({ onClose, deviceName }: { onClose: () => v
         </div>
         <p className="break-all text-xs text-slate-600 dark:text-slate-300"><span className="font-bold">{deviceName}</span> · {pathText}</p>
 
-        <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={busy || !stack.length} onClick={() => setStack((old) => old.slice(0, -1))} className={`${button} bg-slate-700`}><ArrowUp className="h-4 w-4" /> Zurück</button>
-          <button type="button" disabled={busy || !chosen.length} onClick={() => { if (current) setClip({ mode: 'copy', parent: current, entries: chosen }); setMessage({ ok: true, text: `${chosen.length} kopiert.` }); }} className={`${button} bg-blue-600`}><Copy className="h-4 w-4" /> Kopieren</button>
-          <button type="button" disabled={busy || !chosen.length} onClick={() => { if (current) setClip({ mode: 'cut', parent: current, entries: chosen }); setMessage({ ok: true, text: `${chosen.length} ausgeschnitten.` }); }} className={`${button} bg-blue-600`}><Scissors className="h-4 w-4" /> Ausschneiden</button>
-          <button type="button" disabled={busy || !clip} onClick={() => void paste()} className={`${button} bg-blue-600`}><ClipboardPaste className="h-4 w-4" /> Einfügen</button>
-          <button type="button" disabled={busy || !current} onClick={() => setNewFolder('')} className={`${button} bg-blue-600`}><FolderPlus className="h-4 w-4" /> Neuer Ordner</button>
-          <button type="button" disabled={busy || !chosen.length} onClick={() => setConfirmDelete(true)} className={`${button} bg-red-700`}><Trash2 className="h-4 w-4" /> Löschen</button>
-          <button type="button" disabled={busy || chosen.length !== 1 || chosen[0].kind !== 'file'} onClick={() => { const entry = chosen[0]; if (entry.kind === 'file') void download(entry); }} className={`${button} bg-blue-600`}><Download className="h-4 w-4" /> Herunterladen</button>
-          <button type="button" disabled={busy} onClick={() => void run(async () => {
-            const ok = await grantArchiveFolder();
-            if (!ok) throw new Error('Struktur konnte nicht geprüft werden (Zugriff fehlt).');
-            return 'Ordnerstruktur geprüft, fehlende Ordner wurden angelegt.';
-          })} className={`${button} bg-slate-700`}><Wrench className="h-4 w-4" /> Struktur prüfen</button>
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-100 p-1.5 dark:bg-slate-800">
+          <button type="button" disabled={busy || !stack.length} onClick={() => setStack((old) => old.slice(0, -1))} className={tool}><ArrowUp className="h-4 w-4" /> Zurück</button>
+          <span aria-hidden="true" className={sep} />
+          <button type="button" disabled={busy || !chosen.length} onClick={() => { if (current) setClip({ mode: 'copy', parent: current, entries: chosen }); setMessage({ ok: true, text: `${chosen.length} kopiert.` }); }} className={tool}><Copy className="h-4 w-4" /> Kopieren</button>
+          <button type="button" disabled={busy || !chosen.length} onClick={() => { if (current) setClip({ mode: 'cut', parent: current, entries: chosen }); setMessage({ ok: true, text: `${chosen.length} ausgeschnitten.` }); }} className={tool}><Scissors className="h-4 w-4" /> Ausschneiden</button>
+          <button type="button" disabled={busy || !clip} onClick={() => void paste()} className={tool}><ClipboardPaste className="h-4 w-4" /> Einfügen</button>
+          <span aria-hidden="true" className={sep} />
+          <button type="button" disabled={busy || !current} onClick={() => setNewFolder('')} className={tool}><FolderPlus className="h-4 w-4" /> Neuer Ordner</button>
+          <button type="button" disabled={busy || chosen.length !== 1 || chosen[0].kind !== 'file'} onClick={() => { const entry = chosen[0]; if (entry.kind === 'file') void download(entry); }} className={tool}><Download className="h-4 w-4" /> Herunterladen</button>
+          <button type="button" disabled={busy || !chosen.length} onClick={() => setConfirmDelete(true)} className={`${tool} !text-red-700 dark:!text-red-400`}><Trash2 className="h-4 w-4" /> Löschen</button>
         </div>
 
         {newFolder !== null && (
@@ -214,6 +212,11 @@ export function FolderExplorerDialog({ onClose, deviceName }: { onClose: () => v
             ))}
           </ul>
         </div>
+        <button type="button" disabled={busy} onClick={() => void run(async () => {
+          const ok = await grantArchiveFolder();
+          if (!ok) throw new Error('Struktur konnte nicht geprüft werden (Zugriff fehlt).');
+          return 'Ordnerstruktur geprüft, fehlende Ordner wurden angelegt.';
+        })} className="flex items-center gap-1.5 self-start text-xs font-semibold text-slate-600 underline disabled:opacity-40 dark:text-slate-300"><Wrench className="h-3.5 w-3.5" /> Struktur prüfen (fehlende Ordner anlegen)</button>
       </section>
     </div>
   );
