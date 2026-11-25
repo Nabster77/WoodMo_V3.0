@@ -57,7 +57,8 @@ function notify(): void {
 
 export function getDiagMode(): DiagMode {
   const value = readStore(MODE_KEY);
-  return value === 'ready' || value === 'on' ? value : 'off';
+  // Ohne gespeicherte Wahl: BEREIT (nur Lebenszeichen, wartet auf Freigabe). Wer AUS wählt, bleibt AUS.
+  return value === 'off' || value === 'on' ? value : 'ready';
 }
 function storeMode(mode: DiagMode): void {
   writeStore(MODE_KEY, mode);
