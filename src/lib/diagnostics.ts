@@ -115,6 +115,7 @@ function readErrors(): { at: number; msg: string }[] {
   } catch { return []; }
 }
 
+export function resetFolderCache(): void { folderCache = null; notify(); }
 let folderCache: { at: number; value: Awaited<ReturnType<typeof describeArchiveFolder>> } | null = null;
 
 export async function buildReport(ctx: DiagContext): Promise<Record<string, unknown>> {

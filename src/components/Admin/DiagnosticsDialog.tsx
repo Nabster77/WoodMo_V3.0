@@ -2,11 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check } from 'lucide-react';
 import {
   DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
-  sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
+  resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION } from '@/lib/appVersion';
+import { grantArchiveFolder } from '@/lib/journalPdfFile';
 
 const MODE_TEXT: Record<DiagMode, string> = { off: 'AUS', ready: 'BEREIT', on: 'AN' };
 const COMMANDS: { id: DiagCommand; label: string }[] = [
@@ -153,10 +154,23 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
 
         <div className="space-y-2 rounded-xl border border-slate-300 p-3 dark:border-slate-700">
           <p className="text-sm font-bold">Dieses Gerät: <span className="text-emerald-600">{MODE_TEXT[mode]}</span></p>
-          <label className="block text-xs font-semibold">Gerätename
-            <input value={label} maxLength={40} onChange={(event) => setLabel(event.target.value)} onBlur={() => setDeviceLabel(label)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
-          </label>
+          <div>
+            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename (fest für dieses Gerät, z. B. „Bregenz“ oder „Wohnzimmer-Tablet“)</label>
+            <div className="mt-1 flex gap-2">
+              <input id="diag-device-name" value={label} maxLength={40} onChange={(event) => setLabel(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') { setDeviceLabel(label); setMessage({ ok: true, text: 'Gerätename gespeichert.' }); } }}
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+              <button type="button" onClick={() => { setDeviceLabel(label); setMessage({ ok: true, text: 'Gerätename gespeichert.' }); }}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Speichern</button>
+            </div>
+          </div>
+          <div>
+            <button type="button" onClick={async () => {
+              const ok = await grantArchiveFolder().catch(() => false);
+              resetFolderCache();
+              setMessage(ok ? { ok: true, text: 'Zugriff auf den Speicherordner erlaubt.' } : { ok: false, text: 'Zugriff nicht erteilt oder kein Speicherordner festgelegt (Einrichtung / Dateiablage).' });
+            }} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Zugriff auf Speicherordner erlauben</button>
+          </div>
           <div className="flex gap-2">
             {modeButton('off', 'AUS', () => void guarded(() => setLocalMode('off', location), 'Diagnose ist aus.', false))}
             {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false))}
@@ -180,10 +194,10 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
             return (
               <div key={row.device_id} className="space-y-2 rounded-xl border border-slate-300 p-3 text-sm dark:border-slate-700">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-bold">{row.label || 'Gerät'}{own ? ' (dieses)' : ''}{row.location ? ` · ${row.location}` : ''}</p>
+                  <p className="font-bold">{row.label || 'Gerät'}{own ? ' (dieses)' : ''}</p>
                   <span className={`rounded px-2 py-0.5 text-xs font-bold ${seen.online ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'}`}>{seen.online ? 'online' : 'nicht erreichbar'}</span>
                 </div>
-                <p className="text-xs text-slate-500">Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
+                <p className="text-xs text-slate-500">{row.location ? `Standort ${row.location} · ` : ''}Modus {MODE_TEXT[row.mode]} · Version {row.app_version ?? '?'}{row.app_version === APP_VERSION ? ' (wie dieses Gerät)' : ''} · zuletzt {seen.text}</p>
                 {summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
                 {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
                 {row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
