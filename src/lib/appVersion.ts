@@ -97,6 +97,8 @@ export async function preflightPublishedUpdate(candidate: PublishedUpdate): Prom
   }
 }
 
+const REDUNDANT_MESSAGE = 'Der Browser hat die Installation verworfen. Bitte schließen Sie weitere WOODMO-Fenster, falls welche geöffnet sind, und versuchen Sie es erneut.';
+
 export async function activatePublishedUpdate(candidate: PublishedUpdate): Promise<void> {
   const latest = await publishedUpdate();
   if (!latest || buildId(latest) !== buildId(candidate)) throw new Error('Eine andere Version wurde veröffentlicht. Bitte beginnen Sie mit der Update-Prüfung erneut.');
@@ -118,7 +120,7 @@ export async function activatePublishedUpdate(candidate: PublishedUpdate): Promi
       const worker = findWorker();
       if (worker) return worker;
       if (installing?.state === 'redundant') {
-        throw new Error('Der Browser hat die Installation verworfen. Bitte schließen Sie weitere WOODMO-Fenster, falls welche geöffnet sind, und versuchen Sie es erneut.');
+        throw new Error(REDUNDANT_MESSAGE);
       }
       await new Promise(resolve => window.setTimeout(resolve, 200));
     }
@@ -140,16 +142,29 @@ export async function activatePublishedUpdate(candidate: PublishedUpdate): Promi
     await cache.put(approval, new Response(build));
     if (await confirmWorker(previousWorker)) return;
     const script = new URL(updateWorkerScript(latest), base);
-    if (previousWorker.scriptURL === script.href) {
-      await registration.update();
-    } else {
-      await navigator.serviceWorker.register(script.href, { scope: registration.scope, updateViaCache: 'none' });
+    const startInstall = async () => {
+      installing = null;
+      if (previousWorker.scriptURL === script.href) {
+        await registration.update();
+      } else {
+        await navigator.serviceWorker.register(script.href, { scope: registration.scope, updateViaCache: 'none' });
+      }
+      // Chromium can activate the replacement directly when the old worker controls no tabs.
+      return waitForWorker(
+        () => registration.waiting ?? (registration.active !== previousWorker && registration.active?.state === 'activated' ? registration.active : null),
+        'Der Browser hat die neue Version noch nicht zur Aktivierung bereitgestellt. Bitte erneut versuchen.',
+      );
+    };
+    let worker: ServiceWorker;
+    try {
+      worker = await startInstall();
+    } catch (error) {
+      // Der Browser verwirft eine Installation manchmal (z. B. direkt nach mehreren Veröffentlichungen oder bei
+      // einem zweiten Fenster, das gerade selbst aktualisiert). Einmal automatisch neu versuchen.
+      if (!(error instanceof Error) || error.message !== REDUNDANT_MESSAGE) throw error;
+      await new Promise(resolve => window.setTimeout(resolve, 2500));
+      worker = await startInstall();
     }
-    // Chromium can activate the replacement directly when the old worker controls no tabs.
-    const worker = await waitForWorker(
-      () => registration.waiting ?? (registration.active !== previousWorker && registration.active?.state === 'activated' ? registration.active : null),
-      'Der Browser hat die neue Version noch nicht zur Aktivierung bereitgestellt. Bitte erneut versuchen.',
-    );
     if (!await confirmWorker(worker)) throw new Error('Der Browser hat die Zielversion nicht bestätigt. Falls weitere WOODMO-Tabs geöffnet sind, schließen Sie diese und versuchen Sie es erneut.');
     await waitForWorker(
       () => worker.state === 'activated' ? worker : null,
