@@ -333,7 +333,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const diagHandlersRef = useRef<DiagHandlers>({ run: async () => ({ done: true, text: '' }) });
   diagHandlersRef.current = {
-    async run(command: DiagCommand) {
+    async run(command: DiagCommand, force: boolean) {
       if (command === 'status') return { done: true, text: 'Status gesendet' };
       if (command === 'update-check') {
         try {
@@ -341,27 +341,48 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           return { done: true, text: update ? `Update ${update.version} wartet` : `Version ${APP_VERSION} ist aktuell` };
         } catch (error) { return { done: true, text: 'Prüfung nicht möglich: ' + readableSyncError(error) }; }
       }
-      // reload und update-install nur im sicheren Zustand
+      // reload und update-install: normal nur im sicheren Zustand. Erzwungen (mit Passwort gesendet)
+      // auch in Verwaltung/Journal, aber nie mitten im Verkauf (Kassenbildschirm geöffnet).
       let pending = 0;
       try { pending = (await readPendingOutbox()).length; } catch { pending = -1; }
-      if (!homeVisible || currentStaff || updatePhase || pending !== 0 || updateBusy.current) {
-        return { done: false, text: 'Zurückgestellt: Gerät in Benutzung oder Upload offen' };
+      const selling = tab === 'pos' && !homeVisible;
+      const idle = !updatePhase && !updateBusy.current;
+      const safe = homeVisible && !currentStaff && idle && pending === 0;
+      const forcedOk = force && !selling && idle;
+      if (!safe && !forcedOk) {
+        return { done: false, text: selling && force ? 'Zurückgestellt: mitten im Verkauf' : 'Zurückgestellt: Gerät in Benutzung oder Upload offen' };
       }
       if (command === 'reload') {
+        // Buchungen liegen bereits dauerhaft im Gerätespeicher (Upload-Warteschlange), ein Neuladen verliert nichts.
         window.setTimeout(() => window.location.reload(), 2500);
-        return { done: true, text: 'Lädt neu' };
+        return { done: true, text: force && !safe ? 'Lädt neu (erzwungen)' : 'Lädt neu' };
       }
       // update-install
       try {
         const update = candidateRef.current ?? await checkForUpdate(false);
         if (!update) return { done: true, text: `Kein Update, Version ${APP_VERSION}` };
         if (!candidate) return { done: false, text: 'Update wird vorbereitet, nächster Versuch folgt' };
+        if (!homeVisible || currentStaff) {
+          // Erzwungen: zuerst zum Startbildschirm, danach startet der normale Update-Ablauf.
+          forceUpdateRef.current = true;
+          setMenuOpen(false); setHomeVisible(true); setCurrentStaff(null); setManagementAdministrator(null);
+          setAdminUnlocked(false); resetJournalSelection();
+          return { done: true, text: `Update ${update.version}: Gerät geht zum Startbildschirm, dann Installation` };
+        }
         autoUpdate.current = true;
         void prepareUpdate();
         return { done: true, text: `Update ${update.version} gestartet` };
       } catch (error) { return { done: false, text: 'Update nicht gestartet: ' + readableSyncError(error) }; }
     },
   };
+  const forceUpdateRef = useRef(false);
+  useEffect(() => {
+    if (!forceUpdateRef.current || !homeVisible || currentStaff || !candidate || updatePhase || updateBusy.current) return;
+    forceUpdateRef.current = false;
+    autoUpdate.current = true;
+    void prepareUpdate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Lage-Wechsel
+  }, [homeVisible, currentStaff, candidate, updatePhase]);
   useEffect(() => {
     installDiagErrorCapture();
     let busy = false;

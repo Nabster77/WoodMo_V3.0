@@ -27,13 +27,14 @@ export interface DiagRow {
   report: Record<string, unknown> | null;
   reported_at: string | null;
   pending_command: DiagCommand | null;
+  command_force: boolean | null;
   command_sent_at: string | null;
   command_result: string | null;
   command_result_at: string | null;
 }
 export interface DiagHandlers {
   /** done=false: Befehl bleibt liegen und wird später erneut versucht (z. B. Kasse in Benutzung). */
-  run(command: DiagCommand): Promise<{ done: boolean; text: string }>;
+  run(command: DiagCommand, force: boolean): Promise<{ done: boolean; text: string }>;
 }
 
 export const DIAG_EVENT = 'woodmo-diag-changed';
@@ -198,8 +199,13 @@ export async function setRemoteMode(deviceId: string, mode: DiagMode, password: 
   await invokeGateway({ action: 'set_mode', device_id: deviceId, mode, password });
   if (deviceId === getDeviceId()) storeMode(mode);
 }
-export async function sendRemoteCommand(deviceId: string, command: DiagCommand, password: string): Promise<void> {
-  await invokeGateway({ action: 'command', device_id: deviceId, command, password });
+export async function sendRemoteCommand(deviceId: string, command: DiagCommand, password: string, force = false): Promise<void> {
+  await invokeGateway({ action: 'command', device_id: deviceId, command, password, force });
+}
+
+/** Prüft nur das Passwort (serverseitig), ändert nichts. */
+export async function verifyDiagnosticsPassword(password: string): Promise<void> {
+  await invokeGateway({ action: 'verify', password });
 }
 
 /** Ein Durchlauf: Lebenszeichen/Bericht senden, Modus abgleichen, Befehle ausführen. */
@@ -230,7 +236,7 @@ export async function diagnosticsTick(ctx: DiagContext, handlers: DiagHandlers):
   await supabase.from(TABLE).update({ ...base, report }).eq('device_id', id);
   if (mode !== 'on' || !current.pending_command) return;
 
-  const outcome = await handlers.run(current.pending_command);
+  const outcome = await handlers.run(current.pending_command, current.command_force === true);
   if (!outcome.done) {
     await supabase.from(TABLE).update({ command_result: outcome.text.slice(0, 200), command_result_at: new Date().toISOString() })
       .eq('device_id', id);

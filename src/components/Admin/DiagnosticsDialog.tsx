@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check } from 'lucide-react';
 import {
   DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
-  sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode,
+  sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
@@ -56,6 +56,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   const myId = getDeviceId();
   const [label, setLabel] = useState(getDeviceLabel());
   const [password, setPassword] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const [force, setForce] = useState(false);
   const [rows, setRows] = useState<DiagRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -71,13 +73,25 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
     return () => window.clearInterval(timer);
   }, [refresh]);
 
+
+  async function unlock() {
+    if (!password.trim()) { setMessage({ ok: false, text: 'Bitte das Administrator- oder Verwaltungspasswort eingeben.' }); return; }
+    setBusy(true); setMessage(null);
+    try {
+      await verifyDiagnosticsPassword(password);
+      setUnlocked(true);
+    } catch (error) {
+      setPassword('');
+      setMessage({ ok: false, text: error instanceof Error ? error.message : 'Passwort nicht geprüft.' });
+    } finally { setBusy(false); }
+  }
+
   async function guarded(action: () => Promise<void>, okText: string, needPassword: boolean) {
     if (needPassword && !password.trim()) { setMessage({ ok: false, text: 'Bitte zuerst das Administrator- oder Verwaltungspasswort eingeben.' }); return; }
     setBusy(true); setMessage(null);
     try {
       await action();
       setMessage({ ok: true, text: okText });
-      if (needPassword) setPassword('');
       await refresh();
     } catch (error) {
       setMessage({ ok: false, text: error instanceof Error ? error.message : 'Aktion fehlgeschlagen.' });
@@ -90,6 +104,30 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
       {text}
     </button>
   );
+
+  if (!unlocked) {
+    return (
+      <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]" onClick={onClose}
+        onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="woodmo-diag-gate" onClick={(event) => event.stopPropagation()}
+          className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-300 bg-white p-5 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <h2 id="woodmo-diag-gate" className="flex items-center gap-2 text-xl font-bold"><Activity className="h-5 w-5" /> Diagnose</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300">Bitte das Administrator- oder Verwaltungspasswort eingeben.</p>
+          <form onSubmit={(event) => { event.preventDefault(); void unlock(); }} className="space-y-3">
+            <input type="password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="off"
+              aria-label="Passwort" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+            {message && <p role="alert" className="text-sm font-semibold text-red-700 dark:text-red-400">{message.text}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={busy} className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-sm font-bold text-slate-900 disabled:opacity-50">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entsperren
+              </button>
+              <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-lg bg-slate-800 px-3 text-sm font-bold text-white">Abbrechen</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]" onClick={onClose}
@@ -118,9 +156,9 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </div>
         </div>
 
-        <label className="block text-xs font-semibold">Passwort (für AN und für alle Aktionen unten)
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="off"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+        <label className="flex items-start gap-2 text-xs">
+          <input type="checkbox" checked={force} onChange={(event) => setForce(event.target.checked)} className="mt-0.5 h-4 w-4" />
+          <span>Befehle „Neu laden“ und „Update installieren“ erzwingen: auch wenn das Gerät in Verwaltung oder Journal geöffnet ist oder noch etwas hochgeladen wird. Nie mitten im Verkauf.</span>
         </label>
         {message && (
           <p role={message.ok ? 'status' : 'alert'} className={`flex items-center gap-1.5 text-sm font-semibold ${message.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
@@ -161,7 +199,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(async () => {
                           // Schon auf der aktuellen Version: nichts senden, kein Update und kein Neustart nötig.
                           if (command.id === 'update-install' && row.app_version === APP_VERSION) throw new Error(`${row.label || 'Gerät'} läuft schon auf Version ${APP_VERSION}. Kein Update und kein Neustart nötig.`);
-                          await sendRemoteCommand(row.device_id, command.id, password);
+                          await sendRemoteCommand(row.device_id, command.id, password, force && (command.id === 'reload' || command.id === 'update-install'));
                         }, `${command.label} an ${row.label || 'Gerät'} gesendet.`, true)}
                         className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">{command.label}</button>
                     ))}

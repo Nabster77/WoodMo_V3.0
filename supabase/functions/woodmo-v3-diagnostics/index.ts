@@ -83,8 +83,9 @@ Deno.serve(async request => {
   if (!(await authorizedResetPassword(password, managerValid, admins))) {
     return reply(403, { error: 'Administrator- oder Verwaltungspasswort nicht korrekt.' });
   }
-  const deviceId = payload.device_id;
   const action = payload.action;
+  if (action === 'verify') return reply(200, { ok: true });
+  const deviceId = payload.device_id;
   if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
     return reply(400, { error: 'Gerät fehlt oder ungültig.' });
   }
@@ -118,7 +119,7 @@ Deno.serve(async request => {
     if (current.mode !== 'on') return reply(409, { error: 'Befehle nur, wenn das Gerät auf AN steht.' });
     const commandId = crypto.randomUUID();
     const { error } = await service.from('pos_device_diagnostics').update({
-      pending_command: command, command_id: commandId, command_sent_at: now,
+      pending_command: command, command_id: commandId, command_sent_at: now, command_force: payload.force === true,
       command_result: null, command_result_at: null,
     }).eq('device_id', deviceId);
     if (error) return reply(409, { error: error.message || 'Befehl nicht abgelegt.' });
