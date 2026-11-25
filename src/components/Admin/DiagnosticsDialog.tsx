@@ -66,7 +66,6 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   const [label, setLabel] = useState(getDeviceLabel());
   const [password, setPassword] = useState('');
   const [unlocked, setUnlocked] = useState(false);
-  const [force, setForce] = useState(false);
   const [rows, setRows] = useState<DiagRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -165,10 +164,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </div>
         </div>
 
-        <label className="flex items-start gap-2 text-xs">
-          <input type="checkbox" checked={force} onChange={(event) => setForce(event.target.checked)} className="mt-0.5 h-4 w-4" />
-          <span>Befehle „Neu laden“ und „Update installieren“ erzwingen: auch wenn das Gerät in Verwaltung oder Journal geöffnet ist oder noch etwas hochgeladen wird. Nie mitten im Verkauf.</span>
-        </label>
+        <p className="text-xs text-slate-600 dark:text-slate-300">„Neu laden“ und „Update installieren“ warten in der Warteschlange, solange auf dem Gerät ein Benutzer angemeldet ist. Sobald er abgemeldet ist, wird der Befehl ausgeführt.</p>
         {message && (
           <p role={message.ok ? 'status' : 'alert'} className={`flex items-center gap-1.5 text-sm font-semibold ${message.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
             {message.ok && <Check className="h-4 w-4" />} {message.text}
@@ -208,7 +204,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(async () => {
                           // Schon auf der aktuellen Version: nichts senden, kein Update und kein Neustart nötig.
                           if (command.id === 'update-install' && row.app_version === APP_VERSION) throw new Error(`${row.label || 'Gerät'} läuft schon auf Version ${APP_VERSION}. Kein Update und kein Neustart nötig.`);
-                          await sendRemoteCommand(row.device_id, command.id, password, force && (command.id === 'reload' || command.id === 'update-install'));
+                          await sendRemoteCommand(row.device_id, command.id, password, false);
                         }, `${command.label} an ${row.label || 'Gerät'} gesendet.`, true)}
                         className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">{command.label}</button>
                     ))}

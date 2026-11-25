@@ -343,32 +343,27 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           return { done: true, text: update ? `Update ${update.version} wartet` : `Version ${APP_VERSION} ist aktuell` };
         } catch (error) { return { done: true, text: 'Prüfung nicht möglich: ' + readableSyncError(error) }; }
       }
-      // reload und update-install: normal nur im sicheren Zustand. Erzwungen (mit Passwort gesendet)
-      // auch in Verwaltung/Journal, aber nie mitten im Verkauf (Kassenbildschirm geöffnet).
-      let pending = 0;
-      try { pending = (await readPendingOutbox()).length; } catch { pending = -1; }
-      const selling = tab === 'pos' && !homeVisible;
+      // reload und update-install: nur wenn kein Benutzer angemeldet ist (auch Verwaltung zählt). Eine offene Kasse
+      // ohne angemeldeten Benutzer ist erlaubt. Sonst bleibt der Befehl in der Warteschlange und wird beim
+      // nächsten Durchlauf erneut geprüft. Buchungen liegen dauerhaft im Gerätespeicher, ein Neuladen verliert nichts.
+      const loggedIn = !!currentStaff || !!managementAdministrator;
       const idle = !updatePhase && !updateBusy.current;
-      const safe = homeVisible && !currentStaff && idle && pending === 0;
-      const forcedOk = force && !selling && idle;
-      if (!safe && !forcedOk) {
-        return { done: false, text: selling && force ? 'Zurückgestellt: mitten im Verkauf' : 'Zurückgestellt: Gerät in Benutzung oder Upload offen' };
+      if (loggedIn || !idle) {
+        return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet, wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
       }
       if (command === 'reload') {
-        // Buchungen liegen bereits dauerhaft im Gerätespeicher (Upload-Warteschlange), ein Neuladen verliert nichts.
         window.setTimeout(() => window.location.reload(), 2500);
-        return { done: true, text: force && !safe ? 'Lädt neu (erzwungen)' : 'Lädt neu' };
+        return { done: true, text: 'Lädt neu' };
       }
       // update-install
       try {
         const update = candidateRef.current ?? await checkForUpdate(false);
         if (!update) return { done: true, text: `Kein Update, Version ${APP_VERSION}` };
         if (!candidate) return { done: false, text: 'Update wird vorbereitet, nächster Versuch folgt' };
-        if (!homeVisible || currentStaff) {
-          // Erzwungen: zuerst zum Startbildschirm, danach startet der normale Update-Ablauf.
+        if (!homeVisible) {
+          // Offene Kasse ohne Benutzer: zuerst zum Startbildschirm, danach startet der normale Update-Ablauf.
           forceUpdateRef.current = true;
-          setMenuOpen(false); setHomeVisible(true); setCurrentStaff(null); setManagementAdministrator(null);
-          setAdminUnlocked(false); resetJournalSelection();
+          setMenuOpen(false); setHomeVisible(true);
           return { done: true, text: `Update ${update.version}: Gerät geht zum Startbildschirm, dann Installation` };
         }
         autoUpdate.current = true;
@@ -379,7 +374,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const forceUpdateRef = useRef(false);
   useEffect(() => {
-    if (!forceUpdateRef.current || !homeVisible || currentStaff || !candidate || updatePhase || updateBusy.current) return;
+    if (!forceUpdateRef.current || !homeVisible || currentStaff || managementAdministrator || !candidate || updatePhase || updateBusy.current) return;
     forceUpdateRef.current = false;
     autoUpdate.current = true;
     void prepareUpdate();
