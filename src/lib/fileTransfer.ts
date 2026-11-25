@@ -50,7 +50,7 @@ async function serveOnce(deviceId: string): Promise<void> {
       const root = await loadExportFolder() as unknown as DirLike | null;
       if (!root) { await fail('Am Gerät ist kein Speicherordner festgelegt.'); continue; }
       const permission = await root.queryPermission?.({ mode: 'readwrite' });
-      if (permission !== undefined && permission !== 'granted') { await fail('Zugriff auf den Speicherordner fehlt: am Gerät „Zugriff auf Speicherordner erlauben“ tippen.'); continue; }
+      if (permission !== undefined && permission !== 'granted') { await fail(`Zugriff auf den Speicherordner fehlt (${permission}): am Gerät „Zugriff auf Speicherordner erlauben“ tippen.`); continue; }
       const parts = row.path.split('/').filter(Boolean);
       let plain: ArrayBuffer;
       let plainSize: number;
