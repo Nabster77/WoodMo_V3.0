@@ -7,6 +7,8 @@ import { forgetGrantedArchiveRoot, getGrantedArchiveRoot, loadExportFolder } fro
 
 const BUCKET = 'diag-transfer';
 const TABLE = 'pos_file_transfers';
+/** Ordner öffnen / Dateien holen: vorerst ausgeblendet (Chrome-Ordnerzugriff am Gerät ist zu aufwendig). Code bleibt erhalten. */
+export const FOLDER_TOOLS_ENABLED = false;
 export const MAX_TRANSFER_BYTES = 20 * 1024 * 1024;
 
 interface FileLike { kind: 'file'; getFile(): Promise<File> }
@@ -31,7 +33,7 @@ async function publicJwk(key: CryptoKey): Promise<JsonWebKey> {
 /** Gerät: offene Anfragen für dieses Gerät bearbeiten (nur im Modus AN, höchstens 2 je Durchlauf). */
 let serving = false;
 export async function serveFileTransfers(deviceId: string): Promise<void> {
-  if (!supabase || serving) return;
+  if (!FOLDER_TOOLS_ENABLED || !supabase || serving) return;
   serving = true;
   try { await serveOnce(deviceId); } finally { serving = false; }
 }

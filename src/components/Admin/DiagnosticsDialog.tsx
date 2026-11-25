@@ -7,7 +7,7 @@ import {
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION, latestPublishedVersion } from '@/lib/appVersion';
-import { requestFileFromDevice } from '@/lib/fileTransfer';
+import { FOLDER_TOOLS_ENABLED, requestFileFromDevice } from '@/lib/fileTransfer';
 import { RemoteFolderDialog } from './RemoteFolderDialog';
 import { FolderExplorerDialog } from './FolderExplorerDialog';
 import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
@@ -190,10 +190,10 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                 className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Speichern</button>
             </div>
           </div>
-          {folderExists === false && (
+          {FOLDER_TOOLS_ENABLED && folderExists === false && (
             <p className="text-xs text-slate-600 dark:text-slate-300">Speicherordner: noch keiner angelegt.</p>
           )}
-          {folderExists && (
+          {FOLDER_TOOLS_ENABLED && folderExists && (
             <div>
               <button type="button" onClick={async () => {
                 const result = await requestArchivePermission();
@@ -239,7 +239,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                   Eigenschaften {openRows.has(row.device_id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
                 {openRows.has(row.device_id) && summary(row.report).map((line) => <p key={line} className="text-xs">{line}</p>)}
-                {openRows.has(row.device_id) && !own && row.mode === 'on' && ((row.report as { folder?: { newest?: { path: string; size: number; at: number }[] } } | null)?.folder?.newest ?? []).map((file) => {
+                {FOLDER_TOOLS_ENABLED && openRows.has(row.device_id) && !own && row.mode === 'on' && ((row.report as { folder?: { newest?: { path: string; size: number; at: number }[] } } | null)?.folder?.newest ?? []).map((file) => {
                   const key = row.device_id + '|' + file.path;
                   const active = transfer?.key === key;
                   return (
@@ -266,7 +266,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(() => setRemoteMode(row.device_id, 'ready', password), `${row.label || 'Gerät'}: auf BEREIT gestellt.`, true)}
                         className="min-h-10 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">Auf BEREIT</button>
                     )}
-                    {row.mode === 'on' && seen.online && (
+                    {FOLDER_TOOLS_ENABLED && row.mode === 'on' && seen.online && (
                       <button type="button" disabled={busy} onClick={() => setRemoteFolder({ id: row.device_id, name: row.label || 'Gerät' })}
                         className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">Ordner öffnen</button>
                     )}
