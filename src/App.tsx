@@ -336,7 +336,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const diagHandlersRef = useRef<DiagHandlers>({ run: async () => ({ done: true, text: '' }) });
   diagHandlersRef.current = {
     async run(command: DiagCommand) {
-      if (command === 'status') return { done: true, text: 'Status gesendet' };
+      if (command === 'status') return { done: true, text: `Status gesendet, Version ${APP_VERSION}` };
       if (command === 'update-check') {
         try {
           const update = await checkForUpdate(false);

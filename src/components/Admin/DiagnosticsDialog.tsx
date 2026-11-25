@@ -6,7 +6,7 @@ import {
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
-import { APP_VERSION } from '@/lib/appVersion';
+import { APP_VERSION, latestPublishedVersion } from '@/lib/appVersion';
 import { FolderExplorerDialog } from './FolderExplorerDialog';
 import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
 
@@ -66,6 +66,13 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   const mode = useMode();
   const myId = getDeviceId();
   const [label, setLabel] = useState(getDeviceLabel());
+  const [latest, setLatest] = useState<string | null>(null);
+  useEffect(() => {
+    const load = () => { void latestPublishedVersion().then(setLatest); };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [showExplorer, setShowExplorer] = useState(false);
   const [folderExists, setFolderExists] = useState<boolean | null>(null);
   useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
@@ -228,7 +235,12 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(() => setRemoteMode(row.device_id, 'ready', password), `${row.label || 'Gerät'}: auf BEREIT gestellt.`, true)}
                         className="min-h-10 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">Auf BEREIT</button>
                     )}
-                    {row.mode === 'on' && COMMANDS.map((command) => (
+                    {row.mode === 'on' && seen.online && latest && row.app_version !== latest && (
+                      <button type="button" disabled={busy || row.pending_command === 'update-install'}
+                        onClick={() => void guarded(async () => { await sendRemoteCommand(row.device_id, 'update-install', password, false); }, `Update ${latest} an ${row.label || 'Gerät'} gesendet.`, true)}
+                        className="min-h-10 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white disabled:opacity-40">Jetzt updaten: neue Version {latest}</button>
+                    )}
+                    {row.mode === 'on' && COMMANDS.filter((command) => command.id === 'status' || command.id === 'reload').map((command) => (
                       <button key={command.id} type="button" disabled={busy}
                         onClick={() => void guarded(async () => {
                           // Schon auf der aktuellen Version: nichts senden, kein Update und kein Neustart nötig.

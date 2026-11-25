@@ -39,6 +39,18 @@ export function activationVerified(target: string): boolean {
   return true;
 }
 
+/** Neueste veröffentlichte Versionsnummer (nur zum Vergleich, installiert nichts). */
+export async function latestPublishedVersion(): Promise<string | null> {
+  try {
+    const url = new URL('version.json', base);
+    url.searchParams.set('check', String(Date.now()));
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
+    const build: { version?: unknown } = await response.json();
+    return typeof build.version === 'string' ? build.version : null;
+  } catch { return null; }
+}
+
 export async function publishedUpdate(): Promise<PublishedUpdate | null> {
   if (!BUILD_ID) return null;
   const url = new URL('version.json', base);
