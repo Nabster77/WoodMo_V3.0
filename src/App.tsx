@@ -56,6 +56,7 @@ import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafe
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
+import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { DIAG_EVENT, diagnosticsTick, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
 import {
@@ -385,6 +386,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Lage-Wechsel
   }, [homeVisible, currentStaff, candidate, updatePhase]);
   useEffect(() => installFullscreenToggle(), []);
+  useEffect(() => installKeyboardOnTap(), []);
   useEffect(() => {
     installDiagErrorCapture();
     let busy = false;

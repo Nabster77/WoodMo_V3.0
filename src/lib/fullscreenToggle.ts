@@ -17,6 +17,11 @@ export function installFullscreenToggle(): () => void {
     if (event.defaultPrevented) return;
     const target = event.target as Element | null;
     if (!target || (target.closest && target.closest(INTERACTIVE))) return;
+    // Sicherheitsnetz: nie in Dialogen/Overlays (fixed) und nie auf antippbaren Flächen (cursor: pointer) umschalten.
+    for (let el: Element | null = target; el && el !== document.documentElement; el = el.parentElement) {
+      const cs = window.getComputedStyle(el);
+      if (cs.cursor === 'pointer' || cs.position === 'fixed') return;
+    }
     const active = !!document.fullscreenElement;
     if (!active && !installedAppView()) return;
     try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
