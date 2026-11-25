@@ -7,6 +7,7 @@ import {
 } from '@/lib/diagnostics';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { APP_VERSION } from '@/lib/appVersion';
+import { FolderExplorerDialog } from './FolderExplorerDialog';
 import { loadExportFolder, requestArchivePermission } from '@/lib/journalPdfFile';
 
 const MODE_TEXT: Record<DiagMode, string> = { off: 'AUS', ready: 'BEREIT', on: 'AN' };
@@ -65,6 +66,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
   const mode = useMode();
   const myId = getDeviceId();
   const [label, setLabel] = useState(getDeviceLabel());
+  const [showExplorer, setShowExplorer] = useState(false);
   const [folderExists, setFolderExists] = useState<boolean | null>(null);
   useEffect(() => { void loadExportFolder().then((folder) => setFolderExists(!!folder)).catch(() => setFolderExists(false)); }, []);
   const [password, setPassword] = useState('');
@@ -178,6 +180,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                   : result === 'none' ? { ok: false, text: 'Noch kein Speicherordner festgelegt.' }
                   : { ok: false, text: 'Zugriff nicht erteilt.' });
               }} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Zugriff auf Speicherordner erlauben</button>
+              <button type="button" onClick={() => setShowExplorer(true)} className="ml-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">Ordner öffnen</button>
             </div>
           )}
           <div className="flex gap-2">
@@ -246,6 +249,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </button>
         </div>
       </section>
+      {showExplorer && <FolderExplorerDialog onClose={() => setShowExplorer(false)} />}
     </div>
   );
 }
