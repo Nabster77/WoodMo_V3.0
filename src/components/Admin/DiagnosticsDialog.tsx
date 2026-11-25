@@ -158,15 +158,12 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           <h2 id="woodmo-diag-title" className="flex items-center gap-2 text-xl font-bold"><Activity className="h-5 w-5" /> Diagnose</h2>
           <button type="button" aria-label="Diagnose schließen" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-400"><X className="h-5 w-5" /></button>
         </div>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          AUS: nichts wird gesendet, das Gerät hört nicht zu. BEREIT: nur Lebenszeichen, ein Administrator kann das Gerät einschalten. AN: Statusbericht und Befehle.
-          Einschalten und Befehle brauchen das Administrator- oder Verwaltungspasswort.
-        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">AUS: kein Zugriff. BEREIT: Standby. AN: dauerhafter Zugriff.</p>
 
         <div className="space-y-2 rounded-xl border border-slate-300 p-3 dark:border-slate-700">
-          <p className="text-sm font-bold">Dieses Gerät: <span className="text-emerald-600">{MODE_TEXT[mode]}</span></p>
+          <p className="text-sm font-bold">Dieses Gerät ist <span className="text-emerald-600">{MODE_TEXT[mode]}</span></p>
           <div>
-            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename (fest für dieses Gerät, z. B. „Bregenz“ oder „Wohnzimmer-Tablet“)</label>
+            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename</label>
             <div className="mt-1 flex gap-2">
               <input id="diag-device-name" value={label} maxLength={40} onChange={(event) => setLabel(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Enter') { setDeviceLabel(label); setMessage({ ok: true, text: 'Gerätename gespeichert.' }); } }}
@@ -176,7 +173,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
             </div>
           </div>
           {folderExists === false && (
-            <p className="text-xs text-slate-600 dark:text-slate-300">Speicherordner: noch keiner angelegt. Der Zugriff wird erst geprüft, wenn ein Ordner festgelegt ist.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">Speicherordner: noch keiner angelegt.</p>
           )}
           {folderExists && (
             <div>
@@ -197,7 +194,6 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           </div>
         </div>
 
-        <p className="text-xs text-slate-600 dark:text-slate-300">„Neu laden“ und „Update installieren“ warten in der Warteschlange, solange auf dem Gerät ein Benutzer angemeldet ist. Sobald er abgemeldet ist, wird der Befehl ausgeführt.</p>
         {message && (
           <p role={message.ok ? 'status' : 'alert'} className={`flex items-center gap-1.5 text-sm font-semibold ${message.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
             {message.ok && <Check className="h-4 w-4" />} {message.text}
