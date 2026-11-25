@@ -347,7 +347,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       // reload und update-install: nur wenn kein Benutzer angemeldet ist (auch Verwaltung zählt). Eine offene Kasse
       // ohne angemeldeten Benutzer ist erlaubt. Sonst bleibt der Befehl in der Warteschlange und wird beim
       // nächsten Durchlauf erneut geprüft. Buchungen liegen dauerhaft im Gerätespeicher, ein Neuladen verliert nichts.
-      const loggedIn = !!currentStaff || !!managementAdministrator;
+      const loggedIn = !!currentStaff; // Verwaltungs-Anmeldung ohne Kassen-Benutzer gilt als abgemeldet
       const idle = !updatePhase && !updateBusy.current;
       if (loggedIn || !idle) {
         return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet, wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
@@ -364,7 +364,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
         if (!homeVisible) {
           // Offene Kasse ohne Benutzer: zuerst zum Startbildschirm, danach startet der normale Update-Ablauf.
           forceUpdateRef.current = true;
-          setMenuOpen(false); setHomeVisible(true);
+          setMenuOpen(false); setHomeVisible(true); setManagementAdministrator(null);
+          setAdminUnlocked(false); resetJournalSelection();
           return { done: true, text: `Update ${update.version}: Gerät geht zum Startbildschirm, dann Installation` };
         }
         autoUpdate.current = true;
@@ -375,7 +376,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const forceUpdateRef = useRef(false);
   useEffect(() => {
-    if (!forceUpdateRef.current || !homeVisible || currentStaff || managementAdministrator || !candidate || updatePhase || updateBusy.current) return;
+    if (!forceUpdateRef.current || !homeVisible || currentStaff || !candidate || updatePhase || updateBusy.current) return;
     forceUpdateRef.current = false;
     autoUpdate.current = true;
     void prepareUpdate();
