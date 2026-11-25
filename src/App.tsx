@@ -56,6 +56,7 @@ import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafe
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
+import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { DIAG_EVENT, diagnosticsTick, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
 import {
   ShoppingCart, Settings, Receipt, Sun, Moon,
@@ -383,6 +384,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     void prepareUpdate();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Lage-Wechsel
   }, [homeVisible, currentStaff, candidate, updatePhase]);
+  useEffect(() => installFullscreenToggle(), []);
   useEffect(() => {
     installDiagErrorCapture();
     let busy = false;
