@@ -5,6 +5,7 @@ import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
 import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
+import { DiagnosticsDialog } from './DiagnosticsDialog';
 import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
 import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
 import { computeJournalStats, type JournalReportData } from '@/lib/journalPdf';
@@ -19,7 +20,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Activity, Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -149,11 +150,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     action();
   };
   // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
-  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] transition hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
+  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-700 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:border-white/60 hover:from-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
   const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
   const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
   const unreadRelease = APP_RELEASE_NOTES.length > 0 && readRelease !== RELEASE_ID;
   function closeReleaseInfo() {
@@ -173,12 +175,13 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   // header. Closing that modal restores the previously active admin section.
   useEffect(() => {
     const activeTitle = showReleaseInfo ? 'Info'
+      : showDiagnostics ? 'Diagnose'
       : showCatalogTransfer ? 'Excel-Import / Export'
       : showImport ? 'Backup importieren'
       : showReset ? 'Buchungen zurücksetzen'
       : ADMIN_SECTION_TITLES[tab];
     onAdminSectionChange(activeTitle);
-  }, [tab, showReleaseInfo, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
+  }, [tab, showReleaseInfo, showDiagnostics, showCatalogTransfer, showImport, showReset, onAdminSectionChange]);
 
   return (
     <div className="flex h-full flex-col">
@@ -197,7 +200,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
           >
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
               <div>
-                <h2 className="text-lg font-bold">Verwaltungsmenü</h2>
+                <h2 className="text-2xl font-bold">Verwaltungsmenü</h2>
               </div>
               <button type="button" aria-label="Verwaltungsmenü schließen" onClick={onCloseMenu}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 text-slate-200 hover:bg-slate-700">
@@ -239,6 +242,10 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                     <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
                     <span className="sr-only">Neue Versionshinweise</span>
                   </>}
+                </button>
+                <button type="button" className={adminMenuItem} aria-haspopup="dialog"
+                  onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
+                  <Activity className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Diagnose
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
@@ -307,6 +314,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
               : props.onCreateStaff && props.onUpdateStaff && props.onSetStaffPassword && props.onDeleteStaff ? <div className="space-y-4"><StaffManager users={props.staffUsers ?? []} online={props.staffOnline ?? navigator.onLine} onCreate={props.onCreateStaff} onUpdate={props.onUpdateStaff} onSetPassword={props.onSetStaffPassword} onDelete={props.onDeleteStaff} />{props.administratorTools}</div> : null}
       </div>
+      {showDiagnostics && <DiagnosticsDialog location={props.selectedLocation ?? null} onClose={() => setShowDiagnostics(false)} />}
       {showReleaseInfo && (
         <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]"
           onClick={closeReleaseInfo} onKeyDown={event => { if (event.key === 'Escape') closeReleaseInfo(); }}>
@@ -585,6 +593,21 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
     setPfandB(String(pfandSettings.Bregenz));
   }, [pfandSettings, pfandEditing, pfandPhase]);
 
+  // Automatisch speichern (25.11.): kurz nach der letzten Eingabe oder beim Verlassen des Feldes.
+  const pfandValid = parsePfandAmount(pfandF) !== null && parsePfandAmount(pfandB) !== null;
+  useEffect(() => {
+    if (pfandPhase !== 'dirty' || !pfandValid) return;
+    const timer = window.setTimeout(() => { void savePfandSettings(); }, 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pfandPhase, pfandF, pfandB, pfandValid]);
+  // Die Meldung „Gespeichert“ blendet sich nach einigen Sekunden wieder aus.
+  useEffect(() => {
+    if (pfandPhase !== 'cloud' && pfandPhase !== 'local') return;
+    const timer = window.setTimeout(() => setPfandPhase('idle'), 4000);
+    return () => window.clearTimeout(timer);
+  }, [pfandPhase]);
+
   const sorted = [...products].sort(sortMode === 'alphabetical'
     ? (a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
     : sortMode === 'reverse'
@@ -627,7 +650,7 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
       </div>
 
       {/* Global pfand settings */}
-      <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
+      <div className="mb-4 w-fit max-w-full rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
         <div className="mb-2 flex items-center gap-2">
           <Recycle className="h-5 w-5 text-green-600 dark:text-green-400" />
           <p className="text-sm font-bold text-green-800 dark:text-green-300">Globaler Pfandbetrag</p>
@@ -642,7 +665,8 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
                 <label className="mb-1 block text-xs font-semibold text-green-700 dark:text-green-400">{loc}</label>
       <div className="flex items-center gap-1">
                   <input value={val} onChange={(e) => { setVal(e.target.value); setPfandEditing(true); setPfandPhase('dirty'); setPfandError(''); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePfandSettings(); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (pfandValid) void savePfandSettings(); } }}
+                    onBlur={() => { if (pfandPhase === 'dirty' && pfandValid) void savePfandSettings(); }}
                     placeholder="0,00" inputMode="decimal" disabled={pfandPhase === 'saving'}
                     aria-label={`Pfandbetrag ${loc} in Euro`}
                     className="w-24 rounded-lg border border-green-300 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-green-500 focus:outline-none disabled:opacity-50 dark:border-green-700 dark:bg-gray-900 dark:text-gray-100" />
@@ -651,16 +675,11 @@ function ProductManager({ categories, products, onAddProduct, onUpdateProduct, o
               </div>
             );
           })}
-          <button type="button" onClick={() => void savePfandSettings()} disabled={pfandPhase === 'saving'}
-            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-95 disabled:opacity-50">
-            {pfandPhase === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {pfandPhase === 'saving' ? 'Cloud wird geprüft …' : 'Speichern'}
-          </button>
           <span role="status" aria-live="polite" className="text-xs font-semibold">
-            {pfandPhase === 'cloud' && <span className="flex items-center gap-1 text-green-700 dark:text-green-400"><Check className="h-3.5 w-3.5" /> Cloud gespeichert und überprüft</span>}
-            {pfandPhase === 'local' && <span className="text-amber-700 dark:text-amber-400">Nur lokal übernommen – Testmodus, kein Cloud-Abgleich</span>}
-            {pfandPhase === 'dirty' && <span className="text-slate-600 dark:text-slate-300">Noch nicht gespeichert</span>}
-            {pfandPhase === 'saving' && <span className="text-amber-700 dark:text-amber-400">Lokaler Wert übernommen, Cloud-Bestätigung ausstehend</span>}
+            {pfandPhase === 'cloud' && <span className="flex items-center gap-1 text-green-700 dark:text-green-400"><Check className="h-3.5 w-3.5" /> Gespeichert</span>}
+            {pfandPhase === 'local' && <span className="text-amber-700 dark:text-amber-400">Gespeichert (nur lokal, Testmodus)</span>}
+            {pfandPhase === 'dirty' && !pfandValid && <span className="text-amber-700 dark:text-amber-400">Bitte einen gültigen Betrag eingeben (z. B. 3 oder 3,50)</span>}
+            {pfandPhase === 'saving' && <span className="text-amber-700 dark:text-amber-400">Wird gespeichert …</span>}
             {pfandPhase === 'error' && <span role="alert" className="text-red-700 dark:text-red-400">{pfandError}</span>}
             {pfandPhase === 'idle' && testMode && <span className="text-amber-700 dark:text-amber-400">Testmodus: Einstellungen werden nicht in die Cloud hochgeladen</span>}
           </span>
@@ -1103,7 +1122,7 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
         </div>
         <DateNav value={selectedDate} onChange={setOverviewDate} max={today} lastSalesDay={lastSalesDay} />
         {/* Standort direkt in der Verwaltung wechseln (24.11.) oder beide anzeigen. */}
-        <div role="group" aria-label="Standort" className="flex h-10 overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
+        <div role="group" aria-label="Standort" className="flex h-[46px] overflow-hidden rounded-xl border border-gray-300 text-xs font-semibold dark:border-gray-600">
           {LOCATIONS.map((loc) => (
             <button key={loc} type="button" aria-pressed={!showAllLocations && selectedLocation === loc} style={locationStyle(loc)}
               onClick={() => { setShowAllLocations(false); handleSwitch(loc); }}
@@ -1661,19 +1680,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                   <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
                     {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
-                      <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
-                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(tx.timestamp)}
-                          <span className="rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                            {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
-                          </span>
-                          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
-                        </div>
-                      </div>
+                      <SaleRow key={tx.id} tx={tx} />
                     ))}
                   </div>
                 </details>
@@ -1682,6 +1689,56 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Verkaufszeile mit aufklappbaren Bon-Details (25.11.): zeigt, wie sich der Betrag zusammensetzt.
+function SaleRow({ tx }: { tx: Transaction }) {
+  const [open, setOpen] = useState(false);
+  const goods = tx.items.filter((i) => !i.isPfandRetoure);
+  const retoures = tx.items.filter((i) => i.isPfandRetoure);
+  const retoureQty = retoures.reduce((sum, i) => sum + i.quantity, 0);
+  const goodsQty = goods.reduce((sum, i) => sum + i.quantity, 0);
+  const goodsSum = goods.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const pfandOut = goods.reduce((sum, i) => sum + (i.pfand || 0), 0);
+  const pfandBack = retoures.reduce((sum, i) => sum + Math.abs(i.pfand || 0), 0);
+  const money = (v: number) => formatCurrency(Math.round(v * 100) / 100);
+  return (
+    <div className="border-b border-gray-50 text-xs last:border-0 dark:border-gray-700/50">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-1.5 text-left">
+        <div className="flex min-w-0 items-center gap-2 text-gray-500 dark:text-gray-400">
+          <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <span className="shrink-0">{formatTime(tx.timestamp)}</span>
+          <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+            {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
+          </span>
+          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+        </div>
+      </button>
+      {open && (
+        <div className="mx-3 mb-2 space-y-0.5 rounded-lg bg-gray-50 px-3 py-2 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+          {goods.map((i, idx) => (
+            <div key={`g-${idx}`} className="flex justify-between"><span>{i.quantity} × {i.name}</span><span>{money(i.price * i.quantity)}</span></div>
+          ))}
+          {pfandOut > 0 && (
+            <div className="flex justify-between"><span>Pfand für {goodsQty > 0 ? `${goods.filter((i) => (i.pfand || 0) > 0).reduce((n, i) => n + i.quantity, 0)} Becher` : 'Becher'}</span><span>+ {money(pfandOut)}</span></div>
+          )}
+          {pfandBack > 0 && (
+            <div className="flex justify-between text-green-700 dark:text-green-400"><span>Pfand-Retoure {retoureQty} ×</span><span>− {money(pfandBack)}</span></div>
+          )}
+          <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900 dark:border-gray-700 dark:text-gray-100">
+            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span>{formatCurrency(tx.total)}</span>
+          </div>
+          {Math.abs(goodsSum + pfandOut - pfandBack - tx.total) > 0.01 && (
+            <div className="text-[10px] text-amber-600 dark:text-amber-400">Hinweis: Teilbetrag einer geteilten Zahlung, Rest steht in einer eigenen Zeile.</div>
+          )}
+          <div className="pt-1 text-[10px] text-gray-400 dark:text-gray-500">{tx.employeeName ? `${tx.employeeName} · ` : ''}Bon {tx.id.slice(-6)}</div>
+        </div>
+      )}
     </div>
   );
 }

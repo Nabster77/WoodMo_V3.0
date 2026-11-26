@@ -149,6 +149,49 @@ export async function archiveFolderStatus(): Promise<ArchiveFolderStatus> {
   }
 }
 
+export interface ArchiveFolderReport {
+  mode: 'folder' | 'downloads';
+  status: ArchiveFolderStatus | 'unbekannt';
+  name: string | null;
+  files: number;
+  newest: { path: string; size: number; at: number }[];
+}
+
+/** Nur Ordnerstatus und Dateinamen/Größe/Datum (kein Dateiinhalt, keine Berechtigungsabfrage mit Dialog). */
+export async function describeArchiveFolder(): Promise<ArchiveFolderReport> {
+  const setup = readDeviceSetup();
+  if (setup?.archiveMode !== 'folder') return { mode: 'downloads', status: 'unbekannt', name: null, files: 0, newest: [] };
+  const report: ArchiveFolderReport = { mode: 'folder', status: 'missing', name: null, files: 0, newest: [] };
+  try {
+    const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+    if (!folder) return report;
+    report.name = folder.name;
+    const permission = await folder.queryPermission?.({ mode: 'readwrite' });
+    if (permission !== undefined && permission !== 'granted') { report.status = 'needs-permission'; return report; }
+    report.status = 'ok';
+    type Listable = FileSystemDirectoryHandle & { entries: () => AsyncIterableIterator<[string, FileSystemHandle]> };
+    const found: { path: string; size: number; at: number }[] = [];
+    let visited = 0;
+    const walk = async (directory: Listable, prefix: string, depth: number): Promise<void> => {
+      for await (const [name, handle] of directory.entries()) {
+        if (++visited > 600) return;
+        if (handle.kind === 'directory') {
+          if (depth < 4) await walk(handle as Listable, `${prefix}${name}/`, depth + 1);
+        } else {
+          try {
+            const file = await (handle as FileSystemFileHandle).getFile();
+            found.push({ path: `${prefix}${name}`, size: file.size, at: file.lastModified });
+          } catch { /* Datei nicht lesbar: überspringen */ }
+        }
+      }
+    };
+    await walk(folder as unknown as Listable, '', 0);
+    report.files = found.length;
+    report.newest = found.sort((a, b) => b.at - a.at).slice(0, 5);
+  } catch { /* Status bleibt wie ermittelt */ }
+  return report;
+}
+
 async function probeArchiveFolder(): Promise<ArchiveFolderStatus> {
   const folder = await loadExportFolder() as WritableDirectoryHandle | null;
   if (!folder) return 'missing';
@@ -184,6 +227,25 @@ export async function grantArchiveFolder(): Promise<boolean> {
   if (permission !== 'granted') return false;
   await ensureYearStructure(folder, Date.now());
   return true;
+}
+
+/** Nur die Zugriffs-Erlaubnis für den schon festgelegten Ordner abfragen (aus einem Tipp). Legt nichts an. */
+let grantedRoot: WritableDirectoryHandle | null = null;
+/** Der zuletzt per Tipp erlaubte Ordner (gleiches Objekt weiterverwenden: Chrome bindet die Erlaubnis oft an das Objekt). */
+export function getGrantedArchiveRoot(): FileSystemDirectoryHandle | null {
+  return grantedRoot as unknown as FileSystemDirectoryHandle | null;
+}
+export function forgetGrantedArchiveRoot(): void { grantedRoot = null; }
+
+export async function requestArchivePermission(): Promise<'granted' | 'denied' | 'none'> {
+  const folder = await loadExportFolder() as WritableDirectoryHandle | null;
+  if (!folder) return 'none';
+  try {
+    let permission = await folder.queryPermission?.({ mode: 'readwrite' });
+    if (permission !== 'granted') permission = await folder.requestPermission?.({ mode: 'readwrite' });
+    if (permission === 'granted') { grantedRoot = folder; return 'granted'; }
+    return 'denied';
+  } catch { return 'denied'; }
 }
 
 /**
