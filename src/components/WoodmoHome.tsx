@@ -18,20 +18,20 @@ interface Props {
 /** WOODMO home: two existing routes, no invented features or register mutations. */
 export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, testMode, onSetup, updateWaiting, onUpdate }: Props) {
   const symbol = `${import.meta.env.BASE_URL}woodmo-cashmark-no-text.svg`;
-  const watermark = 'pointer-events-none absolute grayscale brightness-150 -right-5 top-1/2 h-40 w-40 -translate-y-1/2 rotate-[-12deg] opacity-[0.085] sm:-right-8 sm:h-52 sm:w-52';
+  const watermark = 'pointer-events-none absolute grayscale dark:brightness-150 -right-5 top-1/2 h-40 w-40 -translate-y-1/2 rotate-[-12deg] opacity-[0.085] sm:-right-8 sm:h-52 sm:w-52';
   return (
     <section className="flex h-full min-h-0 items-center justify-center overflow-y-auto rounded-2xl gx-bg px-3 py-5 sm:px-6">
       <div className="my-auto flex w-full max-w-4xl flex-col items-center gap-6 py-3 sm:gap-8">
         <div className="text-center">
           <h1 className={`woodmo-title-3d text-4xl font-black tracking-wide sm:text-5xl ${status === 'ok' ? 'woodmo-title-ok' : status === 'error' ? 'woodmo-title-error' : ''}`}>WOODMO</h1>
-          <p className="mt-1 text-sm gx-muted">Kassen-App Version {APP_VERSION}</p>
+          <p className="mt-4 text-sm gx-muted">Kassen-App Version {APP_VERSION}</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-3 sm:gap-5">
           <button type="button" onClick={onCash}
             className="gx-tile gx-tile-hi relative isolate flex min-h-[clamp(10rem,30vh,19rem)] flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl p-3 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:p-6">
             <img src={symbol} alt="" aria-hidden="true" className={watermark} />
             <span className="relative z-10 gx-chip rounded-2xl p-2.5">
-              <img src={symbol} alt="" className="h-9 w-9 object-contain grayscale brightness-150 sm:h-11 sm:w-11" />
+              <img src={symbol} alt="" className="h-9 w-9 object-contain grayscale dark:brightness-150 sm:h-11 sm:w-11" />
             </span>
             <span className="relative z-10 text-xl font-extrabold sm:text-3xl">Kasse</span>
             <span className="relative z-10 text-xs gx-muted sm:text-base">{sessionOpen ? 'Kasse fortsetzen' : 'Kasse eröffnen'}</span>
@@ -40,7 +40,7 @@ export function WoodmoHome({ onCash, onAdmin, sessionOpen, location, status, tes
             className="gx-tile relative isolate flex min-h-[clamp(10rem,30vh,19rem)] flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl p-3 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:p-6">
             <img src={symbol} alt="" aria-hidden="true" className={watermark} />
             <span className="relative z-10 gx-chip rounded-2xl p-3">
-              <Settings2 className="h-8 w-8 text-slate-100 sm:h-10 sm:w-10" />
+              <Settings2 className="h-8 w-8 gx-text sm:h-10 sm:w-10" />
             </span>
             <span className="relative z-10 text-xl font-extrabold sm:text-3xl">Verwaltung</span>
             <span className="relative z-10 flex items-center justify-center gap-1 text-xs gx-muted sm:text-base">
