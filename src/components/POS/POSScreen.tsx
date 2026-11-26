@@ -18,6 +18,7 @@ import { DynamicIcon } from '@/components/DynamicIcon';
 import { sessionTransactions } from '@/lib/sessionTransactions';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import { loadJSON, saveJSON } from '@/lib/storage';
+import { loadStaffTileLayout, saveStaffTileLayout } from '@/lib/staffTileLayout';
 import { formatCurrency } from '@/lib/format';
 import {
   ShoppingCart, Trash2, Search, Lock, Move, Euro, Recycle, ClipboardList, Image as ImageIcon, ImageOff, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, Pin, PinOff, Star,
@@ -27,11 +28,11 @@ import {
 // kein Backup, kein Einfluss auf Buchungen oder Zurücksetzen).
 const TILE_IMAGES_KEY = 'pos_tile_images';
 /** Bilder an/aus je Warengruppe (und ★-Ansicht), pro Gerät. Ohne Eintrag gilt die bisherige Grundeinstellung. */
-const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';
 /** Virtuelle Warengruppe „Favoriten“: nur von Hand markierte Artikel (nur Anzeige, nicht in der Datenbank). */
 const FAVORITES_ID = '__favoriten__';
 /** Von Hand markierte Favoriten, pro Gerät gespeichert (nicht in der Datenbank). */
-const FAVORITES_KEY = 'pos_favorites_v1';
+/** Bilder an/aus je Warengruppe (und ★-Ansicht), pro Gerät. */
+const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
 const CART_WIDTH_KEY = 'pos_cart_width';
 const CART_PINNED_KEY = 'pos_cart_pinned';
@@ -141,16 +142,17 @@ export function POSScreen({
   const [showBonliste, setShowBonliste] = useState(false);
   const [priceEntryProduct, setPriceEntryProduct] = useState<Product | null>(null);
   const [dragMode, setDragMode] = useState(false);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
-    const stored = loadJSON<unknown>(FAVORITES_KEY, []);
-    return Array.isArray(stored) ? [...new Set(stored.filter((id): id is string => typeof id === 'string'))] : [];
-  });
+  // Persönliches Layout je Mitarbeiter: beim Wechsel des angemeldeten Mitarbeiters automatisch neu laden.
+  const layoutStaffId = currentStaff?.id ?? null;
+  const [layoutOwner, setLayoutOwner] = useState<string | null>(layoutStaffId);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadStaffTileLayout(layoutStaffId).favorites);
+  const saveFavorites = (next: string[]) => saveStaffTileLayout(layoutStaffId, { favorites: next });
   useEffect(() => {
     const availableIds = new Set(products.map(product => product.id));
     setFavoriteIds(ids => {
       const retained = ids.filter(id => availableIds.has(id));
       if (retained.length === ids.length) return ids;
-      saveJSON(FAVORITES_KEY, retained);
+      saveFavorites(retained);
       return retained;
     });
   }, [products]);
@@ -163,7 +165,7 @@ export function POSScreen({
   const lastCategoryRef = useRef<string>(categories[0]?.id ?? '');
   const toggleFavorite = (product: Product) => setFavoriteIds((ids) => {
     const next = ids.includes(product.id) ? ids.filter((id) => id !== product.id) : [...ids, product.id];
-    saveJSON(FAVORITES_KEY, next);
+    saveFavorites(next);
     return next;
   });
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
@@ -174,6 +176,11 @@ export function POSScreen({
       ? Object.fromEntries(Object.entries(stored as Record<string, unknown>).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
       : {};
   });
+  if (layoutOwner !== layoutStaffId) {
+    // Anderer Mitarbeiter angemeldet (oder abgemeldet): dessen gespeicherte Favoriten laden.
+    setLayoutOwner(layoutStaffId);
+    setFavoriteIds(loadStaffTileLayout(layoutStaffId).favorites);
+  }
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
   const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
   const toggleCart = () => setCartCollapsed((value) => { const next = !value; saveJSON(CART_COLLAPSED_KEY, next); return next; });
@@ -282,7 +289,7 @@ export function POSScreen({
       const next = [...ids];
       next.splice(source, 1);
       next.splice(target, 0, sourceId);
-      saveJSON(FAVORITES_KEY, next);
+      saveFavorites(next);
       return next;
     });
   }

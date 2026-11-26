@@ -160,3 +160,100 @@ button:not(:disabled):not(.woodmo-flat):not(.woodmo-tile-3d):is([class^="bg-"], 
 @media (prefers-reduced-motion: reduce) {
   .woodmo-shot-toast { animation: none; }
 }
+
+/* ===== 26.11. Design „Graphit“ (dunkel + hell). Reine Optik, keine Logik. =====
+   Farben als Variablen: :root = hell, .dark = dunkel (Klasse wird von useTheme gesetzt). */
+:root {
+  --gx-test: #1D5FB8; --gx-test-bg: linear-gradient(180deg, #EAF2FF 0%, #CFE0F8 100%); --gx-ok-bg: linear-gradient(180deg, #E8F7EF 0%, #C9EBD9 100%);
+  --gx-bg: linear-gradient(180deg, #F3F2F0 0%, #E1DFDB 100%);
+  --gx-tile: linear-gradient(180deg, #FFFFFF 0%, #EBE9E5 100%);
+  --gx-panel: linear-gradient(180deg, #FFFFFF 0%, #EFEDE9 100%);
+  --gx-text: #121212; --gx-muted: #55534F;
+  --gx-line: rgba(0,0,0,.12); --gx-edge: rgba(0,0,0,.22);
+  --gx-btn: linear-gradient(180deg, #FFFFFF 0%, #E4E2DE 100%);
+  --gx-btn-hover: linear-gradient(180deg, #FFFFFF 0%, #EDEBE7 100%);
+  --gx-foot: rgba(0,0,0,.28); --gx-shadow: rgba(40,35,30,.25); --gx-light: rgba(255,255,255,.95);
+  --gx-pri: linear-gradient(180deg, #2E2E2E 0%, #0E0E0E 100%); --gx-pri-text: #FFFFFF; --gx-pri-foot: #000000;
+  --gx-field: #FFFFFF; --gx-ok: #177A4C; --gx-warn: #9A6200; --gx-err: #B42318;
+  --gx-warn-bg: linear-gradient(180deg, #FFF6E0 0%, #F6E2B3 100%); --gx-err-bg: linear-gradient(180deg, #FFF0EE 0%, #F6D5D1 100%);
+}
+.dark {
+  --gx-test: #6AA9F5; --gx-test-bg: linear-gradient(180deg, #1D3B63 0%, #12233B 100%); --gx-ok-bg: linear-gradient(180deg, #1C4A36 0%, #112B20 100%);
+  --gx-bg: linear-gradient(180deg, #09090A 0%, #141416 55%, #1B1C1F 100%);
+  --gx-tile: linear-gradient(180deg, #2D2E32 0%, #191A1D 100%);
+  --gx-panel: linear-gradient(180deg, #2A2B2F 0%, #17181B 100%);
+  --gx-text: #F5F5F4; --gx-muted: #A3A3A0;
+  --gx-line: rgba(255,255,255,.10); --gx-edge: rgba(255,255,255,.18);
+  --gx-btn: linear-gradient(180deg, #2E2F33 0%, #18191C 100%);
+  --gx-btn-hover: linear-gradient(180deg, #38393E 0%, #1E1F23 100%);
+  --gx-foot: rgba(0,0,0,.7); --gx-shadow: rgba(0,0,0,.6); --gx-light: rgba(255,255,255,.14);
+  --gx-pri: linear-gradient(180deg, #FFFFFF 0%, #D5D5D2 100%); --gx-pri-text: #0A0A0A; --gx-pri-foot: #7E7E7B;
+  --gx-field: #0C0C0D; --gx-ok: #4CC38A; --gx-warn: #E5A93C; --gx-err: #E5594F;
+  --gx-warn-bg: linear-gradient(180deg, #4A3A1C 0%, #2B2212 100%); --gx-err-bg: linear-gradient(180deg, #4A2220 0%, #2B1312 100%);
+}
+.gx-bg { background: var(--gx-bg); color: var(--gx-text); }
+.gx-text { color: var(--gx-text); }
+.gx-muted { color: var(--gx-muted); }
+.gx-panel {
+  background: var(--gx-panel); color: var(--gx-text); border: 1px solid var(--gx-edge);
+  box-shadow: inset 0 1px 0 var(--gx-light), 0 18px 40px var(--gx-shadow);
+}
+/* 3D-Kachel (Startseite): Verlauf, Lichtkante oben, Fuß, weicher Schatten; Druck = Absenken. */
+.gx-tile {
+  background: var(--gx-tile); color: var(--gx-text); border: 1px solid var(--gx-edge);
+  box-shadow: inset 0 1px 0 var(--gx-light), inset 0 -3px 0 var(--gx-foot), 0 6px 0 var(--gx-foot), 0 14px 24px var(--gx-shadow);
+  transition: translate .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+.gx-tile:hover { filter: brightness(1.06); }
+.gx-tile:active { translate: 0 5px; box-shadow: inset 0 1px 0 var(--gx-light), inset 0 -1px 0 var(--gx-foot), 0 1px 0 var(--gx-foot), 0 4px 8px var(--gx-shadow); }
+.gx-tile-hi { border-color: var(--gx-text); }
+.gx-chip { background: var(--gx-btn); border: 1px solid var(--gx-edge); box-shadow: inset 0 1px 0 var(--gx-light), 0 2px 0 var(--gx-foot); }
+/* 3D-Button (Menüs, Kassenmenü, Dialoge) */
+.gx-btn {
+  background: var(--gx-btn); color: var(--gx-text); border: 1px solid var(--gx-edge);
+  box-shadow: inset 0 1px 0 var(--gx-light), inset 0 -2px 0 var(--gx-foot), 0 3px 0 var(--gx-foot), 0 6px 10px var(--gx-shadow);
+  transition: translate .1s ease, box-shadow .1s ease, filter .1s ease;
+}
+.gx-btn svg { color: currentColor; }
+.gx-btn:not(:disabled):hover { background: var(--gx-btn-hover); }
+.gx-btn:not(:disabled):active, .gx-btn[aria-current="page"] {
+  translate: 0 3px; box-shadow: inset 0 2px 4px var(--gx-foot), 0 0 0 var(--gx-foot), 0 1px 2px var(--gx-shadow);
+}
+.gx-btn[aria-current="page"] { border-color: var(--gx-text); }
+.gx-btn:disabled { opacity: .5; }
+.gx-btn-warn { background: var(--gx-warn-bg); color: var(--gx-warn); border-color: var(--gx-warn); }
+.gx-btn-warn:not(:disabled):hover { background: var(--gx-warn-bg); filter: brightness(1.1); }
+.gx-btn-test { background: var(--gx-test-bg); color: var(--gx-test); border-color: var(--gx-test); }
+.gx-btn-test:not(:disabled):hover { background: var(--gx-test-bg); filter: brightness(1.1); }
+.gx-btn-ok { background: var(--gx-ok-bg); color: var(--gx-ok); border-color: var(--gx-ok); }
+.gx-btn-ok:not(:disabled):hover { background: var(--gx-ok-bg); filter: brightness(1.1); }
+.gx-btn-danger { background: var(--gx-err-bg); color: var(--gx-err); border-color: var(--gx-err); }
+.gx-btn-danger:not(:disabled):hover { background: var(--gx-err-bg); filter: brightness(1.1); }
+.gx-btn-pri { background: var(--gx-pri); color: var(--gx-pri-text); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 var(--gx-pri-foot), 0 6px 10px var(--gx-shadow); }
+.gx-btn-pri:not(:disabled):hover { background: var(--gx-pri); filter: brightness(1.06); }
+.gx-heading { color: var(--gx-muted); }
+.gx-rule { border-color: var(--gx-line); }
+
+/* Dialoge: Panel, Eingabefelder und Buttons ohne Änderung am Markup vereinheitlichen. Doppelte Klasse = höhere Spezifität als dark:-Utilities. */
+.gx-dialog.gx-dialog { background: var(--gx-panel); color: var(--gx-text); border: 1px solid var(--gx-edge); box-shadow: inset 0 1px 0 var(--gx-light), 0 18px 40px var(--gx-shadow); }
+.gx-dialog.gx-dialog :is(h2, h3, label, p, span, strong) { color: inherit; }
+.gx-dialog.gx-dialog :is(input, select, textarea) {
+  background: var(--gx-field); color: var(--gx-text); border: 1px solid var(--gx-edge);
+  box-shadow: inset 0 2px 4px var(--gx-shadow); color-scheme: light;
+}
+.dark .gx-dialog.gx-dialog :is(input, select, textarea) { color-scheme: dark; }
+.gx-dialog.gx-dialog :is(input, select, textarea):focus { outline: 2px solid var(--gx-text); outline-offset: 1px; }
+.gx-dialog.gx-dialog button:not([class*="bg-slate-900"]):not([class*="bg-green-"]):not([class*="bg-red-"]):not(.woodmo-flat) {
+  background: var(--gx-btn); color: var(--gx-text); border: 1px solid var(--gx-edge);
+  box-shadow: inset 0 1px 0 var(--gx-light), 0 3px 0 var(--gx-foot), 0 5px 8px var(--gx-shadow);
+}
+.gx-dialog.gx-dialog button[class*="bg-slate-900"], .gx-dialog.gx-dialog button[class*="bg-green-"] {
+  background: var(--gx-pri); color: var(--gx-pri-text); border: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 var(--gx-pri-foot), 0 5px 8px var(--gx-shadow);
+}
+.gx-dialog.gx-dialog button:not(:disabled):active { translate: 0 2px; }
+.gx-dialog.gx-dialog :is(.text-red-600, .text-red-300) { color: var(--gx-err); }
+.gx-dialog.gx-dialog :is(.text-amber-700, .text-amber-300) { color: var(--gx-warn); }
+.gx-dialog.gx-dialog [class*="bg-slate-50"], .gx-dialog.gx-dialog [class*="bg-gray-50"] { background: transparent; border-color: var(--gx-line); }
+/* Tastatur: Dialog bleibt erreichbar, Felder werden nicht verdeckt. */
+.gx-dialog { scroll-padding-block: 6rem; }

@@ -1,14 +1,11 @@
 {
-  "title": "WOODMO Update 3.40: Bon-Details, Diagnose, schnellere Bedienung",
+  "title": "WOODMO Update: neues Design „Graphit“",
   "notes": [
-    "Tagesinfo: Verkäufe zeigen die Artikelanzahl; antippen klappt die Bon-Details auf (Waren, Pfand, Retoure, Summe, Mitarbeiter, Bon-Nr.).",
-    "Bezahlen: Feld „Gegeben“ ohne Zusatztext.",
-    "Globaler Pfandbetrag speichert automatisch mit kurzer Meldung „Gespeichert“.",
-    "Benutzer verwalten und Verwaltungsmenü kompakter; Standort-Schalter so hoch wie das Datumsfeld.",
-    "Alle farbigen Buttons und der Startbildschirm mit mehr 3D-Effekt.",
-    "Neu: Diagnose im Verwaltungsmenü (Passwort bei jedem Öffnen). Geräte mit Namen, Modus AUS / BEREIT / AN, Statusbericht, Fern-Update nur ohne angemeldeten Kassen-Benutzer. Standard nach dem Update: BEREIT.",
-    "Vollbild per Doppelklick auf eine freie Fläche der installierten App.",
-    "Tablet: Bildschirmtastatur erscheint erst, wenn ein Eingabefeld angetippt wird.",
-    "Update-Installation versucht eine vom Browser verworfene Installation einmal automatisch neu."
+    "Neues Design „Graphit“ in dunkel und hell: große 3D-Kacheln auf der Startseite, einheitliche 3D-Buttons in Verwaltungsmenü, Kassenmenü und Dialogen.",
+    "Verwaltungsmenü: Testmodus blau, Aktivmodus grün, Sicherheitsarchiv gelb, Zurücksetzen rot; Diagnose mit Schraubenschlüssel.",
+    "Kassenmenü: Kacheln zweispaltig, Tagesabschluss bleibt farbig hervorgehoben.",
+    "Anmelde-, Kassenöffnungs- und Schussfenster kompakter; Hinweisfenster im neuen Design.",
+    "Favoriten werden pro Mitarbeiter gespeichert und beim Anmelden automatisch geladen.",
+    "Artikel ohne Bild zeigen ein passendes Symbol nach Artikelname."
   ]
 }

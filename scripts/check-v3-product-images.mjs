@@ -44,7 +44,8 @@ assert.match(pos, /list = list\.filter\(\(p\) => shownIds\.includes\(p\.id\)\);/
 assert.match(pos, /!search\.trim\(\) && !favoriteEdit && \(/, 'Kacheln verschieben auch in Favoriten, nicht beim Favoriten-Wählen');
 assert.match(pos, /if \(!favoritesActive\) \{\s*onMoveProduct\?\.\(sourceId, targetId\);\s*return;\s*\}\s*setFavoriteIds\(/, 'Favoriten-Reihenfolge nur lokal, Artikelreihenfolge der Cloud bleibt unverändert');
 // Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
-assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
+assert.match(pos, /saveStaffTileLayout\(layoutStaffId, \{ favorites: next \}\)/, 'Favoriten pro Mitarbeiter gespeichert');
+assert.match(readFileSync('src/lib/staffTileLayout.ts', 'utf8'), /const LEGACY_FAVORITES_KEY = 'pos_favorites_v1';/);
 assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
 // Kachel-Hülle muss die Kachel auf volle Zellbreite strecken (sonst fallen Bild-Kacheln mit aspect-square auf 0 zusammen).
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);

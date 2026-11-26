@@ -82,7 +82,7 @@ export function StaffLoginDialog({ users, allowedRoles, online, title, onAuthent
     finally { setBusy(false); }
   }
 
-  return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-gray-800">
+  return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"><div className="gx-dialog max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl p-5 landscape:max-w-lg landscape:p-4">
     <div className="mb-5 flex flex-col items-center gap-2 text-center"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white dark:bg-white dark:!text-slate-900"><UserRound className="h-7 w-7" /></div><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{title}</h2><p className="text-sm text-gray-500 dark:text-gray-400">Der zuletzt verwendete Name bleibt ausgewählt. Mit „Namen wechseln“ kann eine andere Person gewählt werden.</p></div>
     {availableUsers.length === 0 ? <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Noch keine passenden Benutzer angelegt. Bitte zuerst in der Verwaltung einen Mitarbeiter oder Administrator anlegen.</div> : <div className="space-y-4">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name<select value={selectedId} onChange={(event) => choose(event.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-base dark:border-gray-700 dark:bg-gray-900"><option value="">Bitte auswählen</option>{availableUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label>
