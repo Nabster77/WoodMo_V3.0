@@ -67,7 +67,7 @@ assert(!menu.includes('> Anfangsbestand'));
 assert(menu.includes('LockKeyhole') && menu.includes('Tagesabschlussbuchung vornehmen') &&
   !menu.includes('Nach Bestätigung unwiderruflich') && menu.includes('min-h-24 w-full'),
   'Day-close menu tile is larger with approachable text; actual confirmation still applies');
-assert(menu.includes('grid-cols-2 sm:grid-cols-4') && menu.includes('<Home className="h-5 w-5" />') && !menu.includes('bg-emerald-50 p-2'),
+assert(menu.includes("'grid-cols-2' : 'grid-cols-2'") && menu.includes('<Home className="h-5 w-5" />') && !menu.includes('bg-emerald-50 p-2'),
   'Employee menu shows balanced Home and Kasse tiles; administrator sees all four');
 assert(menu.includes("chooseCashAction('close')") && pos.includes('requestDailyClose()'),
   'Day close still uses the existing confirmation dialog');
