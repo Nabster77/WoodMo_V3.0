@@ -9,7 +9,7 @@ assert.equal((home.match(/<button type="button" onClick=/g) ?? []).length, 4,
   'Besides the two tiles only the small Update and Setup links exist.');
 assert.match(home, /onClick=\{onUpdate\}/);
 assert.match(home, /onClick=\{onSetup\}/);
-assert.match(home, /text-\[11px\] font-semibold text-slate-500/, 'Update-Zentrale link stays small and unobtrusive.');
+assert.match(home, /text-\[11px\] font-semibold gx-muted/, 'Update-Zentrale link stays small and unobtrusive.');
 for (const label of ['Kasse eröffnen', 'Kasse fortsetzen', 'Verwaltung',
   'Administrator', 'Cloud / Abgleich prüfen']) {
   assert.ok(home.includes(label), `Home text missing: ${label}`);
