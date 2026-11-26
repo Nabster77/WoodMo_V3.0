@@ -3,7 +3,8 @@ import type { Product, Location } from '@/types';
 import { formatCurrency } from '@/lib/format';
 import { taxRateForProduct } from '@/lib/tax';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Package, GripVertical, Euro } from 'lucide-react';
+import { GripVertical, Euro } from 'lucide-react';
+import { productIconFor } from '@/lib/productIcon';
 import { spiritColor } from '@/lib/spiritColors';
 
 interface Props {
@@ -108,7 +109,7 @@ export function ProductTile({
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-          <Package className="h-12 w-12 text-slate-400" />
+          {(() => { const Icon = productIconFor(product.name); return <Icon className="h-12 w-12 text-slate-300" aria-hidden="true" />; })()}
         </div>
       )}
       {/* All visual badges stay in front of the photo. */}

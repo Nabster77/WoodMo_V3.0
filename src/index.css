@@ -164,6 +164,7 @@ button:not(:disabled):not(.woodmo-flat):not(.woodmo-tile-3d):is([class^="bg-"], 
 /* ===== 26.11. Design „Graphit“ (dunkel + hell). Reine Optik, keine Logik. =====
    Farben als Variablen: :root = hell, .dark = dunkel (Klasse wird von useTheme gesetzt). */
 :root {
+  --gx-test: #1D5FB8; --gx-test-bg: linear-gradient(180deg, #EAF2FF 0%, #CFE0F8 100%); --gx-ok-bg: linear-gradient(180deg, #E8F7EF 0%, #C9EBD9 100%);
   --gx-bg: linear-gradient(180deg, #F3F2F0 0%, #E1DFDB 100%);
   --gx-tile: linear-gradient(180deg, #FFFFFF 0%, #EBE9E5 100%);
   --gx-panel: linear-gradient(180deg, #FFFFFF 0%, #EFEDE9 100%);
@@ -177,6 +178,7 @@ button:not(:disabled):not(.woodmo-flat):not(.woodmo-tile-3d):is([class^="bg-"], 
   --gx-warn-bg: linear-gradient(180deg, #FFF6E0 0%, #F6E2B3 100%); --gx-err-bg: linear-gradient(180deg, #FFF0EE 0%, #F6D5D1 100%);
 }
 .dark {
+  --gx-test: #6AA9F5; --gx-test-bg: linear-gradient(180deg, #1D3B63 0%, #12233B 100%); --gx-ok-bg: linear-gradient(180deg, #1C4A36 0%, #112B20 100%);
   --gx-bg: linear-gradient(180deg, #09090A 0%, #141416 55%, #1B1C1F 100%);
   --gx-tile: linear-gradient(180deg, #2D2E32 0%, #191A1D 100%);
   --gx-panel: linear-gradient(180deg, #2A2B2F 0%, #17181B 100%);
@@ -221,6 +223,10 @@ button:not(:disabled):not(.woodmo-flat):not(.woodmo-tile-3d):is([class^="bg-"], 
 .gx-btn:disabled { opacity: .5; }
 .gx-btn-warn { background: var(--gx-warn-bg); color: var(--gx-warn); border-color: var(--gx-warn); }
 .gx-btn-warn:not(:disabled):hover { background: var(--gx-warn-bg); filter: brightness(1.1); }
+.gx-btn-test { background: var(--gx-test-bg); color: var(--gx-test); border-color: var(--gx-test); }
+.gx-btn-test:not(:disabled):hover { background: var(--gx-test-bg); filter: brightness(1.1); }
+.gx-btn-ok { background: var(--gx-ok-bg); color: var(--gx-ok); border-color: var(--gx-ok); }
+.gx-btn-ok:not(:disabled):hover { background: var(--gx-ok-bg); filter: brightness(1.1); }
 .gx-btn-danger { background: var(--gx-err-bg); color: var(--gx-err); border-color: var(--gx-err); }
 .gx-btn-danger:not(:disabled):hover { background: var(--gx-err-bg); filter: brightness(1.1); }
 .gx-btn-pri { background: var(--gx-pri); color: var(--gx-pri-text); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 var(--gx-pri-foot), 0 6px 10px var(--gx-shadow); }

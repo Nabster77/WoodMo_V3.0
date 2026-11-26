@@ -20,7 +20,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Activity, Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench } from 'lucide-react';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -245,7 +245,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 </button>
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
-                  <Activity className="h-5 w-5 shrink-0" aria-hidden="true" /> Diagnose
+                  <Wrench className="h-5 w-5 shrink-0" aria-hidden="true" /> Diagnose
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
@@ -253,7 +253,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   </button>
                 )}
                 {onToggleMode && (
-                  <button type="button" className={`${adminMenuItem} ${testMode ? '' : 'gx-btn-warn'}`} onClick={() => openAdminAction(onToggleMode)}>
+                  <button type="button" className={`${adminMenuItem} ${testMode ? 'gx-btn-ok' : 'gx-btn-test'}`} onClick={() => openAdminAction(onToggleMode)}>
                     {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <FlaskConical className="h-5 w-5 shrink-0" />}
                     {testMode ? 'Auf aktiven Modus wechseln' : 'Auf Testmodus wechseln'}
                   </button>
