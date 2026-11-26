@@ -1,16 +1,14 @@
 {
-  "title": "WOODMO Update 3.39: Kassenübersicht, Berichte, Update-Hinweis",
+  "title": "WOODMO Update 3.40: Bon-Details, Diagnose, schnellere Bedienung",
   "notes": [
-    "Kassen-Übersicht: Umsatz brutto, Pfand eingenommen, Pfandretoure, MwSt. je Steuersatz und Netto auf einen Blick; Verkäufe einklappbar.",
-    "Tagesabschlüsse des Tages über das Klappmenü „Berichte“ (sortierbar). Eine über Nacht offene Kasse erscheint unter dem heutigen Datum.",
-    "Admins wechseln per Klick auf die Kassenkarte den Standort und können die ausgewählte Kasse direkt weiterführen oder eröffnen.",
-    "Tagesinfo: Bar- und Kartenzahlungen ausgeschrieben, Kassensitzungen, Warengruppen, Artikel und Verkäufe einklappbar.",
-    "Pfandübersicht in Berichten und Journalen gilt nur für Standort und gewählten Zeitraum.",
-    "Excel-Export im Journal; PDF in Standortfarben.",
-    "Tagesabschluss kompakter mit Geld-Zählhilfe; Abschlussdatum ist der Tag der endgültigen Buchung.",
-    "Schussauswahl bleibt offen, zeigt die Anzahl je Sorte, Papierkorb und „Fertig“.",
-    "Update-Hinweis mittig mit „Später“ (Erinnerung nach 10 Minuten); Prüfung auch beim Öffnen und bei Rückkehr zum Startbildschirm. Eine offene Kasse blockiert das Update nicht mehr.",
-    "Veraltete Kassenstände auf einem Gerät blockieren die Synchronisierung nicht mehr.",
-    "Neue Optik: Standortfarben, 3D-Buttons, WOODMO-Schriftzug, kompakte Kasseneröffnung."
+    "Tagesinfo: Verkäufe zeigen die Artikelanzahl; antippen klappt die Bon-Details auf (Waren, Pfand, Retoure, Summe, Mitarbeiter, Bon-Nr.).",
+    "Bezahlen: Feld „Gegeben“ ohne Zusatztext.",
+    "Globaler Pfandbetrag speichert automatisch mit kurzer Meldung „Gespeichert“.",
+    "Benutzer verwalten und Verwaltungsmenü kompakter; Standort-Schalter so hoch wie das Datumsfeld.",
+    "Alle farbigen Buttons und der Startbildschirm mit mehr 3D-Effekt.",
+    "Neu: Diagnose im Verwaltungsmenü (Passwort bei jedem Öffnen). Geräte mit Namen, Modus AUS / BEREIT / AN, Statusbericht, Fern-Update nur ohne angemeldeten Kassen-Benutzer. Standard nach dem Update: BEREIT.",
+    "Vollbild per Doppelklick auf eine freie Fläche der installierten App.",
+    "Tablet: Bildschirmtastatur erscheint erst, wenn ein Eingabefeld angetippt wird.",
+    "Update-Installation versucht eine vom Browser verworfene Installation einmal automatisch neu."
   ]
 }
