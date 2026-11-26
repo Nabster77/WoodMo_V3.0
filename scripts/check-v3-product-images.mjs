@@ -44,7 +44,8 @@ assert.match(pos, /list = list\.filter\(\(p\) => shownIds\.includes\(p\.id\)\);/
 assert.match(pos, /!search\.trim\(\) && !favoriteEdit && \(/, 'Kacheln verschieben auch in Favoriten, nicht beim Favoriten-Wählen');
 assert.match(pos, /if \(!favoritesActive\) \{\s*onMoveProduct\?\.\(sourceId, targetId\);\s*return;\s*\}\s*setFavoriteIds\(/, 'Favoriten-Reihenfolge nur lokal, Artikelreihenfolge der Cloud bleibt unverändert');
 // Favoriten von Hand markieren (pro Gerät), Antippen verkauft dabei nichts.
-assert.match(pos, /const FAVORITES_KEY = 'pos_favorites_v1';/);
+assert.match(pos, /saveStaffTileLayout\(layoutStaffId, \{ favorites: next \}\)/, 'Favoriten pro Mitarbeiter gespeichert');
+assert.match(readFileSync('src/lib/staffTileLayout.ts', 'utf8'), /const LEGACY_FAVORITES_KEY = 'pos_favorites_v1';/);
 assert.match(pos, /onAdd=\{favoriteEdit \? toggleFavorite : handleProductTap\}/);
 // Kachel-Hülle muss die Kachel auf volle Zellbreite strecken (sonst fallen Bild-Kacheln mit aspect-square auf 0 zusammen).
 assert.match(pos, /<div key=\{product\.id\} className="relative grid min-w-0">/);
@@ -116,7 +117,8 @@ assert.match(pos, /openDialogAfterConfirmedClose\.current = true;\n\s*const resu
 assert.match(readFileSync('src/components/Admin/AdminScreen.tsx','utf8'), /<LiveSessionOverview transactions=\{overviewTransactions\}/);
 
 // Bilder an/aus je Warengruppe (Wunsch 18.11.2026 17:59), pro Gerät.
-assert.match(pos, /const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';/);
+assert.match(readFileSync('src/lib/staffTileLayout.ts', 'utf8'), /LEGACY_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1'/);
+assert.match(pos, /saveStaffTileLayout\(layoutStaffId, \{ imagesByGroup: next \}\)/);
 assert.match(pos, /const showImages = imagesByGroup\[imageGroupKey\] \?\? defaultShowImages;/);
 assert.match(pos, /\[imageGroupKey\]: !\(map\[imageGroupKey\] \?\? defaultShowImages\)/);
 console.log('BILDER JE WARENGRUPPE: Schalter gilt nur für die gewählte Gruppe.');
