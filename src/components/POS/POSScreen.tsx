@@ -31,6 +31,8 @@ const TILE_IMAGES_KEY = 'pos_tile_images';
 /** Virtuelle Warengruppe „Favoriten“: nur von Hand markierte Artikel (nur Anzeige, nicht in der Datenbank). */
 const FAVORITES_ID = '__favoriten__';
 /** Von Hand markierte Favoriten, pro Gerät gespeichert (nicht in der Datenbank). */
+/** Bilder an/aus je Warengruppe (und ★-Ansicht), pro Gerät. */
+const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';
 const CART_COLLAPSED_KEY = 'pos_cart_collapsed';
 const CART_WIDTH_KEY = 'pos_cart_width';
 const CART_PINNED_KEY = 'pos_cart_pinned';
@@ -168,13 +170,16 @@ export function POSScreen({
   });
   const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc'>('manual');
   const [defaultShowImages] = useState<boolean>(() => loadJSON<boolean>(TILE_IMAGES_KEY, false) === true);
-  const [imagesByGroup, setImagesByGroup] = useState<Record<string, boolean>>(() => loadStaffTileLayout(layoutStaffId).imagesByGroup);
+  const [imagesByGroup, setImagesByGroup] = useState<Record<string, boolean>>(() => {
+    const stored = loadJSON<unknown>(TILE_IMAGES_BY_GROUP_KEY, {});
+    return stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? Object.fromEntries(Object.entries(stored as Record<string, unknown>).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
+      : {};
+  });
   if (layoutOwner !== layoutStaffId) {
-    // Anderer Mitarbeiter angemeldet (oder abgemeldet): dessen gespeichertes Layout laden.
-    const layout = loadStaffTileLayout(layoutStaffId);
+    // Anderer Mitarbeiter angemeldet (oder abgemeldet): dessen gespeicherte Favoriten laden.
     setLayoutOwner(layoutStaffId);
-    setFavoriteIds(layout.favorites);
-    setImagesByGroup(layout.imagesByGroup);
+    setFavoriteIds(loadStaffTileLayout(layoutStaffId).favorites);
   }
   // Warenkorb zuklappen: mehr Platz für Kacheln; Buchen, Pfand-Retoure und Bezahlen bleiben gleich.
   const [cartCollapsed, setCartCollapsed] = useState<boolean>(() => loadJSON<boolean>(CART_COLLAPSED_KEY, false) === true);
@@ -241,7 +246,7 @@ export function POSScreen({
   const showImages = imagesByGroup[imageGroupKey] ?? defaultShowImages;
   const toggleImages = () => setImagesByGroup((map) => {
     const next = { ...map, [imageGroupKey]: !(map[imageGroupKey] ?? defaultShowImages) };
-    saveStaffTileLayout(layoutStaffId, { imagesByGroup: next });
+    saveJSON(TILE_IMAGES_BY_GROUP_KEY, next);
     return next;
   });
   const [dragSource, setDragSource] = useState<string | null>(null);

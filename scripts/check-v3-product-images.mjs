@@ -117,8 +117,7 @@ assert.match(pos, /openDialogAfterConfirmedClose\.current = true;\n\s*const resu
 assert.match(readFileSync('src/components/Admin/AdminScreen.tsx','utf8'), /<LiveSessionOverview transactions=\{overviewTransactions\}/);
 
 // Bilder an/aus je Warengruppe (Wunsch 18.11.2026 17:59), pro Gerät.
-assert.match(readFileSync('src/lib/staffTileLayout.ts', 'utf8'), /LEGACY_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1'/);
-assert.match(pos, /saveStaffTileLayout\(layoutStaffId, \{ imagesByGroup: next \}\)/);
+assert.match(pos, /const TILE_IMAGES_BY_GROUP_KEY = 'pos_tile_images_by_group_v1';/);
 assert.match(pos, /const showImages = imagesByGroup\[imageGroupKey\] \?\? defaultShowImages;/);
 assert.match(pos, /\[imageGroupKey\]: !\(map\[imageGroupKey\] \?\? defaultShowImages\)/);
 console.log('BILDER JE WARENGRUPPE: Schalter gilt nur für die gewählte Gruppe.');
