@@ -150,9 +150,9 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
     action();
   };
   // 24.11.: Schwarz-Weiß wie Startbildschirm; schlichte Knöpfe mit dezentem 3D-Effekt.
-  const adminMenuItem = 'flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/25 bg-gradient-to-b from-slate-700 to-slate-900 px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:border-white/60 hover:from-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white';
-  const activeAdminMenuItem = 'border-white from-slate-600 to-slate-700';
-  const adminMenuHeading = 'mb-2 text-sm font-bold uppercase tracking-[.12em] text-slate-200';
+  const adminMenuItem = 'gx-btn flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+  const activeAdminMenuItem = '';
+  const adminMenuHeading = 'gx-heading mb-2 text-sm font-bold uppercase tracking-[.12em]';
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -196,14 +196,14 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             aria-modal="true"
             aria-label="Verwaltungsmenü"
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-white/70 bg-gradient-to-b from-black via-slate-950 to-slate-900 p-4 text-white shadow-2xl"
+            className="max-h-full w-full max-w-xl overflow-y-auto gx-panel rounded-3xl p-4"
           >
-            <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-3">
+            <div className="mb-4 flex items-center justify-between gap-3 gx-rule border-b pb-3">
               <div>
                 <h2 className="text-2xl font-bold">Verwaltungsmenü</h2>
               </div>
               <button type="button" aria-label="Verwaltungsmenü schließen" onClick={onCloseMenu}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 text-slate-200 hover:bg-slate-700">
+                className="gx-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -212,22 +212,22 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-admin-navigation" className={adminMenuHeading}>Verwaltungsbereiche</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" aria-current={menuItemChosen && tab === 'sessions' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'sessions' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('sessions')}>
-                  <MonitorDot className="h-5 w-5 shrink-0 text-white" /> Kassen-Übersicht
+                  <MonitorDot className="h-5 w-5 shrink-0" /> Kassen-Übersicht
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'categories' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'categories' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('categories')}>
-                  <Tag className="h-5 w-5 shrink-0 text-white" /> Warengruppen
+                  <Tag className="h-5 w-5 shrink-0" /> Warengruppen
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'products' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'products' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('products')}>
-                  <Package className="h-5 w-5 shrink-0 text-white" /> Artikel
+                  <Package className="h-5 w-5 shrink-0" /> Artikel
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'shots' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'shots' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('shots')}>
-                  <Wine className="h-5 w-5 shrink-0 text-white" /> SCHUSS
+                  <Wine className="h-5 w-5 shrink-0" /> SCHUSS
                 </button>
                 <button type="button" aria-current={menuItemChosen && tab === 'staff' ? 'page' : undefined} className={`${adminMenuItem} ${menuItemChosen && tab === 'staff' ? activeAdminMenuItem : ''}`} onClick={() => changeTab('staff')}>
-                  <ShieldCheck className="h-5 w-5 shrink-0 text-white" /> Benutzer
+                  <ShieldCheck className="h-5 w-5 shrink-0" /> Benutzer
                 </button>
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onOpenJournal)}>
-                  <ReceiptIcon className="h-5 w-5 shrink-0 text-white" /> Journal
+                  <ReceiptIcon className="h-5 w-5 shrink-0" /> Journal
                 </button>
               </div>
             </section>
@@ -237,7 +237,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowReleaseInfo(true))}>
-                  <Info className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Info
+                  <Info className="h-5 w-5 shrink-0" aria-hidden="true" /> Info
                   {unreadRelease && <>
                     <span aria-hidden="true" className="ml-auto grid size-6 place-items-center rounded-full bg-red-600 font-bold text-white">!</span>
                     <span className="sr-only">Neue Versionshinweise</span>
@@ -245,16 +245,16 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 </button>
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
-                  <Activity className="h-5 w-5 shrink-0 text-white" aria-hidden="true" /> Diagnose
+                  <Activity className="h-5 w-5 shrink-0" aria-hidden="true" /> Diagnose
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
-                    <Settings className="h-5 w-5 shrink-0 text-white" /> Setup / PDF-Ordner
+                    <Settings className="h-5 w-5 shrink-0" /> Setup / PDF-Ordner
                   </button>
                 )}
                 {onToggleMode && (
-                  <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onToggleMode)}>
-                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0 text-white" /> : <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />}
+                  <button type="button" className={`${adminMenuItem} ${testMode ? '' : 'gx-btn-warn'}`} onClick={() => openAdminAction(onToggleMode)}>
+                    {testMode ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <FlaskConical className="h-5 w-5 shrink-0" />}
                     {testMode ? 'Auf aktiven Modus wechseln' : 'Auf Testmodus wechseln'}
                   </button>
                 )}
@@ -265,39 +265,39 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               <h3 id="woodmo-import-export" className={adminMenuHeading}>Import / Export</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowCatalogTransfer(true))}>
-                  <FileDown className="h-5 w-5 shrink-0 text-white" /> Excel-Import / Export
+                  <FileDown className="h-5 w-5 shrink-0" /> Excel-Import / Export
                 </button>
                 {onImportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => setShowImport(true))}>
-                    <FileUp className="h-5 w-5 shrink-0 text-white" /> Backup importieren
+                    <FileUp className="h-5 w-5 shrink-0" /> Backup importieren
                   </button>
                 )}
                 {onExportBackup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void onExportBackup(); })}>
-                    <Download className="h-5 w-5 shrink-0 text-white" /> Backup exportieren
+                    <Download className="h-5 w-5 shrink-0" /> Backup exportieren
                   </button>
                 )}
                 {/* 24.11.: Sicherheitsarchiv sichern und löschen in einer Zeile. */}
                 {resetQuarantineCount > 0 && (onExportResetQuarantine || onClearResetQuarantine) && (
                   <div className="col-span-full grid grid-cols-2 gap-2">
                 {onExportResetQuarantine && resetQuarantineCount > 0 && (
-                  <button type="button" className={adminMenuItem}
+                  <button type="button" className={`${adminMenuItem} gx-btn-warn`}
                     onClick={() => openAdminAction(() => { void onExportResetQuarantine(); })}>
-                    <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
+                    <AlertTriangle className="h-5 w-5 shrink-0" />
                     Sicherheitsarchiv sichern ({resetQuarantineCount})
                   </button>
                   )}
                   {onClearResetQuarantine && resetQuarantineCount > 0 && (
-                  <button type="button" className={adminMenuItem}
+                  <button type="button" className={`${adminMenuItem} gx-btn-warn`}
                     onClick={() => openAdminAction(() => { void onClearResetQuarantine(); })}>
-                    <Trash2 className="h-5 w-5 shrink-0 text-amber-300" />
+                    <Trash2 className="h-5 w-5 shrink-0" />
                     Sicherheitsarchiv löschen
                   </button>
                   )}
                   </div>
                 )}
                 {onResetAllData && (
-                  <button type="button" className={`${adminMenuItem} border-red-700/60 text-red-300 hover:border-red-500 hover:bg-red-950/40`}
+                  <button type="button" className={`${adminMenuItem} gx-btn-danger`}
                     onClick={() => openAdminAction(() => setShowReset(true))}>
                     <RotateCcw className="h-5 w-5 shrink-0" /> Buchungen zurücksetzen
                   </button>

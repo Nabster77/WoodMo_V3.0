@@ -1147,29 +1147,29 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               onClick={() => setMenuOpen(false)}
               onKeyDown={(event) => { if (event.key === 'Escape') setMenuOpen(false); }}>
               <nav role="dialog" aria-modal="true" aria-label="Kassenmenü"
-                className="w-full max-w-xl rounded-2xl border border-white/25 bg-slate-950 p-3 text-white shadow-2xl"
+                className="gx-panel w-full max-w-xl rounded-3xl p-3"
                 onClick={(event) => event.stopPropagation()}>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-bold text-white">Kassenmenü</h2>
+                  <h2 className="text-lg font-bold gx-text">Kassenmenü</h2>
                   <button type="button" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-5 w-5" /></button>
+                    className="gx-btn flex h-10 w-10 items-center justify-center rounded-xl"><X className="h-5 w-5" /></button>
                 </div>
 
                 {/* Home and Kasse stay together, also in the employee-only menu. */}
-                <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+                <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2' : 'grid-cols-2'}`}>
                   <button type="button" onClick={goHome}
-                    className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                    className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                     <Home className="h-5 w-5" /> <span>Startseite</span>
                   </button>
-                  <button type="button" onClick={() => navigateTo('pos')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                  <button type="button" onClick={() => navigateTo('pos')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                     <ShoppingCart className="h-5 w-5" /> Kasse
                   </button>
                   {(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) && (
                     <>
-                      <button type="button" onClick={() => navigateToProtected('journal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                      <button type="button" onClick={() => navigateToProtected('journal')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <Receipt className="h-5 w-5" /> Journal
                       </button>
-                      <button type="button" onClick={() => navigateToProtected('admin')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                      <button type="button" onClick={() => navigateToProtected('admin')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <Settings className="h-5 w-5" /> Verwaltung
                       </button>
                     </>
@@ -1178,16 +1178,16 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
 
                 {store.activeSession && currentStaff && (
                   <>
-                    <h3 className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-slate-300">Kassenbewegungen</h3>
+                    <h3 className="gx-heading mt-4 mb-2 text-xs font-bold uppercase tracking-wide">Kassenbewegungen</h3>
                     {/* Gleiche Kachelgröße wie oben: gleiche Spaltenzahl, gleiche Höhe, gleiche Schrift. */}
-                    <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
-                      <button type="button" onClick={() => chooseCashAction('deposit')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                    <div className={`grid gap-2 ${(currentStaff?.role === 'administrator' || (adminUnlocked && currentStaff?.role !== 'employee')) ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                      <button type="button" onClick={() => chooseCashAction('deposit')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <ArrowDownCircle className="h-5 w-5" /> Einlage
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                      <button type="button" onClick={() => chooseCashAction('withdrawal')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <ArrowUpCircle className="h-5 w-5" /> Ausgabe
                       </button>
-                      <button type="button" onClick={() => chooseCashAction('correction')} className="flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-sm font-bold transition border border-white/25 bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-[0_2px_0_rgba(255,255,255,0.08)_inset,0_3px_6px_rgba(0,0,0,0.5)] hover:border-white/60 hover:from-slate-700 active:translate-y-px active:shadow-none">
+                      <button type="button" onClick={() => chooseCashAction('correction')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <Settings className="h-5 w-5" /> Bestandskorrektur
                       </button>
                     </div>

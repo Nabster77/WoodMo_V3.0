@@ -22,7 +22,7 @@ export function ShotSelectionDialog({ options, location, current, onSelect, onCa
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center" onClick={onCancel}>
-      <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+      <div className="my-auto max-h-[calc(100dvh-2rem)] w-full gx-dialog max-w-sm overflow-y-auto rounded-3xl p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
             <Wine className="h-5 w-5 text-blue-600 dark:text-blue-400" /> Schussauswahl {location}
