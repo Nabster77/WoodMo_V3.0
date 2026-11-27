@@ -55,6 +55,8 @@ import { headerDateLong, headerDateShort, headerTime } from '@/lib/headerDate';
 import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafely, validateBackupCloseArchive, type CompleteBackup } from '@/lib/backupRecovery';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
+import { restoreStepRunning, restoreFinished, restoreFailed, restoreClear } from '@/lib/restoreProgress';
+import { RestoreProgressOverlay } from '@/components/RestoreProgressOverlay';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installStyledAlert } from '@/lib/styledAlert';
@@ -1637,6 +1639,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               }}
               onImportBackup={async (file) => {
                 let restoreSyncPaused = false;
+                let progressStarted = false;
                 try {
                   if (testMode) throw new Error('Rücksicherung aktiver Cloud-Buchungen ist im Testmodus gesperrt. Bitte zum Aktivmodus wechseln.');
                    const text = await file.text();
@@ -1646,6 +1649,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                     return;
                   }
 
+                  restoreStepRunning(0);
+                  progressStarted = true;
                   // Financial inconsistencies are rejected before any restore or cloud writes.
                    const selectedBackup = parsed as CompleteBackup;
                    const imported = selectedBackup.data!;
@@ -1671,11 +1676,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                          byId(cloudNow.transactions) === byId(imported.transactions) &&
                          byId(cloudNow.cashSessions) === byId(imported.cashSessions) &&
                          byId(stornosNow) === byId(imported.stornos ?? [])) {
+                       restoreClear();
                        alert('Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud. Ein Import ist nicht nötig.');
                        return;
                      }
                      // Cloud hat Buchungen: ein Import ist erst nach dem Zurücksetzen möglich.
                      if (cloudNow.transactions.length > 0 || cloudNow.cashSessions.length > 0) {
+                       restoreClear();
                        const cloudIds = new Set(cloudNow.transactions.map(tx => tx.id));
                        const newer = imported.transactions.every(tx => cloudIds.has(tx.id)) &&
                          cloudNow.transactions.length > imported.transactions.length;
@@ -1729,9 +1736,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                   setOpeningManagementAccess(null);
                   setAdminUnlocked(true);
                   setTab('admin');
+                  restoreFinished();
                   alert('Backup sicher wiederhergestellt. Die Daten sind verfügbar; Sie bleiben in der Verwaltung.');
                 } catch (error) {
-                  alert(error instanceof Error ? error.message : 'Backup-Datei konnte nicht gelesen werden.');
+                  const message = error instanceof Error ? error.message : 'Backup-Datei konnte nicht gelesen werden.';
+                  if (progressStarted) restoreFailed(message); else alert(message);
                 } finally {
                   if (restoreSyncPaused) {
                     resumeSyncAfterRestore();
@@ -1781,6 +1790,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           )
         )}
       </main>
+      <RestoreProgressOverlay />
       {syncedAt !== null && <SyncToast key={syncedAt} onClose={closeSyncToast} />}
       {syncOpen && <SyncDialog syncNow={syncEverything} onRecoverCashConflict={recoverUnusedLocalCashConflict} onClose={() => setSyncOpen(false)} />}
       {staffAdminLoginOpen && (
