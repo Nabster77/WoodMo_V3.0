@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff, X } from 'lucide-react';
 import { callMobile, MobileApiError, newMobileReceiptId } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
+import { SwipeConfirm } from './SwipeConfirm';
 
 /**
  * Handy-Modus (27.11.2026): eigene schlanke Seite ohne Kassen-App und ohne Cloud-Konto.
@@ -243,10 +244,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
           </div>
           <p className="mt-4 text-center text-sm font-semibold gx-muted">Auszahlen</p>
           <p className="text-center text-4xl font-black text-[color:var(--gx-ok)]">{formatCurrency(total)}</p>
-          <button type="button" disabled={busy || !online || count < 1} onClick={() => void book()}
-            className="gx-btn gx-btn-ok mt-4 flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl text-xl font-extrabold">
-            {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Recycle className="h-6 w-6" />} Pfand buchen
-          </button>
+          <SwipeConfirm label={count < 1 ? 'Erst Anzahl wählen' : '← Zum Buchen nach links schieben'} disabled={!online || count < 1 || Boolean(ended)} busy={busy} onConfirm={() => void book()} />
           <ErrorLine text={error} />
         </div>
       )}
