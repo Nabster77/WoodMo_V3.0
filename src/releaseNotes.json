@@ -4,6 +4,7 @@
     "Handy koppeln: Das Kassentablet zeigt einen QR-Code, Link oder Code. Am Handy lässt sich Pfand-Retoure buchen (Schieber), ohne die Kasse zu bedienen.",
     "Kopplung aufheben per Schieber mit Rückfrage; „Minimieren“ lässt die Kopplung bestehen. Sie endet auch beim Schließen der Kassen-App, bei Sitzungsende oder nach 10 Stunden.",
     "Mobile Kassenübersicht für Administratoren (nur lesen): Namen auswählen, beide Standorte auf einen Blick.",
-    "Startseite/Home meldet Mitarbeiter und Administratoren ab; Kasse und Buchungen bleiben bestehen."
+    "Startseite/Home meldet Mitarbeiter und Administratoren ab; Kasse und Buchungen bleiben bestehen.",
+    "Diagnose → Geräte: zeigt nur noch aktive Geräte; Einträge, die über 24 Stunden nichts gemeldet haben, werden beim Aktualisieren entfernt."
   ]
 }
