@@ -909,6 +909,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setAdminShotDirty(false);
     setMenuOpen(false);
     setHomeVisible(true);
+    // 27.11.: Ein Mitarbeiter wird beim Wechsel zur Startseite (Home-Knopf oder Menü „Startseite“) sofort abgemeldet.
+    // Nur der Login-Status wird beendet: Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt (kein Verwerfen).
+    // Administratoren bleiben angemeldet.
+    if (currentStaff?.role === 'employee') {
+      recordStaff('logout', currentStaff);
+      setCurrentStaff(null);
+    }
   }
 
   function navigateToProtected(nextTab: 'admin' | 'journal') {
