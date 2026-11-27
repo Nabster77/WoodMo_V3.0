@@ -12,7 +12,8 @@ const dialog = readFileSync(new URL('../src/components/POS/CashOpeningDialog.tsx
 assert.match(dialog, /const existingSession = \(location === \(defaultLocation \?\? 'Friedrichshafen'\) \? deviceSession : null\) \?\? openSessions\?\.\[location\] \?\? null;/, 'gewählter Standort entscheidet');
 assert.match(dialog, /if \(continuesOtherLocation && onContinueAt\) \{[\s\S]{0,200}onContinueAt\(location\);\s*return;/, 'weiterführen ohne neue Kasse');
 assert.match(dialog, /\{existingSession \? 'Kasse weiterführen' : 'Kasse eröffnen'\}/);
-assert.match(dialog, /<fieldset disabled=\{!!deviceSession\}/, 'Standortwahl nur gesperrt, wenn am Gerätestandort schon eine Kasse läuft');
+assert.doesNotMatch(dialog, /<fieldset disabled=\{!!deviceSession\}/, 'Standortwahl bei offener Gerätekasse frei (27.11.: Wechsel zu einer anderen offenen Kasse erlaubt)');
+assert.match(dialog, /const continuesOtherLocation = Boolean\(existingSession && existingSession\.location !== homeLocation\);/, 'Weiterführen am anderen Standort auch bei offener Gerätekasse');
 const pos = readFileSync(new URL('../src/components/POS/POSScreen.tsx', import.meta.url), 'utf8');
 assert.match(pos, /openSessions=\{openSessionsByLocation\} onContinueAt=/);
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
