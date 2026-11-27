@@ -22,6 +22,7 @@ import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
 import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench, Smartphone } from 'lucide-react';
 import { mobileLink } from '@/lib/mobileApi';
+import { QrCode } from '@/components/QrCode';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -157,6 +158,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showMobileLink, setShowMobileLink] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
   const unreadRelease = APP_RELEASE_NOTES.length > 0 && readRelease !== RELEASE_ID;
   function closeReleaseInfo() {
@@ -250,11 +252,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 </button>
                 {/* 27.11.: Link für die mobile Kassenübersicht (Handy, nur lesen, eigene Administrator-Anmeldung). */}
                 <button type="button" className={adminMenuItem}
-                  onClick={() => openAdminAction(() => {
-                    const link = mobileLink('admin');
-                    void navigator.clipboard?.writeText(link).catch(() => undefined);
-                    alert(`Mobile Kassenübersicht\n\n${link}\n\nDer Link ist in die Zwischenablage kopiert. Am Handy in Chrome öffnen und als Lesezeichen speichern. Anmeldung mit Administrator-Name und persönlichem Passwort.`);
-                  })}>
+                  onClick={() => openAdminAction(() => setShowMobileLink(true))}>
                   <Smartphone className="h-5 w-5 shrink-0" aria-hidden="true" /> Mobile Kassenübersicht
                 </button>
                 {onDeviceSetup && (
@@ -324,6 +322,20 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
               : props.onCreateStaff && props.onUpdateStaff && props.onSetStaffPassword && props.onDeleteStaff ? <div className="space-y-4"><StaffManager users={props.staffUsers ?? []} online={props.staffOnline ?? navigator.onLine} onCreate={props.onCreateStaff} onUpdate={props.onUpdateStaff} onSetPassword={props.onSetStaffPassword} onDelete={props.onDeleteStaff} />{props.administratorTools}</div> : null}
       </div>
+      {showMobileLink && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4" onClick={() => { setShowMobileLink(false); onOpenMenu(); }}>
+          <div className="gx-dialog w-full max-w-sm rounded-3xl p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-1 text-xl font-bold">Mobile Kassenübersicht</h2>
+            <p className="mb-3 text-sm">Mit der Handy-Kamera scannen, dann mit Administrator-Name und persönlichem Passwort anmelden. Nur lesen.</p>
+            <QrCode text={mobileLink('admin')} size={220} />
+            <p className="mt-3 break-all font-mono text-xs">{mobileLink('admin')}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { void navigator.clipboard?.writeText(mobileLink('admin')).catch(() => undefined); }} className="min-h-11 rounded-xl text-sm font-bold">Link kopieren</button>
+              <button type="button" onClick={() => { setShowMobileLink(false); onOpenMenu(); }} className="bg-slate-900 min-h-11 rounded-xl text-sm font-bold">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDiagnostics && <DiagnosticsDialog location={props.selectedLocation ?? null} onClose={() => setShowDiagnostics(false)} />}
       {showReleaseInfo && (
         <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]"

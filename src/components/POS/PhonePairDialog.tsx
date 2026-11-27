@@ -3,6 +3,7 @@ import { Loader2, Smartphone, Unlink, X } from 'lucide-react';
 import type { CashSession, StaffUser } from '@/types';
 import { callMobileAsTablet, mobileLink } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
+import { QrCode } from '@/components/QrCode';
 
 interface Props {
   session: CashSession;
@@ -77,10 +78,10 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
         <p className="mb-3 text-sm">Das Handy bucht nur <strong>Pfand-Retouren</strong> in diese Kasse: <strong>{session.location}</strong>, {formatCurrency(pfandAmount)} je Stück, Mitarbeiter {staff.name}.</p>
         {code && secondsLeft > 0 ? (
           <div className="mb-3 rounded-2xl border p-4 text-center">
-            <p className="text-sm font-semibold">Am Handy in Chrome öffnen:</p>
-            <p className="break-all font-mono text-sm font-bold">{mobileLink('pfand')}</p>
-            <p className="mt-3 text-sm font-semibold">und diesen Code eingeben:</p>
-            <p className="font-mono text-5xl font-black tracking-[.2em]">{code.code}</p>
+            <p className="mb-2 text-sm font-bold">Mit der Handy-Kamera scannen:</p>
+            <QrCode text={mobileLink('pfand', code.code)} size={220} />
+            <p className="mt-3 text-xs">oder in Chrome <span className="font-mono font-bold">{mobileLink('pfand')}</span> öffnen und Code eingeben:</p>
+            <p className="font-mono text-3xl font-black tracking-[.2em]">{code.code}</p>
             <p className="mt-1 text-xs">gültig noch {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')} Min · nur einmal verwendbar</p>
           </div>
         ) : (
