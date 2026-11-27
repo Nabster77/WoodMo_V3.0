@@ -83,7 +83,11 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
           <div className="mb-3 rounded-2xl border p-4 text-center">
             <p className="mb-2 text-sm font-bold">Mit der Handy-Kamera scannen:</p>
             <QrCode text={mobileLink('pfand', code.code)} size={220} />
-            <p className="mt-3 text-xs">oder in Chrome <span className="font-mono font-bold">{mobileLink('pfand')}</span> öffnen und Code eingeben:</p>
+            <p className="mt-3 text-xs font-bold">Kein zweites Gerät zum Scannen? Direkt auf diesem Handy:</p>
+            <a href={mobileLink('pfand', code.code)} target="_blank" rel="noopener noreferrer" className="bg-slate-900 mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-base font-bold underline">
+              <Smartphone className="h-5 w-5" /> Handy-Link öffnen
+            </a>
+            <p className="mt-3 text-xs">oder Link <a href={mobileLink('pfand')} target="_blank" rel="noopener noreferrer" className="break-all font-mono font-bold underline">{mobileLink('pfand')}</a> öffnen und Code eingeben:</p>
             <p className="font-mono text-3xl font-black tracking-[.2em]">{code.code}</p>
             <p className="mt-1 text-xs">gültig noch {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')} Min · nur einmal verwendbar</p>
           </div>

@@ -328,7 +328,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             <h2 className="mb-1 text-xl font-bold">Mobile Kassenübersicht</h2>
             <p className="mb-3 text-sm">Mit der Handy-Kamera scannen, dann mit Administrator-Name und persönlichem Passwort anmelden. Nur lesen.</p>
             <QrCode text={mobileLink('admin')} size={220} />
-            <p className="mt-3 break-all font-mono text-xs">{mobileLink('admin')}</p>
+            <a href={mobileLink('admin')} target="_blank" rel="noopener noreferrer" className="mt-3 block break-all font-mono text-xs font-bold underline">{mobileLink('admin')}</a>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => { void navigator.clipboard?.writeText(mobileLink('admin')).catch(() => undefined); }} className="min-h-11 rounded-xl text-sm font-bold">Link kopieren</button>
               <button type="button" onClick={() => { setShowMobileLink(false); onOpenMenu(); }} className="bg-slate-900 min-h-11 rounded-xl text-sm font-bold">Schließen</button>
