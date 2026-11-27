@@ -288,12 +288,10 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
             </div>
             <button type="button" aria-label="Mehr" onClick={() => choose(count + 1)} className="gx-btn flex h-20 w-20 items-center justify-center rounded-2xl"><Plus className="h-8 w-8" /></button>
           </div>
-          <div className="mt-3 grid grid-cols-5 gap-2">
+          <div className="mt-3 grid grid-cols-6 gap-2">
+            <button type="button" disabled={count === 0 && (entry === '' || entry === '0')} onClick={() => choose(0)} aria-label="Auf 0 zurücksetzen" title="Auf 0 zurücksetzen"
+              className="gx-btn flex min-h-12 items-center justify-center rounded-xl disabled:opacity-40"><RotateCcw className="h-5 w-5" /></button>
             {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => choose(n)} className="gx-btn min-h-12 rounded-xl text-lg font-bold">{n}</button>)}
-          </div>
-          <div className="mt-2 flex justify-end">
-            <button type="button" disabled={count === 0 && (entry === '' || entry === '0')} onClick={() => choose(0)} aria-label="Auf 0 zurücksetzen"
-              className="gx-btn flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-bold disabled:opacity-40"><RotateCcw className="h-4 w-4" /> Zurücksetzen</button>
           </div>
           <p className="mt-4 text-center text-sm font-semibold gx-muted">Auszahlen</p>
           <p className="text-center text-4xl font-black text-[color:var(--gx-ok)]">{formatCurrency(total)}</p>
