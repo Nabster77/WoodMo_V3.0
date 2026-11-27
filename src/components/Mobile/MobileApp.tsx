@@ -181,6 +181,8 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     setMinimized(false);
   }
 
+  // Beendete Kopplung: gespeicherten Zugriffstoken dieses Handys sofort löschen.
+  useEffect(() => { if (ended) saveSession(PFAND_KEY, null); }, [ended]);
   useEffect(() => {
     const on = () => setOnline(true); const off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -248,7 +250,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
         {!ended && <button type="button" onClick={() => setMinimized(true)} aria-label="Minimieren (Kopplung bleibt)"
           className="gx-btn flex min-h-12 items-center justify-center gap-1 rounded-xl px-3 text-sm font-bold"><ChevronDown className="h-5 w-5" /> Minimieren</button>}
       </div>
-      {!ended && <div className="mb-3"><SwipeConfirm compact direction="right" tone="danger" label="Kopplung lösen" disabled={busy} onConfirm={() => setConfirmEnd(true)} /></div>}
+      {!ended && <div className="mb-3"><SwipeConfirm compact direction="right" tone="danger" label="Kopplung aufheben" disabled={busy} onConfirm={() => setConfirmEnd(true)} /></div>}
       {confirmEnd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true">
           <div className="gx-panel w-full max-w-sm rounded-3xl p-5">

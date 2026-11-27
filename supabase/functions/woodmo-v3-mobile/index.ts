@@ -16,8 +16,8 @@ const HEADERS = {
 const LOCATIONS = ['Friedrichshafen', 'Bregenz'];
 const CODE_MINUTES = 3;
 const PFAND_HOURS = 10;
-/** Ohne Lebenszeichen der Kassen-App (geschlossen) endet die Kopplung. Display-Sperre am Tablet ist bis hierhin unschädlich. */
-const TABLET_SILENCE_MIN = 30;
+/** Ohne Lebenszeichen der Kassen-App (geschlossen) endet die Kopplung (Rückfall, falls das Schließen nicht gemeldet werden konnte). */
+const TABLET_SILENCE_MIN = 10;
 const ADMIN_MINUTES = 30;
 const MAX_FAILS = 8;
 const FAIL_WINDOW_MIN = 10;
@@ -68,12 +68,18 @@ async function loadSession(db: SupabaseClient, id: string) {
   const { data } = await db.from('pos_cash_sessions').select('id, location, data, booking_generation').eq('id', id).maybeSingle();
   return data as { id: string; location: string; data: Record<string, unknown>; booking_generation: number } | null;
 }
+async function revokePairing(db: SupabaseClient, id: unknown): Promise<void> {
+  if (typeof id === 'string') await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('id', id).is('revoked_at', null);
+}
 async function pairingByToken(db: SupabaseClient, token: unknown, kind: 'pfand' | 'admin') {
   if (typeof token !== 'string' || token.length !== 64) return null;
   const { data } = await db.from('pos_mobile_pairings').select('*').eq('token_hash', await sha(token)).eq('kind', kind).maybeSingle();
   if (!data || data.revoked_at || new Date(data.expires_at).getTime() < Date.now()) return null;
   if (kind === 'pfand' && !data.claimed_at) return null;
-  if (kind === 'pfand' && data.tablet_seen_at && Date.now() - new Date(data.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000) return null;
+  if (kind === 'pfand' && data.tablet_seen_at && Date.now() - new Date(data.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000) {
+    await revokePairing(db, data.id); // Kassen-App seit längerem nicht mehr aktiv: Kopplung endgültig beenden
+    return null;
+  }
   return data as Record<string, unknown>;
 }
 
@@ -109,15 +115,27 @@ Deno.serve(async request => {
       return reply(200, { ok: true });
     }
     if (action === 'pair_heartbeat') {
+      const open = await loadSession(db, sessionId);
+      if (!open || !isOpen(open.data)) {
+        await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
+        return reply(200, { active: 0 });
+      }
       const { data } = await db.from('pos_mobile_pairings').update({ tablet_seen_at: new Date().toISOString() })
         .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).not('claimed_at', 'is', null)
         .gt('expires_at', new Date().toISOString()).select('id');
       return reply(200, { active: (data ?? []).length });
     }
     if (action === 'pair_list') {
-      const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at')
-        .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).gt('expires_at', new Date().toISOString());
-      const active = (data ?? []).filter(row => row.claimed_at || new Date(row.code_expires_at).getTime() > Date.now());
+      const open = await loadSession(db, sessionId);
+      if (!open || !isOpen(open.data)) {
+        await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
+        return reply(200, { pairings: [] });
+      }
+      const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at, tablet_seen_at')
+        .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).gt('expires_at', new Date().toISOString()).order('claimed_at', { ascending: true });
+      const active = (data ?? []).filter(row => row.claimed_at
+        ? !(row.tablet_seen_at && Date.now() - new Date(row.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000)
+        : new Date(row.code_expires_at).getTime() > Date.now());
       return reply(200, { pairings: active });
     }
     const session = await loadSession(db, sessionId);
@@ -175,7 +193,7 @@ Deno.serve(async request => {
     const pairing = await pairingByToken(db, payload.token, 'pfand');
     if (!pairing) return reply(410, { error: 'Kopplung beendet.' });
     const session = await loadSession(db, String(pairing.session_id));
-    if (!session || !isOpen(session.data)) return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' });
+    if (!session || !isOpen(session.data)) { await revokePairing(db, pairing.id); return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' }); }
     return reply(200, { ok: true, expires_at: pairing.expires_at, location: pairing.location, staff_name: pairing.staff_name, pfand_amount: Number(pairing.pfand_amount) });
   }
 
@@ -184,7 +202,7 @@ Deno.serve(async request => {
     const pairing = await pairingByToken(db, payload.token, 'pfand');
     if (!pairing) return reply(410, { error: 'Kopplung beendet. Am Tablet neu koppeln.' });
     const session = await loadSession(db, String(pairing.session_id));
-    if (!session || !isOpen(session.data)) return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' });
+    if (!session || !isOpen(session.data)) { await revokePairing(db, pairing.id); return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' }); }
     const id = payload.id, count = Number(payload.count);
     if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) return reply(400, { error: 'Bon-ID ungültig.' });
     if (!Number.isInteger(count) || count < 1 || count > 999) return reply(400, { error: 'Anzahl ungültig (1–999).' });

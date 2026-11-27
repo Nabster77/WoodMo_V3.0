@@ -59,7 +59,7 @@ import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyC
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installStyledAlert } from '@/lib/styledAlert';
 import { PhonePairDialog } from '@/components/POS/PhonePairDialog';
-import { callMobileAsTablet } from '@/lib/mobileApi';
+import { callMobileAsTablet, revokePairingsOnClose } from '@/lib/mobileApi';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { serveFileTransfers } from '@/lib/fileTransfer';
 import { DIAG_EVENT, diagnosticsTick, getDeviceId, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
@@ -146,6 +146,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const [syncOpen, setSyncOpen] = useState(false);
   const [currentStaff, setCurrentStaff] = useState<StaffUser | null>(null);
   // 27.11.: Handy für Pfand-Retouren koppeln (Kassenmenü); gekoppelt → Kasse gleicht alle 5 s ab.
+  const pairStartupDone = useRef(false);
   const [showPhonePair, setShowPhonePair] = useState(false);
   const [phonePaired, setPhonePaired] = useState(false);
   const [phonePairedNotice, setPhonePairedNotice] = useState(false);
@@ -408,9 +409,30 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       void callMobileAsTablet<{ active: number }>('pair_heartbeat', { session_id: pairSessionId })
         .then((result) => setPhonePaired(result.active > 0)).catch(() => undefined);
     };
-    beat();
+    // Kassen-App wurde neu geöffnet (vorher geschlossen): alte Handy-Kopplungen dieser Kasse enden, erst danach Lebenszeichen.
+    if (!pairStartupDone.current) {
+      pairStartupDone.current = true;
+      void callMobileAsTablet('pair_revoke', { session_id: pairSessionId }).then(() => setPhonePaired(false)).catch(() => undefined).finally(beat);
+    } else beat();
     const timer = window.setInterval(beat, 60_000);
     return () => window.clearInterval(timer);
+  }, [pairSessionId, testMode]);
+  // Kassen-App wird geschlossen (Tab/App weg): Kopplungen sofort beenden. Bildschirmsperre oder Hintergrund zählt nicht.
+  useEffect(() => {
+    if (!pairSessionId || testMode) return;
+    const onPageHide = (event: PageTransitionEvent) => { if (!event.persisted) revokePairingsOnClose(pairSessionId); };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [pairSessionId, testMode]);
+  // Kassensitzung endet (Tagesabschluss, abgeschlossen): Kopplungen dieser Sitzung enden, Anzeige zurücksetzen.
+  const previousPairSession = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousPairSession.current;
+    previousPairSession.current = pairSessionId;
+    if (previous && !pairSessionId && !testMode) {
+      setPhonePaired(false);
+      void callMobileAsTablet('pair_revoke', { session_id: previous }).catch(() => undefined);
+    }
   }, [pairSessionId, testMode]);
   useEffect(() => {
     if (!phonePaired || testMode) return;
@@ -909,12 +931,14 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setAdminShotDirty(false);
     setMenuOpen(false);
     setHomeVisible(true);
-    // 27.11.: Ein Mitarbeiter wird beim Wechsel zur Startseite (Home-Knopf oder Menü „Startseite“) sofort abgemeldet.
-    // Nur der Login-Status wird beendet: Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt (kein Verwerfen).
-    // Administratoren bleiben angemeldet.
-    if (currentStaff?.role === 'employee') {
+    // 27.11.: Wer zur Startseite wechselt (Home-Knopf oder Menü „Startseite“), wird sofort abgemeldet – Mitarbeiter und
+    // Administrator. Nur der Login-Status endet: Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt (kein Verwerfen).
+    if (currentStaff) {
       recordStaff('logout', currentStaff);
       setCurrentStaff(null);
+      setManagementAdministrator(null);
+      setAdminUnlocked(false);
+      resetJournalSelection();
     }
   }
 

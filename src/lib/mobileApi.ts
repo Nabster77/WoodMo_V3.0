@@ -28,12 +28,29 @@ export async function callMobile<T = Record<string, unknown>>(action: string, bo
   return data as T;
 }
 
+let lastTabletJwt: string | null = null;
+
+/** Beim Schließen der Kassen-App: Kopplungen dieser Kasse beenden. keepalive lässt die Anfrage das Schließen überleben. */
+export function revokePairingsOnClose(sessionId: string): void {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key || !lastTabletJwt) return;
+  try {
+    void fetch(`${url}/functions/v1/${FUNCTION}`, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${lastTabletJwt}` },
+      body: JSON.stringify({ action: 'pair_revoke', session_id: sessionId }),
+    }).catch(() => undefined);
+  } catch { /* Schließen darf nie blockieren. */ }
+}
+
 /** Vom Kassentablet aus, mit dem Cloud-Konto der Kasse. */
 export async function callMobileAsTablet<T = Record<string, unknown>>(action: string, body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Cloud ist nicht konfiguriert.');
   const { data: auth } = await supabase.auth.getSession();
   const jwt = auth.session?.access_token;
   if (!jwt) throw new Error('Cloud-Anmeldung der Kasse fehlt.');
+  lastTabletJwt = jwt;
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   let response: Response;
