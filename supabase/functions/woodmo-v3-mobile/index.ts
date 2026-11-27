@@ -15,7 +15,9 @@ const HEADERS = {
 };
 const LOCATIONS = ['Friedrichshafen', 'Bregenz'];
 const CODE_MINUTES = 3;
-const PFAND_HOURS = 16;
+const PFAND_HOURS = 10;
+/** Ohne Lebenszeichen der Kassen-App (geschlossen) endet die Kopplung. Display-Sperre am Tablet ist bis hierhin unschädlich. */
+const TABLET_SILENCE_MIN = 30;
 const ADMIN_MINUTES = 30;
 const MAX_FAILS = 8;
 const FAIL_WINDOW_MIN = 10;
@@ -71,6 +73,7 @@ async function pairingByToken(db: SupabaseClient, token: unknown, kind: 'pfand' 
   const { data } = await db.from('pos_mobile_pairings').select('*').eq('token_hash', await sha(token)).eq('kind', kind).maybeSingle();
   if (!data || data.revoked_at || new Date(data.expires_at).getTime() < Date.now()) return null;
   if (kind === 'pfand' && !data.claimed_at) return null;
+  if (kind === 'pfand' && data.tablet_seen_at && Date.now() - new Date(data.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000) return null;
   return data as Record<string, unknown>;
 }
 
@@ -93,7 +96,7 @@ Deno.serve(async request => {
   const action = payload.action;
 
   // ---- Aktionen des Kassentablets: nur mit dem Cloud-Konto der Kasse ----
-  if (action === 'pair_create' || action === 'pair_revoke' || action === 'pair_list') {
+  if (action === 'pair_create' || action === 'pair_revoke' || action === 'pair_list' || action === 'pair_heartbeat') {
     const jwt = /^Bearer (.+)$/i.exec(request.headers.get('Authorization') ?? '')?.[1];
     if (!jwt || jwt.startsWith('sb_')) return reply(401, { error: 'Cloud-Anmeldung der Kasse erforderlich.' });
     const account = createClient(url, publishableKey, { global: { headers: { Authorization: 'Bearer ' + jwt } }, auth: { persistSession: false, autoRefreshToken: false } });
@@ -104,6 +107,12 @@ Deno.serve(async request => {
     if (action === 'pair_revoke') {
       await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
       return reply(200, { ok: true });
+    }
+    if (action === 'pair_heartbeat') {
+      const { data } = await db.from('pos_mobile_pairings').update({ tablet_seen_at: new Date().toISOString() })
+        .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).not('claimed_at', 'is', null)
+        .gt('expires_at', new Date().toISOString()).select('id');
+      return reply(200, { active: (data ?? []).length });
     }
     if (action === 'pair_list') {
       const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at')
@@ -127,7 +136,7 @@ Deno.serve(async request => {
       code_expires_at: new Date(now + CODE_MINUTES * 60_000).toISOString(),
       expires_at: new Date(now + PFAND_HOURS * 3_600_000).toISOString(),
       // Der Token wird erst beim Einlösen des Codes ausgegeben; bis dahin liegt er nur gehasht vor.
-      last_used_at: null,
+      last_used_at: null, tablet_seen_at: new Date(now).toISOString(),
     });
     if (error) return reply(503, { error: 'Kopplung konnte nicht angelegt werden.' });
     // Klartext-Token kurz zwischenspeichern ist nicht nötig: beim Einlösen wird ein neuer Token erzeugt.
@@ -153,13 +162,21 @@ Deno.serve(async request => {
     return reply(200, { token, location: row.location, session_id: row.session_id, staff_name: row.staff_name, pfand_amount: Number(row.pfand_amount) });
   }
 
+  // ---- Handy: Kopplung selbst beenden (X → Ja) ----
+  if (action === 'pfand_unpair') {
+    if (typeof payload.token === 'string' && payload.token.length === 64) {
+      await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('token_hash', await sha(payload.token)).eq('kind', 'pfand');
+    }
+    return reply(200, { ok: true });
+  }
+
   // ---- Handy: Kopplung prüfen ----
   if (action === 'pfand_status') {
     const pairing = await pairingByToken(db, payload.token, 'pfand');
     if (!pairing) return reply(410, { error: 'Kopplung beendet.' });
     const session = await loadSession(db, String(pairing.session_id));
     if (!session || !isOpen(session.data)) return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' });
-    return reply(200, { ok: true, location: pairing.location, staff_name: pairing.staff_name, pfand_amount: Number(pairing.pfand_amount) });
+    return reply(200, { ok: true, expires_at: pairing.expires_at, location: pairing.location, staff_name: pairing.staff_name, pfand_amount: Number(pairing.pfand_amount) });
   }
 
   // ---- Handy: Pfand-Retoure buchen ----

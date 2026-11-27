@@ -59,6 +59,7 @@ import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyC
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installStyledAlert } from '@/lib/styledAlert';
 import { PhonePairDialog } from '@/components/POS/PhonePairDialog';
+import { callMobileAsTablet } from '@/lib/mobileApi';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { serveFileTransfers } from '@/lib/fileTransfer';
 import { DIAG_EVENT, diagnosticsTick, getDeviceId, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
@@ -391,6 +392,19 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   useEffect(() => installFullscreenToggle(), []);
   useEffect(() => installKeyboardOnTap(), []);
   useEffect(() => { installStyledAlert(); }, []);
+  // Lebenszeichen an gekoppelte Handys: ohne Meldung (Kassen-App geschlossen) endet deren Kopplung nach 30 Minuten.
+  const pairSessionId = store.activeSession && !store.activeSession.closed ? store.activeSession.id : null;
+  useEffect(() => {
+    if (!pairSessionId || testMode) return;
+    const beat = () => {
+      if (!navigator.onLine) return;
+      void callMobileAsTablet<{ active: number }>('pair_heartbeat', { session_id: pairSessionId })
+        .then((result) => setPhonePaired(result.active > 0)).catch(() => undefined);
+    };
+    beat();
+    const timer = window.setInterval(beat, 60_000);
+    return () => window.clearInterval(timer);
+  }, [pairSessionId, testMode]);
   useEffect(() => {
     if (!phonePaired || testMode) return;
     const timer = window.setInterval(() => { if (navigator.onLine) void syncNow(); }, 5000);

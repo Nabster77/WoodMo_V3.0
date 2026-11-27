@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff } from 'lucide-react';
+import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff, X } from 'lucide-react';
 import { callMobile, MobileApiError, newMobileReceiptId } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
 
@@ -109,7 +109,18 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
   const [ended, setEnded] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [booked, setBooked] = useState<Booked[]>([]);
+  const [minimized, setMinimized] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [endedByUser, setEndedByUser] = useState(false);
   const total = count * pairing.pfand_amount;
+
+  async function endPairing() {
+    setConfirmEnd(false);
+    await callMobile('pfand_unpair', { token: pairing.token }).catch(() => undefined);
+    setEndedByUser(true);
+    setEnded('Die Kopplung wurde beendet. Bitte neu verbinden.');
+    setMinimized(false);
+  }
 
   useEffect(() => {
     const on = () => setOnline(true); const off = () => setOnline(false);
@@ -154,9 +165,44 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     setBusy(false);
   }
 
+  // Minimiert: nur ein schwebender Knopf; die Kopplung bleibt aktiv (Status wird weiter geprüft).
+  if (minimized && !ended) {
+    return (
+      <div className="flex min-h-[80dvh] items-center justify-center">
+        <button type="button" onClick={() => setMinimized(false)} aria-label="Pfand-Fenster öffnen"
+          className="gx-btn gx-btn-ok fixed bottom-6 right-6 flex h-20 w-20 flex-col items-center justify-center rounded-full text-xs font-extrabold shadow-2xl">
+          <Recycle className="h-8 w-8" /> Pfand
+        </button>
+        <p className="gx-muted max-w-xs text-center text-sm font-semibold">Pfand-Fenster minimiert – Kopplung {pairing.location} bleibt aktiv. Grünen Knopf antippen zum Öffnen.</p>
+      </div>
+    );
+  }
+
   return (
     <>
-      <Header title="Pfand-Retoure" sub={`${pairing.staff_name} · Handy gekoppelt`} onLogout={onEnd} />
+      <div className="mb-4 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="gx-heading text-xs font-bold uppercase tracking-[.14em]">WOODMO</p>
+          <h1 className="gx-text truncate text-xl font-extrabold">Pfand-Retoure</h1>
+          <p className="gx-muted truncate text-xs font-semibold">{pairing.staff_name} · Handy gekoppelt</p>
+        </div>
+        {!ended && <button type="button" onClick={() => setMinimized(true)} aria-label="Minimieren (Kopplung bleibt)" title="Minimieren – Kopplung bleibt"
+          className="gx-btn flex h-12 w-12 items-center justify-center rounded-xl"><ChevronDown className="h-6 w-6" /></button>}
+        {!ended && <button type="button" onClick={() => setConfirmEnd(true)} aria-label="Kopplung beenden" title="Kopplung beenden"
+          className="gx-btn gx-btn-danger flex h-12 w-12 items-center justify-center rounded-xl"><X className="h-6 w-6" /></button>}
+      </div>
+      {confirmEnd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true">
+          <div className="gx-panel w-full max-w-sm rounded-3xl p-5">
+            <p className="text-lg font-extrabold">Wollen Sie wirklich die Kopplung beenden?</p>
+            <p className="gx-muted mt-1 text-sm">Danach sind keine Pfandretouren mit diesem Handy mehr möglich.</p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setConfirmEnd(false)} className="gx-btn min-h-14 rounded-xl text-lg font-bold">Nein</button>
+              <button type="button" onClick={() => void endPairing()} className="gx-btn gx-btn-danger min-h-14 rounded-xl text-lg font-bold">Ja</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="gx-panel mb-3 flex items-center gap-2 rounded-2xl px-4 py-3">
         <MapPin className="h-5 w-5" />
         <span className="text-lg font-extrabold">{pairing.location}</span>
@@ -165,9 +211,9 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
       {!online && <p className="mb-3 flex items-center gap-2 rounded-xl border border-[color:var(--gx-warn)] px-3 py-2 text-sm font-bold text-[color:var(--gx-warn)]"><WifiOff className="h-4 w-4" /> Keine Verbindung – Buchen erst wieder mit Internet.</p>}
       {ended ? (
         <div className="gx-panel rounded-3xl p-5 text-center">
-          <p className="text-lg font-extrabold text-[color:var(--gx-err)]">Kopplung beendet</p>
-          <p className="gx-muted mt-1 text-sm">{ended}</p>
-          <button type="button" onClick={onEnd} className="gx-btn gx-btn-pri mt-4 min-h-12 w-full rounded-xl font-bold">Neu koppeln</button>
+          <p className="text-lg font-extrabold text-[color:var(--gx-err)]">{endedByUser ? ended : 'Kopplung beendet'}</p>
+          {!endedByUser && <p className="gx-muted mt-1 text-sm">{ended} Bitte neu verbinden.</p>}
+          <button type="button" onClick={onEnd} className="gx-btn gx-btn-pri mt-4 min-h-12 w-full rounded-xl font-bold">Neu verbinden</button>
         </div>
       ) : (
         <div className="gx-panel rounded-3xl p-4">
