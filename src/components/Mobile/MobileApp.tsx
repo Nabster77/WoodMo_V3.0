@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff, X } from 'lucide-react';
 import { callMobile, MobileApiError, newMobileReceiptId } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
+import { APP_VERSION } from '@/lib/appVersion';
 import { SwipeConfirm } from './SwipeConfirm';
 
 /**
@@ -25,14 +26,62 @@ export function isMobileMode(): boolean {
   return new URLSearchParams(window.location.search).has('mobil');
 }
 
+/** Während einer Buchung nie neu laden. */
+let mobileBusy = false;
+export function setMobileBusy(value: boolean) { mobileBusy = value; }
+
+/** Lädt die Handy-Seite frisch (Zeitstempel umgeht jeden Zwischenspeicher). Kopplung im Tab bleibt erhalten. */
+function reloadFresh() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('code');
+  url.searchParams.set('v', Date.now().toString(36));
+  window.location.replace(url.toString());
+}
+
+/** Prüft beim Öffnen und bei Rückkehr in den Vordergrund, ob online eine neuere Version liegt. */
+function useFreshVersion(): boolean {
+  const [outdated, setOutdated] = useState(false);
+  useEffect(() => {
+    let stopped = false;
+    const check = async () => {
+      try {
+        const url = new URL('version.json', new URL(import.meta.env.BASE_URL, window.location.origin));
+        url.searchParams.set('t', Date.now().toString(36));
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+        const online = (await res.json() as { version?: string }).version;
+        if (stopped || !online || online === APP_VERSION) { setOutdated(false); return; }
+        setOutdated(true);
+        // Einmal pro Version automatisch neu laden, nie während einer Buchung.
+        const key = 'woodmo_mobile_reloaded_for';
+        if (!mobileBusy && sessionStorage.getItem(key) !== online) { sessionStorage.setItem(key, online); reloadFresh(); }
+      } catch { /* offline: später erneut */ }
+    };
+    void check();
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    const timer = window.setInterval(() => { void check(); }, 120_000);
+    return () => { stopped = true; document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('pageshow', onVisible); window.clearInterval(timer); };
+  }, []);
+  return outdated;
+}
+
 export function MobileApp() {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get('mobil') === 'admin' ? 'admin' : 'pfand';
+  const outdated = useFreshVersion();
   useEffect(() => { document.documentElement.classList.add('dark'); document.title = mode === 'admin' ? 'WOODMO Übersicht' : 'WOODMO Pfand'; }, [mode]);
   return (
     <div className="gx-bg min-h-dvh px-3 py-4 text-[15px]">
       <div className="mx-auto w-full max-w-md">
+        {outdated && (
+          <button type="button" onClick={reloadFresh} className="gx-btn gx-btn-warn mb-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl font-bold">
+            <RefreshCw className="h-5 w-5" /> Neue Version – Ansicht aktualisieren
+          </button>
+        )}
         {mode === 'admin' ? <AdminMobile /> : <PfandMobile initialCode={params.get('code') ?? ''} />}
+        <p className="gx-muted mt-6 text-center text-[10px]">Version {APP_VERSION}</p>
       </div>
     </div>
   );
@@ -61,7 +110,8 @@ interface PfandPairing { token: string; location: string; staff_name: string; pf
 interface Booked { id: string; count: number; total: number; at: number; state: 'ok' | 'pending' | 'error' }
 
 function PfandMobile({ initialCode }: { initialCode: string }) {
-  const [pairing, setPairing] = useState<PfandPairing | null>(() => loadSession<PfandPairing>(PFAND_KEY));
+  // Neuer QR-Code im Link: alte Kopplung dieses Tabs nicht weiterverwenden, neue einlösen.
+  const [pairing, setPairing] = useState<PfandPairing | null>(() => /^\d{6}$/.test(initialCode) ? null : loadSession<PfandPairing>(PFAND_KEY));
   const [code, setCode] = useState(initialCode.replace(/\D/g, '').slice(0, 6));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,12 +216,12 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
 
   async function book() {
     if (busy || ended || count < 1) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setMobileBusy(true);
     const entry: Booked = { id: newMobileReceiptId(), count, total: -total, at: Date.now(), state: 'pending' };
     setBooked((list) => [entry, ...list].slice(0, 20));
     const ok = await send(entry);
     if (ok) choose(0);
-    setBusy(false);
+    setBusy(false); setMobileBusy(false);
   }
 
   // Minimiert: nur ein schwebender Knopf; die Kopplung bleibt aktiv (Status wird weiter geprüft).

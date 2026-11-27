@@ -133,7 +133,8 @@ self.addEventListener('message', event => {
         importScripts: [workerGuard],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
         navigateFallback: `${base}index.html`,
-        ...(testReplay ? { navigateFallbackDenylist: [/^\/update-test(?:-start)?\.html(?:\?|$)/] } : {}),
+        // 27.11.: Handy-Seiten (?mobil=…) nie aus dem App-Speicher, immer frisch aus dem Netz (Handys haben keinen Update-Knopf).
+        navigateFallbackDenylist: [/[?&]mobil=/, ...(testReplay ? [/^\/update-test(?:-start)?\.html(?:\?|$)/] : [])],
         cleanupOutdatedCaches: true,
         clientsClaim: false,
         skipWaiting: false,
