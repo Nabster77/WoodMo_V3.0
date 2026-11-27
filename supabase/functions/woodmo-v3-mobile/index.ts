@@ -223,6 +223,14 @@ Deno.serve(async request => {
     return reply(200, { ok: true, total: amount });
   }
 
+  // ---- Administrator: Namensliste für die Auswahl (nur Namen, keine Daten) ----
+  if (action === 'admin_names') {
+    const { data: rows } = await db.from('pos_staff_users').select('data').eq('deleted', false)
+      .eq('data->>role', 'administrator').eq('data->>active', 'true').limit(50);
+    const names = (rows ?? []).map(r => String((r.data as Record<string, unknown>).name ?? '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, 'de'));
+    return reply(200, { names });
+  }
+
   // ---- Administrator: Anmeldung mit persönlichem Passwort ----
   if (action === 'admin_login') {
     const key = 'admin:' + clientKey(request);

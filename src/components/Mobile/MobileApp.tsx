@@ -344,6 +344,12 @@ function AdminLoginForm({ onLogin }: { onLogin: (l: AdminLogin) => void }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    callMobile<{ names: string[] }>('admin_names').then((r) => { if (alive && Array.isArray(r.names)) { setNames(r.names); if (r.names.length === 1) setName(r.names[0]); } }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
   async function submit() {
     if (busy) return;
     setBusy(true); setError(null);
@@ -357,10 +363,22 @@ function AdminLoginForm({ onLogin }: { onLogin: (l: AdminLogin) => void }) {
     <>
       <Header title="Mobile Kassenübersicht" sub="Nur für Administratoren · nur lesen" />
       <form className="gx-panel space-y-3 rounded-3xl p-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+        {names.length > 0 ? (
+          <div>
+            <p className="text-sm font-semibold gx-muted">Administrator wählen</p>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {names.map((n) => (
+                <button key={n} type="button" onClick={() => setName(n)} aria-pressed={name === n}
+                  className={`gx-btn min-h-14 rounded-xl text-base font-extrabold ${name === n ? 'gx-btn-pri' : ''}`}>{n}</button>
+              ))}
+            </div>
+          </div>
+        ) : (
         <label className="block text-sm font-semibold gx-muted">Administrator-Name
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="username"
             className="mt-1 w-full rounded-xl border border-[color:var(--gx-edge)] bg-[color:var(--gx-field)] px-3 py-3 text-base text-[color:var(--gx-text)]" />
         </label>
+        )}
         <label className="block text-sm font-semibold gx-muted">Persönliches Passwort
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password"
             className="mt-1 w-full rounded-xl border border-[color:var(--gx-edge)] bg-[color:var(--gx-field)] px-3 py-3 text-base text-[color:var(--gx-text)]" />
