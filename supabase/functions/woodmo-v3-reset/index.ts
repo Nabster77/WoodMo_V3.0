@@ -89,5 +89,23 @@ Deno.serve(async request => {
       !Number.isFinite(Number((reset as { reset_at?: unknown }).reset_at))) {
     return reply(503, { error: 'Cloud-Reset nicht eindeutig bestätigt. Kassenstand prüfen.' });
   }
-  return reply(200, reset as Record<string, unknown>);
+  // Nach dem Zurücksetzen auch Geräte- und Kopplungsreste entfernen (nur Diagnose-/Kopplungstabellen):
+  // alle Handy-Kopplungen und Versuchszähler, Geräte ohne Meldung seit über 24 h. Buchungen, Kassen und Archive bleiben unberührt.
+  // Fehler (z. B. Tabelle noch nicht vorhanden) verhindern das Zurücksetzen nicht.
+  const cleaned = { pairings: 0, attempts: 0, devices: 0 };
+  try {
+    const { data: removed } = await service.from('pos_mobile_pairings').delete().not('id', 'is', null).select('id');
+    cleaned.pairings = removed?.length ?? 0;
+  } catch { /* Tabelle fehlt: nichts zu tun */ }
+  try {
+    const { data: removed } = await service.from('pos_mobile_attempts').delete().not('id', 'is', null).select('id');
+    cleaned.attempts = removed?.length ?? 0;
+  } catch { /* Tabelle fehlt: nichts zu tun */ }
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const { data: removed } = await service.from('pos_device_diagnostics').delete()
+      .or(`reported_at.lt.${cutoff},reported_at.is.null`).select('device_id');
+    cleaned.devices = removed?.length ?? 0;
+  } catch { /* nicht kritisch */ }
+  return reply(200, { ...(reset as Record<string, unknown>), cleaned });
 });
