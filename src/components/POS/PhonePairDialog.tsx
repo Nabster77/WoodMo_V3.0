@@ -87,6 +87,7 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
             <a href={mobileLink('pfand', code.code)} target="_blank" rel="noopener noreferrer" className="bg-slate-900 mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-base font-bold underline">
               <Smartphone className="h-5 w-5" /> Handy-Link öffnen
             </a>
+            <button type="button" onClick={() => { void navigator.clipboard?.writeText(mobileLink('pfand', code.code)).catch(() => undefined); }} className="mt-2 min-h-11 w-full rounded-xl text-sm font-bold">Link kopieren (zum Einfügen in Safari/Chrome)</button>
             <p className="mt-3 text-xs">oder Link <a href={mobileLink('pfand')} target="_blank" rel="noopener noreferrer" className="break-all font-mono font-bold underline">{mobileLink('pfand')}</a> öffnen und Code eingeben:</p>
             <p className="font-mono text-3xl font-black tracking-[.2em]">{code.code}</p>
             <p className="mt-1 text-xs">gültig noch {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')} Min · nur einmal verwendbar</p>
