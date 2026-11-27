@@ -1024,13 +1024,8 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   onOpenCash?: () => void;
   exportedByName?: string;
 }) {
-  // 24.11.: Beim Öffnen die offene Kasse des gewählten Standorts zeigen, sonst heute.
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const now = formatDateISO(Date.now());
-    const open = cashSessions.find((s) => s.location === selectedLocation && !s.closed && !s.discarded && !s.dailyCloseFinalizedAt);
-    const day = open ? formatDateISO(open.openedAt) : now;
-    return day <= now ? day : now;
-  });
+  // 27.11.: Beim Öffnen immer das heutige Datum („letzter Umsatztag“ bleibt als Sprungziel).
+  const [selectedDate, setSelectedDate] = useState<string>(() => formatDateISO(Date.now()));
   const [previewReport, setPreviewReport] = useState<JournalReportData | null>(null);
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);

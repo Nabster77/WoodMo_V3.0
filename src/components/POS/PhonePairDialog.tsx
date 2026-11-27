@@ -12,12 +12,14 @@ interface Props {
   onClose: () => void;
   /** true, solange mindestens ein Handy gekoppelt ist (Kasse gleicht dann häufiger ab). */
   onPairedChange: (paired: boolean) => void;
+  /** Ein Handy hat den Code gerade eingelöst: Fenster schließen, kurze Meldung. */
+  onPaired: () => void;
 }
 
 interface Pairing { staff_name: string; claimed_at: string | null; last_used_at: string | null }
 
 /** 27.11.: Handy für Pfand-Retouren an die offene Kasse koppeln. Bucht nur über die Cloud-Prüfung. */
-export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPairedChange }: Props) {
+export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPairedChange, onPaired }: Props) {
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [pairings, setPairings] = useState<Pairing[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,11 +33,12 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
       setPairings(result.pairings);
       const count = result.pairings.filter((p) => p.claimed_at).length;
       onPairedChange(count > 0);
-      // Code wurde am Handy eingelöst: Anzeige ausblenden.
-      if (claimedCount.current >= 0 && count > claimedCount.current) setCode(null);
+      // Code wurde am Handy eingelöst: Fenster schließen.
+      const before = claimedCount.current;
       claimedCount.current = count;
+      if (before >= 0 && count > before) onPaired();
     } catch { /* Anzeige bleibt; nächster Versuch folgt */ }
-  }, [session.id, onPairedChange]);
+  }, [session.id, onPairedChange, onPaired]);
 
   useEffect(() => {
     void refresh();
@@ -84,6 +87,13 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
             <p className="font-mono text-3xl font-black tracking-[.2em]">{code.code}</p>
             <p className="mt-1 text-xs">gültig noch {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')} Min · nur einmal verwendbar</p>
           </div>
+        ) : code ? (
+          <div className="mb-3 rounded-2xl border p-4 text-center">
+            <p className="text-sm font-bold">Code abgelaufen – keine Kopplung.</p>
+            <button type="button" disabled={busy} onClick={() => void create()} className="bg-slate-900 mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl font-bold">
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Smartphone className="h-5 w-5" />} Erneut versuchen
+            </button>
+          </div>
         ) : (
           <button type="button" disabled={busy} onClick={() => void create()} className="bg-slate-900 mb-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl text-base font-bold">
             {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Smartphone className="h-5 w-5" />} Kopplungscode erzeugen
@@ -98,7 +108,12 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
             <Unlink className="h-4 w-4" /> Alle Handys dieser Kasse entkoppeln
           </button>
         )}
-        {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
+        {error && (
+          <div className="mt-3">
+            <p className="text-sm font-semibold text-red-600">{error}</p>
+            <button type="button" disabled={busy} onClick={() => void create()} className="mt-2 min-h-11 w-full rounded-xl text-sm font-bold">Erneut versuchen</button>
+          </div>
+        )}
         <p className="mt-3 text-xs">Die Kopplung endet automatisch mit dem Tagesabschluss. Handy-Buchungen erscheinen hier nach dem nächsten Abgleich (wenige Sekunden).</p>
       </div>
     </div>

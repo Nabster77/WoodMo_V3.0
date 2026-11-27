@@ -148,6 +148,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   // 27.11.: Handy für Pfand-Retouren koppeln (Kassenmenü); gekoppelt → Kasse gleicht alle 5 s ab.
   const [showPhonePair, setShowPhonePair] = useState(false);
   const [phonePaired, setPhonePaired] = useState(false);
+  const [phonePairedNotice, setPhonePairedNotice] = useState(false);
+  useEffect(() => {
+    if (!phonePairedNotice) return;
+    const timer = window.setTimeout(() => setPhonePairedNotice(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [phonePairedNotice]);
+  const handlePhonePaired = useCallback(() => { setShowPhonePair(false); setPhonePaired(true); setPhonePairedNotice(true); }, []);
   const [openingManagementAccess, setOpeningManagementAccess] = useState<OpeningManagementAccess>(null);
   // This is deliberately separate from `currentStaff`: opening Verwaltung
   // must never replace the person currently working at the cash register.
@@ -1238,7 +1245,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       {showPhonePair && store.activeSession && currentStaff && (
         <PhonePairDialog session={store.activeSession} staff={currentStaff}
           pfandAmount={store.pfandSettings[store.activeSession.location]}
-          onClose={() => setShowPhonePair(false)} onPairedChange={setPhonePaired} />
+          onClose={() => setShowPhonePair(false)} onPairedChange={setPhonePaired} onPaired={handlePhonePaired} />
+      )}
+      {phonePairedNotice && (
+        <div role="status" className="pointer-events-none fixed left-1/2 top-20 z-[90] -translate-x-1/2 rounded-2xl border border-emerald-400 bg-emerald-900/95 px-5 py-3 text-base font-bold text-white shadow-2xl">
+          ✓ Handy gekoppelt
+        </div>
       )}
 
       {/* Test mode banner */}

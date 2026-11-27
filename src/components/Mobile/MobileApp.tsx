@@ -95,6 +95,12 @@ function PfandMobile({ initialCode }: { initialCode: string }) {
             {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />} Koppeln
           </button>
           <ErrorLine text={error} />
+          {error && (
+            <div className="mt-3 grid grid-cols-1 gap-2">
+              <button type="button" disabled={busy} onClick={() => void claim(code)} className="gx-btn min-h-12 rounded-xl font-bold">Erneut versuchen</button>
+              <p className="gx-muted text-center text-xs">Ist der Code abgelaufen: am Tablet „Erneut versuchen“ tippen und den neuen QR-Code scannen.</p>
+            </div>
+          )}
         </div>
       </>
     );
@@ -103,7 +109,9 @@ function PfandMobile({ initialCode }: { initialCode: string }) {
 }
 
 function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => void }) {
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(0);
+  const [entry, setEntry] = useState('0');
+  const choose = (n: number) => { const v = Math.min(999, Math.max(0, n)); setCount(v); setEntry(String(v)); };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState<string | null>(null);
@@ -161,7 +169,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     const entry: Booked = { id: newMobileReceiptId(), count, total: -total, at: Date.now(), state: 'pending' };
     setBooked((list) => [entry, ...list].slice(0, 20));
     const ok = await send(entry);
-    if (ok) setCount(1);
+    if (ok) choose(0);
     setBusy(false);
   }
 
@@ -218,21 +226,24 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
       ) : (
         <div className="gx-panel rounded-3xl p-4">
           <div className="flex items-center justify-between gap-3">
-            <button type="button" aria-label="Weniger" onClick={() => setCount((c) => Math.max(1, c - 1))} className="gx-btn flex h-20 w-20 items-center justify-center rounded-2xl"><Minus className="h-8 w-8" /></button>
+            <button type="button" aria-label="Weniger" onClick={() => choose(count - 1)} className="gx-btn flex h-20 w-20 items-center justify-center rounded-2xl"><Minus className="h-8 w-8" /></button>
             <div className="text-center">
-              <input value={String(count)} inputMode="numeric" aria-label="Anzahl"
-                onChange={(e) => { const v = Number(e.target.value.replace(/\D/g, '').slice(0, 3)); setCount(Number.isFinite(v) && v > 0 ? v : 1); }}
+              <input value={entry} inputMode="numeric" aria-label="Anzahl"
+                onFocus={() => { setEntry(''); setCount(0); }}
+                onBlur={() => { if (!entry) setEntry('0'); }}
+                onChange={(e) => { const digits = e.target.value.replace(/\D/g, '').slice(0, 3); setEntry(digits); setCount(digits ? Number(digits) : 0); }}
+                placeholder="0"
                 className="w-28 bg-transparent text-center text-6xl font-black text-[color:var(--gx-text)]" />
               <p className="gx-muted text-sm font-semibold">Stück</p>
             </div>
-            <button type="button" aria-label="Mehr" onClick={() => setCount((c) => Math.min(999, c + 1))} className="gx-btn flex h-20 w-20 items-center justify-center rounded-2xl"><Plus className="h-8 w-8" /></button>
+            <button type="button" aria-label="Mehr" onClick={() => choose(count + 1)} className="gx-btn flex h-20 w-20 items-center justify-center rounded-2xl"><Plus className="h-8 w-8" /></button>
           </div>
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {[1, 2, 3, 5].map((n) => <button key={n} type="button" onClick={() => setCount(n)} className="gx-btn min-h-12 rounded-xl text-lg font-bold">{n}</button>)}
+          <div className="mt-3 grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => choose(n)} className="gx-btn min-h-12 rounded-xl text-lg font-bold">{n}</button>)}
           </div>
           <p className="mt-4 text-center text-sm font-semibold gx-muted">Auszahlen</p>
           <p className="text-center text-4xl font-black text-[color:var(--gx-ok)]">{formatCurrency(total)}</p>
-          <button type="button" disabled={busy || !online} onClick={() => void book()}
+          <button type="button" disabled={busy || !online || count < 1} onClick={() => void book()}
             className="gx-btn gx-btn-ok mt-4 flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl text-xl font-extrabold">
             {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Recycle className="h-6 w-6" />} Pfand buchen
           </button>
