@@ -58,6 +58,7 @@ import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installStyledAlert } from '@/lib/styledAlert';
+import { PhonePairDialog } from '@/components/POS/PhonePairDialog';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { serveFileTransfers } from '@/lib/fileTransfer';
 import { DIAG_EVENT, diagnosticsTick, getDeviceId, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
@@ -65,6 +66,7 @@ import {
   ShoppingCart, Settings, Receipt, Sun, Moon,
   ArrowDownCircle, ArrowUpCircle,
   FlaskConical, CheckCircle2, AlertTriangle, RefreshCw, Cloud, LayoutGrid, X, Home, LogOut, LogIn, LockKeyhole, MapPin, UserRound,
+  Smartphone,
 } from 'lucide-react';
 
 type Tab = 'pos' | 'admin' | 'journal';
@@ -142,6 +144,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const closeSyncToast = useCallback(() => setSyncedAt(null), []);
   const [syncOpen, setSyncOpen] = useState(false);
   const [currentStaff, setCurrentStaff] = useState<StaffUser | null>(null);
+  // 27.11.: Handy für Pfand-Retouren koppeln (Kassenmenü); gekoppelt → Kasse gleicht alle 5 s ab.
+  const [showPhonePair, setShowPhonePair] = useState(false);
+  const [phonePaired, setPhonePaired] = useState(false);
   const [openingManagementAccess, setOpeningManagementAccess] = useState<OpeningManagementAccess>(null);
   // This is deliberately separate from `currentStaff`: opening Verwaltung
   // must never replace the person currently working at the cash register.
@@ -386,6 +391,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   useEffect(() => installFullscreenToggle(), []);
   useEffect(() => installKeyboardOnTap(), []);
   useEffect(() => { installStyledAlert(); }, []);
+  useEffect(() => {
+    if (!phonePaired || testMode) return;
+    const timer = window.setInterval(() => { if (navigator.onLine) void syncNow(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [phonePaired, testMode, syncNow]);
   // Datei-/Ordneranfragen vom PC zügig beantworten (nur im Modus AN, nur online und sichtbar).
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1192,6 +1202,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                       <button type="button" onClick={() => chooseCashAction('correction')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <Settings className="h-5 w-5" /> Bestandskorrektur
                       </button>
+                      {!testMode && (
+                        <button type="button" onClick={() => { setMenuOpen(false); setShowPhonePair(true); }} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
+                          <Smartphone className="h-5 w-5" /> Handy koppeln{phonePaired ? ' ●' : ''}
+                        </button>
+                      )}
                     </div>
                     <button type="button" onClick={() => chooseCashAction('close')}
                       className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-amber-300 bg-gradient-to-b from-amber-500 to-amber-700 px-4 py-4 text-base font-bold text-white shadow-[0_2px_0_rgba(255,255,255,0.25)_inset,0_4px_10px_rgba(0,0,0,0.5)] transition hover:from-amber-400 active:translate-y-px active:shadow-none">
@@ -1204,6 +1219,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             </div>
           )}
         </>
+      )}
+
+      {showPhonePair && store.activeSession && currentStaff && (
+        <PhonePairDialog session={store.activeSession} staff={currentStaff}
+          pfandAmount={store.pfandSettings[store.activeSession.location]}
+          onClose={() => setShowPhonePair(false)} onPairedChange={setPhonePaired} />
       )}
 
       {/* Test mode banner */}

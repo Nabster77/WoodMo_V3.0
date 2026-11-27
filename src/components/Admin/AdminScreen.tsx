@@ -20,7 +20,8 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench, Smartphone } from 'lucide-react';
+import { mobileLink } from '@/lib/mobileApi';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -246,6 +247,15 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 <button type="button" className={adminMenuItem} aria-haspopup="dialog"
                   onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
                   <Wrench className="h-5 w-5 shrink-0" aria-hidden="true" /> Diagnose
+                </button>
+                {/* 27.11.: Link für die mobile Kassenübersicht (Handy, nur lesen, eigene Administrator-Anmeldung). */}
+                <button type="button" className={adminMenuItem}
+                  onClick={() => openAdminAction(() => {
+                    const link = mobileLink('admin');
+                    void navigator.clipboard?.writeText(link).catch(() => undefined);
+                    alert(`Mobile Kassenübersicht\n\n${link}\n\nDer Link ist in die Zwischenablage kopiert. Am Handy in Chrome öffnen und als Lesezeichen speichern. Anmeldung mit Administrator-Name und persönlichem Passwort.`);
+                  })}>
+                  <Smartphone className="h-5 w-5 shrink-0" aria-hidden="true" /> Mobile Kassenübersicht
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
