@@ -362,10 +362,21 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       // reload und update-install: nur wenn kein Benutzer angemeldet ist (auch Verwaltung zählt). Eine offene Kasse
       // ohne angemeldeten Benutzer ist erlaubt. Sonst bleibt der Befehl in der Warteschlange und wird beim
       // nächsten Durchlauf erneut geprüft. Buchungen liegen dauerhaft im Gerätespeicher, ein Neuladen verliert nichts.
-      const loggedIn = !!currentStaff; // Verwaltungs-Anmeldung ohne Kassen-Benutzer gilt als abgemeldet
+      let loggedIn = !!currentStaff; // Verwaltungs-Anmeldung ohne Kassen-Benutzer gilt als abgemeldet
       const idle = !updatePhase && !updateBusy.current;
+      // 27.11.: Steht der angemeldete Benutzer auf dem Startbildschirm (kein Kassenfenster offen), meldet der Fernbefehl ihn selbst ab,
+      // damit das Update nicht an einer vergessenen Anmeldung hängt. Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt.
+      // Steht er noch in Kasse/Verwaltung/Journal, wartet der Befehl wie bisher.
+      if (loggedIn && idle && homeVisible && currentStaff) {
+        recordStaff('logout', currentStaff);
+        setCurrentStaff(null);
+        setManagementAdministrator(null);
+        setAdminUnlocked(false);
+        resetJournalSelection();
+        loggedIn = false;
+      }
       if (loggedIn || !idle) {
-        return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet, wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
+        return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet (nicht auf dem Startbildschirm), wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
       }
       if (command === 'reload') {
         window.setTimeout(() => window.location.reload(), 2500);
