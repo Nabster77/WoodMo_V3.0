@@ -141,7 +141,7 @@ export async function archiveFolderStatus(): Promise<ArchiveFolderStatus> {
     return await Promise.race([
       probeArchiveFolder(),
       new Promise<ArchiveFolderStatus>(resolve => {
-        timeout = window.setTimeout(() => resolve('missing'), 4000);
+        timeout = window.setTimeout(() => resolve('missing'), 10_000);
       }),
     ]);
   } finally {
