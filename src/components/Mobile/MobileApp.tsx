@@ -366,15 +366,13 @@ function AdminLoginForm({ onLogin }: { onLogin: (l: AdminLogin) => void }) {
       <Header title="Mobile Kassenübersicht" sub="Nur für Administratoren · nur lesen" />
       <form className="gx-panel space-y-3 rounded-3xl p-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         {names.length > 0 ? (
-          <div>
-            <p className="text-sm font-semibold gx-muted">Administrator wählen</p>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {names.map((n) => (
-                <button key={n} type="button" onClick={() => setName(n)} aria-pressed={name === n}
-                  className={`gx-btn min-h-14 rounded-xl text-base font-extrabold ${name === n ? 'gx-btn-pri' : ''}`}>{n}</button>
-              ))}
-            </div>
-          </div>
+          <label className="block text-sm font-semibold gx-muted">Administrator wählen
+            <select value={name} onChange={(e) => setName(e.target.value)} aria-label="Administrator wählen"
+              className="mt-1 w-full rounded-xl border border-[color:var(--gx-edge)] bg-[color:var(--gx-field)] px-3 py-3 text-lg font-bold text-[color:var(--gx-text)]">
+              <option value="">Bitte wählen …</option>
+              {names.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
         ) : (
         <label className="block text-sm font-semibold gx-muted">Administrator-Name
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="username"
