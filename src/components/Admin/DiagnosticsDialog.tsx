@@ -253,7 +253,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                     </div>
                   );
                 })}
-                {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
+                {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}{row.command_result && row.command_result.startsWith('Wartet') ? ' – ' + row.command_result : ' – das Gerät fragt etwa alle 30 Sekunden nach.'}</p>}
                 {openRows.has(row.device_id) && row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
                 {!own && (
                   <div className="flex flex-wrap gap-2">
@@ -281,6 +281,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(async () => {
                           // Schon auf der aktuellen Version: nichts senden, kein Update und kein Neustart nötig.
                           if (command.id === 'update-install' && row.app_version === APP_VERSION) throw new Error(`${row.label || 'Gerät'} läuft schon auf Version ${APP_VERSION}. Kein Update und kein Neustart nötig.`);
+                          if (row.pending_command && row.pending_command !== command.id) throw new Error(`${row.label || 'Gerät'} hat noch einen wartenden Befehl (${COMMANDS.find((c) => c.id === row.pending_command)?.label}). Bitte warten, bis er ausgeführt ist.`);
                           await sendRemoteCommand(row.device_id, command.id, password, false);
                         }, `${command.label} an ${row.label || 'Gerät'} gesendet.`, true)}
                         className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">{command.label}</button>
