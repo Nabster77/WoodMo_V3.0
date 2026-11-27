@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
+  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices, cleanupStaleDevices,
   resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
@@ -118,6 +118,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
     try {
       await verifyDiagnosticsPassword(password);
       setUnlocked(true);
+      try { await cleanupStaleDevices(password); await refresh(); } catch { /* Anzeige blendet Veraltetes ohnehin aus */ }
     } catch (error) {
       setPassword('');
       setMessage({ ok: false, text: error instanceof Error ? error.message : 'Passwort nicht geprüft.' });
@@ -220,8 +221,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
 
         <div className="space-y-2">
           <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Geräte</h3>
-          {rows.filter((row) => row.device_id !== myId).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät gemeldet.</p>}
-          {rows.filter((row) => row.device_id !== myId).map((row) => {
+          {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät aktiv.</p>}
+          {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).map((row) => {
             const seen = ago(row.reported_at);
             const own = row.device_id === myId;
             return (
@@ -290,7 +291,15 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
               </div>
             );
           })}
-          <button type="button" disabled={busy} onClick={() => void refresh()}
+          {(() => {
+            const hidden = rows.filter((row) => row.device_id !== myId && !ago(row.reported_at).online).length;
+            return hidden > 0 ? <p className="text-xs text-slate-500">{hidden} nicht aktive{hidden === 1 ? 's Gerät' : ' Geräte'} ausgeblendet. „Aktualisieren“ entfernt Einträge, die seit über 24 Stunden nichts gemeldet haben.</p> : null;
+          })()}
+          <button type="button" disabled={busy}
+            onClick={() => void (async () => {
+              if (unlocked && password.trim()) { try { await cleanupStaleDevices(password); } catch { /* nur Anzeige */ } }
+              await refresh();
+            })()}
             className="flex min-h-10 items-center gap-1.5 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Aktualisieren
           </button>
