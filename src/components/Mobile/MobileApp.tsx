@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff, X } from 'lucide-react';
+import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, ShieldCheck, WifiOff } from 'lucide-react';
 import { callMobile, MobileApiError, newMobileReceiptId } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
 import { APP_VERSION } from '@/lib/appVersion';
@@ -245,11 +245,10 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
           <h1 className="gx-text truncate text-xl font-extrabold">Pfand-Retoure</h1>
           <p className="gx-muted truncate text-xs font-semibold">{pairing.staff_name} · Handy gekoppelt</p>
         </div>
-        {!ended && <button type="button" onClick={() => setMinimized(true)} aria-label="Minimieren (Kopplung bleibt)" title="Minimieren – Kopplung bleibt"
-          className="gx-btn flex h-12 w-12 items-center justify-center rounded-xl"><ChevronDown className="h-6 w-6" /></button>}
-        {!ended && <button type="button" onClick={() => setConfirmEnd(true)} aria-label="Kopplung beenden" title="Kopplung beenden"
-          className="gx-btn gx-btn-danger flex h-12 w-12 items-center justify-center rounded-xl"><X className="h-6 w-6" /></button>}
+        {!ended && <button type="button" onClick={() => setMinimized(true)} aria-label="Minimieren (Kopplung bleibt)"
+          className="gx-btn flex min-h-12 items-center justify-center gap-1 rounded-xl px-3 text-sm font-bold"><ChevronDown className="h-5 w-5" /> Minimieren</button>}
       </div>
+      {!ended && <div className="mb-3"><SwipeConfirm compact direction="right" tone="danger" label="Kopplung lösen" disabled={busy} onConfirm={() => setConfirmEnd(true)} /></div>}
       {confirmEnd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true">
           <div className="gx-panel w-full max-w-sm rounded-3xl p-5">
