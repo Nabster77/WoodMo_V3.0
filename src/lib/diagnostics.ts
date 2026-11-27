@@ -215,6 +215,12 @@ export async function sendRemoteCommand(deviceId: string, command: DiagCommand, 
   await invokeGateway({ action: 'command', device_id: deviceId, command, password, force });
 }
 
+/** Entfernt Geräteeinträge, die seit über 24 Stunden nichts gemeldet haben (nur Diagnose-Tabelle). */
+export async function cleanupStaleDevices(password: string): Promise<number> {
+  const result = await invokeGateway({ action: 'cleanup', password });
+  return typeof result.removed === 'number' ? result.removed : 0;
+}
+
 /** Prüft nur das Passwort (serverseitig), ändert nichts. */
 export async function verifyDiagnosticsPassword(password: string): Promise<void> {
   await invokeGateway({ action: 'verify', password });

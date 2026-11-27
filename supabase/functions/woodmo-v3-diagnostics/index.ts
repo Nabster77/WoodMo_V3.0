@@ -85,6 +85,14 @@ Deno.serve(async request => {
   }
   const action = payload.action;
   if (action === 'verify') return reply(200, { ok: true });
+  if (action === 'cleanup') {
+    // Nur offensichtlich veraltete Geräteeinträge (seit über 24 h keine Meldung). Buchungen, Kassensitzungen, Archive bleiben unberührt.
+    const cutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const { data: removed, error } = await service.from('pos_device_diagnostics').delete()
+      .or(`reported_at.lt.${cutoff},reported_at.is.null`).select('device_id');
+    if (error) return reply(409, { error: error.message || 'Aufräumen nicht möglich.' });
+    return reply(200, { removed: removed?.length ?? 0 });
+  }
   const deviceId = payload.device_id;
   if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
     return reply(400, { error: 'Gerät fehlt oder ungültig.' });
