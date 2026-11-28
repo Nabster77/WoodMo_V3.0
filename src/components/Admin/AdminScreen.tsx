@@ -1397,7 +1397,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
           </button>
           {salesOpen && txToday.length > 0 && (
             <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-              {txToday.map((tx) => (
+              {[...txToday].sort((a, b) => b.timestamp - a.timestamp).map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Clock className="h-3 w-3" />
@@ -1635,7 +1635,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">Anfangsbestandskorrekturen</h3>
                       <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Bereits im angezeigten Anfangsbestand enthalten; wird nicht erneut abgezogen oder addiert.</p>
                       <div className="mt-2 space-y-2">
-                        {[...session.corrections].sort((a, b) => a.timestamp - b.timestamp).map((correction) => {
+                        {[...session.corrections].sort((a, b) => b.timestamp - a.timestamp).map((correction) => {
                           const difference = Math.round((correction.newAmount - correction.oldAmount) * 100) / 100;
                           return <div key={correction.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm dark:border-amber-800 dark:bg-gray-900/40">
                             <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(correction.oldAmount)} → {formatCurrency(correction.newAmount)} <span className={difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>({difference > 0 ? '+' : ''}{formatCurrency(difference)})</span></p>
@@ -1717,7 +1717,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 <details className="group">
                   <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-                    {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
+                    {[...transactions].sort((a, b) => b.timestamp - a.timestamp).map((tx) => (
                       <SaleRow key={tx.id} tx={tx} />
                     ))}
                   </div>
