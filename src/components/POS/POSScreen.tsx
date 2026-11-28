@@ -343,7 +343,11 @@ export function POSScreen({
   }, [activeSession?.id]);
 
   useEffect(() => {
-    if (!headerAction || !activeSession || !currentStaff) return;
+    if (!headerAction) return;
+    // Aktion (z. B. Tagesabschluss aus dem Reset-Dialog) ohne angemeldeten Mitarbeiter:
+    // Anmeldefenster zeigen; die Aktion bleibt vorgemerkt und startet nach der Anmeldung.
+    if (activeSession && !currentStaff) { setShowOpenDialog(true); return; }
+    if (!activeSession || !currentStaff) return;
     if (headerAction === 'deposit' || headerAction === 'withdrawal') {
       setCashEntryType(headerAction);
     } else if (headerAction === 'pfand') {
@@ -809,7 +813,7 @@ export function POSScreen({
 
       {/* Dialogs */}
       {showOpenDialog && (
-        <CashOpeningDialog existingSession={activeSession} openSessions={openSessionsByLocation} onContinueAt={(loc) => { onContinueSessionAt?.(loc); setShowOpenDialog(false); }} onSave={async (loc, bal) => { if (!activeSession) { const ok = await onOpenCash(loc, bal); if (!ok) return false; } setShowOpenDialog(false); return true; }} onClose={() => { setShowOpenDialog(false); onHome?.(); }} defaultLocation={currentLocation} staffUsers={staffUsers} currentStaff={currentStaff} online={online} lastStaffId={lastStaffId} onStaffAuthenticated={onStaffAuthenticated} onSetInitialCredentials={onSetInitialCredentials} onConfigureSecurity={onConfigureStaffSecurity} onResetStaffPassword={onResetStaffPassword} openingBalanceSuggestions={openingBalanceSuggestions} openingBalanceDates={openingBalanceDates} />
+        <CashOpeningDialog existingSession={activeSession} openSessions={openSessionsByLocation} onContinueAt={(loc) => { onContinueSessionAt?.(loc); setShowOpenDialog(false); }} onSave={async (loc, bal) => { if (!activeSession) { const ok = await onOpenCash(loc, bal); if (!ok) return false; } setShowOpenDialog(false); return true; }} onClose={() => { setShowOpenDialog(false); onHeaderActionConsumed?.(); onHome?.(); }} defaultLocation={currentLocation} staffUsers={staffUsers} currentStaff={currentStaff} online={online} lastStaffId={lastStaffId} onStaffAuthenticated={onStaffAuthenticated} onSetInitialCredentials={onSetInitialCredentials} onConfigureSecurity={onConfigureStaffSecurity} onResetStaffPassword={onResetStaffPassword} openingBalanceSuggestions={openingBalanceSuggestions} openingBalanceDates={openingBalanceDates} />
       )}
       {showCorrection && activeSession && (
         <CashCorrectionDialog session={activeSession} currentCashBalance={currentCashBalance} onSave={(amt, reason) => { onCorrectOpening(amt, reason); setShowCorrection(false); }} onClose={() => setShowCorrection(false)} />
