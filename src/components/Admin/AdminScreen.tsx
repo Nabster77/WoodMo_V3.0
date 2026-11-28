@@ -65,6 +65,8 @@ interface Props {
   onToggleMode?: () => void;
   onExportBackup?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onImportBackup?: (file: File) => void;
+  /** Führt zum Tagesabschluss der offenen Kasse am Standort (Weg B beim Zurücksetzen). */
+  onCloseOpenCash?: (location: string) => void;
   resetQuarantineCount?: number;
   onExportResetQuarantine?: () => Promise<void>;
   onClearResetQuarantine?: () => Promise<void>;
@@ -122,7 +124,7 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
   const [tab, setTab] = useState<keyof typeof ADMIN_SECTION_TITLES>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
@@ -365,6 +367,8 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
           sessionCount={props.cashSessions.length}
           openSessionCount={props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).length}
           testMode={testMode}
+          openLocations={[...new Set(props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).map((session) => session.location))]}
+          onCloseOpenCash={onCloseOpenCash ? (location) => { setShowReset(false); onCloseOpenCash(location); } : undefined}
           onCancel={() => setShowReset(false)}
           onConfirm={async (adminPassword) => { await onResetAllData?.(adminPassword); setShowReset(false); }}
         />
@@ -1762,7 +1766,9 @@ function SaleRow({ tx }: { tx: Transaction }) {
 
 // ---- Reset / Backup / Import dialogs ----
 
-function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, testMode }: {
+function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, openLocations, onCloseOpenCash, testMode }: {
+  openLocations: string[];
+  onCloseOpenCash?: (location: string) => void;
   onExport?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onCheck?: (progress: (result: ResetSafetyResult) => void) => Promise<ResetSafetyResult>;
   onCancel: () => void;
@@ -1956,6 +1962,21 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
 
         {testMode && openSessionCount > 0 && (
           <p className="mb-3 text-xs text-amber-700">Im Testmodus werden nur lokale Testdaten entfernt.</p>
+        )}
+        {!testMode && completed && report?.resetAllowed === false && openLocations.length > 0 && onCloseOpenCash && (
+          <div className="mb-3 rounded-xl border border-blue-400/60 p-3 text-sm text-gray-800 dark:text-gray-100">
+            <p className="mb-2 font-semibold">Offene Kassen zuerst abschließen:</p>
+            <div className="flex flex-col gap-2">
+              {openLocations.map(location => (
+                <button key={location} type="button" disabled={busy}
+                  onClick={() => onCloseOpenCash(location)}
+                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                  Kasse {location} jetzt abschließen
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">Nach dem Abschluss: Verwaltung → Buchungen zurücksetzen. Das Backup startet dann automatisch.</p>
+          </div>
         )}
         {error && <p role="alert" className="mb-3 rounded-xl border border-red-300 p-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
         {notice && <p role="status" className="mb-3 rounded-xl border border-emerald-400/60 p-2 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}

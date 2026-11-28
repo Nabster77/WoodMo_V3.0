@@ -1573,6 +1573,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               administratorTools={managementAdministrator ? <><ManagerPasswordPanel online={online} hasAdministrator={staff.users.some((user) => user.role === 'administrator' && user.active && !!user.passwordHash)} onChange={(currentPassword, nextPassword) => changeManagerPassword(currentPassword, nextPassword, true)} /><CloudPasswordPanel onChanged={() => { saveJSON(STORAGE_KEYS.rootPasswordChanged, true); saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); }} /></> : undefined}
               testMode={testMode}
               onToggleMode={() => setModeConfirm(testMode ? 'to-active' : 'to-test')}
+              onCloseOpenCash={(location) => { store.switchLocation(location as Location); chooseCashAction('close'); }}
               onExportBackup={async () => {
                 try {
                 // Folder access must be requested while the tap is still active.
