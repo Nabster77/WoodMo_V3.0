@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices, cleanupStaleDevices,
+  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, hasDeviceLabel, getDiagMode, listDevices, cleanupStaleDevices,
   resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
@@ -125,7 +125,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
     } finally { setBusy(false); }
   }
 
-  async function guarded(action: () => Promise<void>, okText: string, needPassword: boolean) {
+  async function guarded(action: () => Promise<void>, okText: string, needPassword: boolean, needName = false) {
+    if (needName && !hasDeviceLabel()) { setMessage({ ok: false, text: 'Bitte zuerst einen Gerätenamen eintragen (z. B. „Tablet Bregenz“) und auf Speichern drücken.' }); return; }
     if (needPassword && !password.trim()) { setMessage({ ok: false, text: 'Bitte zuerst das Administrator- oder Verwaltungspasswort eingeben.' }); return; }
     setBusy(true); setMessage(null);
     try {
@@ -182,7 +183,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
         <div className="space-y-2 rounded-xl border border-slate-300 p-3 dark:border-slate-700">
           <p className="text-sm font-bold">Dieses Gerät ist <span className="text-emerald-600">{MODE_TEXT[mode]}</span></p>
           <div>
-            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename</label>
+            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename{!hasDeviceLabel() ? ' – bitte vergeben (z. B. „Tablet Bregenz“)' : ''}</label>
             <div className="mt-1 flex gap-2">
               <input id="diag-device-name" value={label} maxLength={40} onChange={(event) => setLabel(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Enter') { setDeviceLabel(label); setMessage({ ok: true, text: 'Gerätename gespeichert.' }); } }}
@@ -208,8 +209,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           )}
           <div className="flex gap-2">
             {modeButton('off', 'AUS', () => void guarded(() => setLocalMode('off', location), 'Diagnose ist aus.', false))}
-            {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false))}
-            {modeButton('on', 'AN', () => void guarded(() => enableOwnDevice(password, location), 'Diagnose ist an.', true))}
+            {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false, true))}
+            {modeButton('on', 'AN', () => void guarded(() => enableOwnDevice(password, location), 'Diagnose ist an.', true, true))}
           </div>
         </div>
 
@@ -319,6 +320,11 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
             })()}
             className="flex min-h-10 items-center gap-1.5 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Aktualisieren
+          </button>
+          <button type="button" disabled={busy}
+            onClick={() => void guarded(async () => { const removed = await cleanupStaleDevices(password); setMessage({ ok: true, text: removed > 0 ? `${removed} alte Einträge entfernt.` : 'Keine alten Einträge vorhanden.' }); }, 'Alte Einträge geprüft.', true)}
+            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
+            Alte Einträge jetzt entfernen
           </button>
         </div>
       </section>

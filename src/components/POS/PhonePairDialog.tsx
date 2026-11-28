@@ -16,7 +16,7 @@ interface Props {
   onPaired: () => void;
 }
 
-interface Pairing { staff_name: string; claimed_at: string | null; last_used_at: string | null }
+interface Pairing { id?: string; staff_name: string; claimed_at: string | null; last_used_at: string | null }
 
 /** 27.11.: Handy für Pfand-Retouren an die offene Kasse koppeln. Bucht nur über die Cloud-Prüfung. */
 export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPairedChange, onPaired }: Props) {
@@ -58,11 +58,12 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
     finally { setBusy(false); }
   }
 
-  async function revoke() {
+  async function revoke(pairingId?: string) {
     setBusy(true); setError(null);
     try {
-      await callMobileAsTablet('pair_revoke', { session_id: session.id });
-      setCode(null); setPairings([]); onPairedChange(false);
+      await callMobileAsTablet('pair_revoke', pairingId ? { session_id: session.id, pairing_id: pairingId } : { session_id: session.id });
+      if (pairingId) await refresh();
+      else { setCode(null); setPairings([]); onPairedChange(false); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
@@ -106,10 +107,11 @@ export function PhonePairDialog({ session, staff, pfandAmount, onClose, onPaired
         )}
         <p className="mb-1 text-sm font-bold">Gekoppelte Handys: {claimed.length}</p>
         <ul className="mb-3 space-y-1 text-xs">
-          {claimed.map((p, i) => <li key={i}>Handy {i + 1} · gekoppelt {new Date(p.claimed_at!).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}{p.last_used_at ? ` · letzte Buchung ${new Date(p.last_used_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : ''}</li>)}
+          {claimed.map((p, i) => <li key={p.id ?? i} className="flex items-center gap-2"><span className="min-w-0 flex-1">Handy {i + 1} · gekoppelt {new Date(p.claimed_at!).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}{p.last_used_at ? ` · letzte Buchung ${new Date(p.last_used_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            {p.id && <button type="button" disabled={busy} onClick={() => void revoke(p.id)} className="min-h-9 shrink-0 rounded-lg border px-3 text-xs font-bold">Trennen</button>}</li>)}
         </ul>
         {(claimed.length > 0 || code) && (
-          <button type="button" disabled={busy} onClick={() => void revoke()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold">
+          <button type="button" disabled={busy} onClick={() => void revoke(undefined)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold">
             <Unlink className="h-4 w-4" /> Alle Handys dieser Kasse entkoppeln
           </button>
         )}

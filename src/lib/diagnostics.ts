@@ -81,6 +81,9 @@ export function defaultDeviceLabel(): string {
 export function getDeviceLabel(): string {
   return (readStore(LABEL_KEY) ?? '').trim() || defaultDeviceLabel();
 }
+export function hasDeviceLabel(): boolean {
+  return (readStore(LABEL_KEY) ?? '').trim().length > 0;
+}
 export function setDeviceLabel(label: string): void {
   writeStore(LABEL_KEY, label.trim().slice(0, 40));
   notify();

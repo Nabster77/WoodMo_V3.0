@@ -114,7 +114,9 @@ Deno.serve(async request => {
     const sessionId = payload.session_id;
     if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 128) return reply(400, { error: 'Kassensitzung fehlt.' });
     if (action === 'pair_revoke') {
-      await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
+      let revoke = db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
+      if (typeof payload.pairing_id === 'string' && payload.pairing_id) revoke = revoke.eq('id', payload.pairing_id); // einzelnes Handy trennen
+      await revoke;
       return reply(200, { ok: true });
     }
     if (action === 'pair_heartbeat') {
@@ -134,7 +136,7 @@ Deno.serve(async request => {
         await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
         return reply(200, { pairings: [] });
       }
-      const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at, tablet_seen_at, phone_seen_at')
+      const { data } = await db.from('pos_mobile_pairings').select('id, staff_name, claimed_at, last_used_at, code_expires_at, tablet_seen_at, phone_seen_at')
         .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).gt('expires_at', new Date().toISOString()).order('claimed_at', { ascending: true });
       const active = (data ?? []).filter(row => row.claimed_at
         ? phoneAlive(row) && !(row.tablet_seen_at && Date.now() - new Date(row.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000)
