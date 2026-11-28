@@ -1628,8 +1628,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const savedAs = await saveBackupFile(backupTarget, blob, `kasse-backup-${formatDateISO(Date.now())}.json`);
                 if (backupTarget.mode === 'folder') {
-                  alert(`Backup gespeichert: ${savedAs}`);
+                  return { mode: 'folder' as const, savedAs };
                 }
+                return { mode: 'downloads' as const, savedAs };
                 } catch (error) {
                   // Keep the existing error dialog and propagate failure to the
                   // reset checklist: a failed download must never become green.

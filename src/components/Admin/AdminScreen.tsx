@@ -63,7 +63,7 @@ interface Props {
   onDeviceSetup?: () => void;
   testMode?: boolean;
   onToggleMode?: () => void;
-  onExportBackup?: () => void | Promise<void>;
+  onExportBackup?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onImportBackup?: (file: File) => void;
   resetQuarantineCount?: number;
   onExportResetQuarantine?: () => Promise<void>;
@@ -281,7 +281,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   </button>
                 )}
                 {onExportBackup && (
-                  <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void onExportBackup(); })}>
+                  <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void (async () => { const saved = await onExportBackup(); if (saved && saved.mode === 'folder') alert(`Backup gespeichert: ${saved.savedAs}`); })(); })}>
                     <Download className="h-5 w-5 shrink-0" /> Backup exportieren
                   </button>
                 )}
@@ -1763,7 +1763,7 @@ function SaleRow({ tx }: { tx: Transaction }) {
 // ---- Reset / Backup / Import dialogs ----
 
 function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, testMode }: {
-  onExport?: () => void | Promise<void>;
+  onExport?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onCheck?: (progress: (result: ResetSafetyResult) => void) => Promise<ResetSafetyResult>;
   onCancel: () => void;
   onConfirm: (adminPassword: string) => Promise<void>;
@@ -1785,6 +1785,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
   const [notice, setNotice] = useState<string | null>(null);
   const checkRef = useRef(onCheck);
   checkRef.current = onCheck;
+  const autoBackupTried = useRef(false);
 
   // First opening performs a real scan; the dialog must be reopened to scan again.
   useEffect(() => {
@@ -1807,7 +1808,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
     setBusy(true);
     setError(null);
     try {
-            await onExport();
+      const exported = await onExport();
       setNotice(null);
       // An open cash register does not block the backup itself (22.11.2026):
       // the file is complete. Only the reset needs every register closed, so
@@ -1833,7 +1834,14 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
       // A download request is NOT proof that the file was saved. The user
       // must expressly tick the confirmation once the file is on disk.
       setBackupRequested(true);
-      setSavedBackup(false);
+      // Im Ordner-Modus ist das Schreiben der Datei selbst der Nachweis (Dateiname
+      // wurde vom Ordner bestätigt). Nur beim normalen Download bleibt der Haken manuell.
+      if (exported && exported.mode === 'folder') {
+        setSavedBackup(true);
+        setNotice('Backup gespeichert: ' + exported.savedAs);
+      } else {
+        setSavedBackup(false);
+      }
     } catch (cause) {
             setBackupRequested(false);
       setSavedBackup(false);
@@ -1844,6 +1852,17 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
       setBusy(false);
     }
   }
+
+  // Automatisch sichern, sobald die Prüfung bestanden ist. Es wird immer eine
+  // frische Sicherung erstellt (nie eine alte Datei wiederverwendet): sie ist
+  // dadurch sicher zum aktuellen Cloud-Stand passend. Schlägt es fehl (z. B.
+  // Ordnerzugriff nur per Tippen), bleibt der Button zum manuellen Sichern.
+  useEffect(() => {
+    if (testMode || autoBackupTried.current || !completed || !canBackup || !report?.resetAllowed || !onExport || busy) return;
+    autoBackupTried.current = true;
+    void saveBackup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completed, canBackup, report?.resetAllowed]);
 
   async function confirm() {
     if (!confirmed || busy || checking || !canReset || (!testMode && !adminPassword.trim())) return;
