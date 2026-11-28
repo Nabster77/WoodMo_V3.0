@@ -147,6 +147,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const closeSyncToast = useCallback(() => setSyncedAt(null), []);
   const [syncOpen, setSyncOpen] = useState(false);
   const [currentStaff, setCurrentStaff] = useState<StaffUser | null>(null);
+  // Update-Hinweis und -Ablauf: Startseite ODER Kassenansicht, solange niemand angemeldet ist (Anmeldung blendet ihn aus).
+  const updateSafeView = homeVisible || tab === 'pos';
   // 27.11.: Handy für Pfand-Retouren koppeln (Kassenmenü); gekoppelt → Kasse gleicht alle 5 s ab.
   const pairStartupDone = useRef(false);
   const [showPhonePair, setShowPhonePair] = useState(false);
@@ -295,7 +297,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   useEffect(() => {
     // Neue Version tatsächlich installiert (Prüfung findet kein Update mehr): Erinnerung löschen.
     if (approvedActivation() || updatePhase !== null || updateBusy.current || autoInstallPending) return; // Installation läuft: pausieren
-    if (!homeVisible || currentStaff || document.visibilityState === 'hidden') return;
+    if (!updateSafeView || currentStaff || document.visibilityState === 'hidden') return;
     const later = readLater();
     if (later && Date.now() - later.at < REMIND_MS) return;
     let active = true;
@@ -310,7 +312,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     }).catch(() => undefined);
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Takt, Startbildschirm und Phase genügen
-  }, [reminderTick, homeVisible, currentStaff, updatePhase, autoInstallPending]);
+  }, [reminderTick, updateSafeView, currentStaff, updatePhase, autoInstallPending]);
   function remindLater() {
     const c = candidateRef.current;
     try { if (c) localStorage.setItem(UPDATE_LATER_KEY, JSON.stringify({ id: candidateId(c), at: Date.now() })); } catch { /* ignore */ }
@@ -319,12 +321,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   // 24.11.: Bei jeder Rückkehr zum Startbildschirm sofort online prüfen,
   // ob eine neue Version bereitsteht (Dialog/Erinnerung folgen den Regeln oben).
   useEffect(() => {
-    if (!homeVisible || currentStaff || approvedActivation()) return;
+    if (!updateSafeView || currentStaff || approvedActivation()) return;
     if (document.visibilityState === 'hidden') return;
     void checkForUpdate(!updateDeferred.current)
       .then(() => setReminderTick((n) => n + 1))
       .catch(() => undefined); // offline: installierte Version läuft weiter
-  }, [homeVisible, currentStaff, checkForUpdate]);
+  }, [updateSafeView, currentStaff, checkForUpdate]);
 
   async function openUpdateFromHome() {
     updateDeferred.current = false;
@@ -422,12 +424,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const forceUpdateRef = useRef(false);
   useEffect(() => {
-    if (!forceUpdateRef.current || !homeVisible || currentStaff || !candidate || updatePhase || updateBusy.current) return;
+    if (!forceUpdateRef.current || !updateSafeView || currentStaff || !candidate || updatePhase || updateBusy.current) return;
     forceUpdateRef.current = false;
     autoUpdate.current = true;
     void prepareUpdate();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Lage-Wechsel
-  }, [homeVisible, currentStaff, candidate, updatePhase]);
+  }, [updateSafeView, currentStaff, candidate, updatePhase]);
   useEffect(() => installFullscreenToggle(), []);
   useEffect(() => installKeyboardOnTap(), []);
   useEffect(() => { installStyledAlert(); }, []);
@@ -509,15 +511,15 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const autoUpdate = useRef(false);
   useEffect(() => {
     if (!autoUpdate.current || updateBusy.current) return;
-    if (!homeVisible || currentStaff) { autoUpdate.current = false; return; }
+    if (!updateSafeView || currentStaff) { autoUpdate.current = false; return; }
     if (updatePhase === 'prepared' && !updateError) void continueUpdate();
     else if (updatePhase === 'synced' && !updateError) void finishUpdate();
     else if (updatePhase === 'sync-error' || updatePhase === 'offer' || updatePhase === null) autoUpdate.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
-  }, [updatePhase, updateError, homeVisible, currentStaff]);
+  }, [updatePhase, updateError, updateSafeView, currentStaff]);
   useEffect(() => {
     if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
-    if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
+    if (!updateSafeView || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
     setAutoInstallPending(false);
     autoChecking.current = true;
     // Automatisch nur, wenn alle Kassen abgeschlossen sind; sonst wartet das Update auf „Jetzt installieren“.
@@ -527,7 +529,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       void prepareUpdate();
     }).finally(() => { autoChecking.current = false; setReminderTick((n) => n + 1); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
-  }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
+  }, [autoInstallPending, candidate, updatePhase, updateSafeView, currentStaff, testMode]);
 
   // Sicherheitsprüfung 23.11.: Update nur, wenn in der Cloud ALLE Kassen endgültig
   // abgeschlossen sind. Ohne Cloud-Antwort gilt das Update als nicht freigegeben.
@@ -546,7 +548,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   }
 
   async function prepareUpdate() {
-    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    if (!candidate || updateBusy.current || !updateSafeView || currentStaff) return;
     updateBusy.current = true;
     setUpdateError(null);
     setUpdatePhase('preparing');
@@ -614,7 +616,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   }
 
   async function finishUpdate() {
-    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    if (!candidate || updateBusy.current || !updateSafeView || currentStaff) return;
     updateBusy.current = true;
     setUpdateError(null);
     setUpdatePhase('activating');
@@ -1844,7 +1846,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
         />
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
-      {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
+      {updateSafeView && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
         <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
           notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
           onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}
