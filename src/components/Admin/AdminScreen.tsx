@@ -67,6 +67,8 @@ interface Props {
   onImportBackup?: (file: File) => void;
   /** Führt zum Tagesabschluss der offenen Kasse am Standort (Weg B beim Zurücksetzen). */
   onCloseOpenCash?: (location: string) => void;
+  /** Info-Fenster: Update prüfen; gibt es eins, melden sich alle ab und die App installiert es und startet neu. */
+  onUpdateNow?: () => void;
   /** Meldet einen Mitarbeiter in einer offenen Kassensitzung ab (nur Login-Status, keine Buchung). */
   onLogoutStaff?: (sessionId: string, staffId: string, staffName: string) => void;
   resetQuarantineCount?: number;
@@ -126,7 +128,7 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onLogoutStaff, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onLogoutStaff, onUpdateNow, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
   const [tab, setTab] = useState<keyof typeof ADMIN_SECTION_TITLES>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
@@ -349,6 +351,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             onClick={event => event.stopPropagation()}>
             <h2 id="woodmo-version-info" className="text-xl font-bold">Info</h2>
             <ReleaseSummary />
+            {onUpdateNow && (
+              <button type="button" onClick={() => { saveJSON(READ_RELEASE_KEY, RELEASE_ID); setReadRelease(RELEASE_ID); setShowReleaseInfo(false); onUpdateNow(); }}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/70 bg-cyan-950/30 px-4 font-semibold text-cyan-200 hover:bg-cyan-900/50">
+                <RotateCcw className="h-4 w-4" aria-hidden="true" /> Auf neue Version prüfen / Aktualisieren
+              </button>
+            )}
             <button type="button" autoFocus onClick={closeReleaseInfo}
               className="ml-auto block min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white dark:bg-white dark:text-slate-900">
               Schließen

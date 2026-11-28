@@ -335,6 +335,20 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     }
   }
 
+  // 28.11.: „Auf neue Version prüfen / Aktualisieren“ im Info-Fenster (Administrator): gibt es ein Update, melden sich alle
+  // an diesem Gerät ab (Kasse und Buchungen bleiben), die App installiert es und startet neu bis zum Startbildschirm.
+  async function updateNowFromInfo() {
+    updateDeferred.current = false;
+    try {
+      const update = candidateRef.current ?? await checkForUpdate(false);
+      if (!update) { alert(`Version ${APP_VERSION} ist aktuell. Kein Update vorhanden.`); return; }
+      forceUpdateRef.current = true;
+      goHome();
+    } catch (error) {
+      alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
+    }
+  }
+
   // Geräte-Diagnose (25.11.): Lebenszeichen/Statusbericht und Fernbefehle, nur wenn am Gerät
   // BEREIT/AN gewählt ist. Befehle laufen nur im sicheren Zustand (Startbildschirm, niemand angemeldet,
   // nichts im Upload) und benutzen denselben Update-Ablauf wie „Jetzt installieren“.
@@ -1574,7 +1588,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               administratorTools={managementAdministrator ? <><ManagerPasswordPanel online={online} hasAdministrator={staff.users.some((user) => user.role === 'administrator' && user.active && !!user.passwordHash)} onChange={(currentPassword, nextPassword) => changeManagerPassword(currentPassword, nextPassword, true)} /><CloudPasswordPanel onChanged={() => { saveJSON(STORAGE_KEYS.rootPasswordChanged, true); saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); }} /></> : undefined}
               testMode={testMode}
               onToggleMode={() => setModeConfirm(testMode ? 'to-active' : 'to-test')}
-              onLogoutStaff={(sessionId, staffId, staffName) => store.recordStaffActivity(sessionId, {
+              onUpdateNow={() => void updateNowFromInfo()}
+            onLogoutStaff={(sessionId, staffId, staffName) => store.recordStaffActivity(sessionId, {
                 id: `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
                 type: 'logout', staffId, staffName, timestamp: Date.now(),
               })}
