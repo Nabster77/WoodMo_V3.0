@@ -372,7 +372,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
           openLocations={[...new Set(props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).map((session) => session.location))]}
           onCloseOpenCash={onCloseOpenCash ? (location) => { setShowReset(false); onCloseOpenCash(location); } : undefined}
           loggedInStaff={props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt)
-            .flatMap((session) => (session.staffLoginIntervals ?? []).filter((interval) => interval.logoutAt === undefined)
+            .flatMap((session) => (session.staffLoginIntervals ?? []).filter((interval) => interval.logoutAt === undefined && interval.staffId !== props.currentStaff?.id)
               .map((interval) => ({ sessionId: session.id, location: session.location, staffId: interval.staffId, staffName: interval.staffName })))}
           onLogoutStaff={onLogoutStaff}
           onCancel={() => setShowReset(false)}
