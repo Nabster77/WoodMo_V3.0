@@ -3,7 +3,7 @@ import { ClipboardList, FileDown, LockKeyhole, ShieldCheck, X } from 'lucide-rea
 import type { CashSession, StaffUser, Transaction } from '@/types';
 import type { StornoRecord } from '@/lib/stornoRules';
 import { lastFiveCashReceipts, lastFiveStornoCandidates, prepareStorno } from '@/lib/stornoRules';
-import { formatCurrency } from '@/lib/format';
+import { amountColor, formatCurrency } from '@/lib/format';
 import { exportStornoDocument } from '@/lib/stornoReceiptPdf';
 import { getTaxByRate, transactionNet } from '@/lib/tax';
 
@@ -118,7 +118,7 @@ export function BonlisteDialog({ session, transactions, stornos, staff, currentC
                   : 'border-gray-200 bg-gray-50 hover:border-emerald-500/60 dark:border-slate-700 dark:bg-slate-800'}`}>
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">Bon {index + 1} · {dateTime(receipt.timestamp)}</span>
-                  <strong className="text-sm">{formatCurrency(receipt.total)}</strong>
+                  <strong className={`text-sm ${amountColor(receipt.total)}`}>{formatCurrency(receipt.total)}</strong>
                 </span>
                 <span className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span>{receipt.paymentMethod === 'cash' ? 'Bar' : 'Karte'} · {receipt.items.length} Positionen</span>
@@ -153,7 +153,7 @@ export function BonlisteDialog({ session, transactions, stornos, staff, currentC
                 </div>)}
                 <dt>Pfand</dt><dd className="text-right">{formatCurrency(selected.totalPfand)}</dd>
                 <dt className="font-bold">Gesamt / {selected.paymentMethod === 'cash' ? 'Bar' : 'Karte'}</dt>
-                <dd className="text-right font-bold">{formatCurrency(selected.total)}</dd>
+                <dd className={`text-right font-bold ${amountColor(selected.total)}`}>{formatCurrency(selected.total)}</dd>
               </dl>
               {alreadyVoided ? <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
                 <strong>Storniert</strong> am {dateTime(alreadyVoided.timestamp)} · {alreadyVoided.employeeName}.

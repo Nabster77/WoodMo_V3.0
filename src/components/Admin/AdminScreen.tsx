@@ -4,7 +4,7 @@ import type { CatalogImportSession } from '@/lib/catalogEngine';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
-import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
+import { amountColor, formatCurrency, formatDateISO, formatTime } from '@/lib/format';
 import { DiagnosticsDialog } from './DiagnosticsDialog';
 import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
 import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
@@ -1370,7 +1370,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             ] as const).map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
-                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value)}</p>
+                <p className={`text-sm font-bold ${value < 0 ? RED_TEXT : 'text-[var(--loc-strong)] dark:text-[var(--loc-light)]'}`}>{formatCurrency(value)}</p>
               </div>
             ))}
             {/* MwSt.: reduziert + regulär je Standort, darunter gesamt */}
@@ -1403,12 +1403,13 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
                     <Clock className="h-3 w-3" />
                     {formatTime(tx.timestamp)}
                     <span className="rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
+                    {tx.total < 0 && tx.items.every((i) => i.isPfandRetoure) && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">RETOURE</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                       {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
                     </span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+                    <span className={`font-bold ${amountColor(tx.total, 'text-gray-900 dark:text-gray-100')}`}>{formatCurrency(tx.total)}</span>
                   </div>
                 </div>
               ))}
@@ -1446,6 +1447,8 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
 }
 
 // ---- Day Info Dialog ----
+
+const RED_TEXT = 'text-red-600 dark:text-red-400';
 
 function DayInfoDialog({ location, date, categories, transactions, parts, onClose }: {
   location: Location;
@@ -1543,7 +1546,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 </div>
                 <div className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
                   <p className="text-xs text-green-700/70 dark:text-green-400/70">Pfand-Saldo</p>
-                  <p className="text-base font-bold text-green-700 dark:text-green-300">{formatCurrency(totalPfand)}</p>
+                  <p className={`text-base font-bold ${totalPfand < 0 ? RED_TEXT : 'text-green-700 dark:text-green-300'}`}>{formatCurrency(totalPfand)}</p>
                 </div>
               </div>
 
@@ -1746,12 +1749,13 @@ function SaleRow({ tx }: { tx: Transaction }) {
           <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
           <span className="shrink-0">{formatTime(tx.timestamp)}</span>
           <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
+          {tx.total < 0 && tx.items.every((i) => i.isPfandRetoure) && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">RETOURE</span>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
             {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
           </span>
-          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+          <span className={`font-bold ${amountColor(tx.total, 'text-gray-900 dark:text-gray-100')}`}>{formatCurrency(tx.total)}</span>
         </div>
       </button>
       {open && (
@@ -1766,7 +1770,7 @@ function SaleRow({ tx }: { tx: Transaction }) {
             <div className="flex justify-between text-green-700 dark:text-green-400"><span>Pfand-Retoure {retoureQty} ×</span><span>− {money(pfandBack)}</span></div>
           )}
           <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900 dark:border-gray-700 dark:text-gray-100">
-            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span>{formatCurrency(tx.total)}</span>
+            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span className={amountColor(tx.total)}>{formatCurrency(tx.total)}</span>
           </div>
           {Math.abs(goodsSum + pfandOut - pfandBack - tx.total) > 0.01 && (
             <div className="text-[10px] text-amber-600 dark:text-amber-400">Hinweis: Teilbetrag einer geteilten Zahlung, Rest steht in einer eigenen Zeile.</div>

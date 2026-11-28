@@ -13,7 +13,7 @@ import { projectFinancialTransactions } from '@/lib/stornoReportProjection';
 import type { StornoJournalTransaction } from '@/lib/stornoReportProjection';
 import { exportStornoDocument } from '@/lib/stornoReceiptPdf';
 import {
-  formatCurrency, formatDate, formatDateGermanFromISO, formatDateISO, formatDateLong, parseGermanDate,
+  amountColor, formatCurrency, formatDate, formatDateGermanFromISO, formatDateISO, formatDateLong, parseGermanDate,
   formatTime,
   startOfDay, endOfDay, startOfWeek, startOfMonth, startOfYear,
   monthLabel, yearLabel, getWeekNumber,
@@ -957,7 +957,7 @@ function TransactionListView({ transactions, sort }: { transactions: Transaction
                 <div className="flex items-center gap-1">
                   {tx.paymentMethod === 'cash' ? <Banknote className="h-4 w-4 text-green-600 dark:text-green-400" /> : <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
                 </div>
-                <span className={`text-lg font-bold ${reversal ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-gray-100'}`}>{formatCurrency(tx.total)}</span>
+                <span className={`text-lg font-bold ${reversal ? 'text-red-700 dark:text-red-300' : amountColor(tx.total, 'text-gray-900 dark:text-gray-100')}`}>{formatCurrency(tx.total)}</span>
                 {expanded === tx.id ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
               </div>
             </button>
@@ -994,7 +994,7 @@ function TransactionListView({ transactions, sort }: { transactions: Transaction
                   {tx.totalPfand > 0 && <div className="flex justify-between"><span>Pfand</span><span>{formatCurrency(tx.totalPfand)}</span></div>}
                   {tx.totalPfand > 0 && <div className="flex justify-between"><span>Pfand (eingenommen)</span><span>{formatCurrency(tx.totalPfand)}</span></div>}
                   <div className="flex justify-between font-bold text-gray-900 dark:text-gray-100"><span>Umsatz (ohne Pfand)</span><span>{formatCurrency(tx.subtotal)}</span></div>
-                  <div className="flex justify-between font-bold text-gray-900 dark:text-gray-100"><span>Gesamt (Kassenbetrag)</span><span>{formatCurrency(tx.total)}</span></div>
+                  <div className="flex justify-between font-bold text-gray-900 dark:text-gray-100"><span>Gesamt (Kassenbetrag)</span><span className={amountColor(tx.total)}>{formatCurrency(tx.total)}</span></div>
                   <div className="flex justify-between">
                     <span>Zahlart: {tx.items.every((item) => item.isPfandRetoure) ? 'PFANDAUSGABE' : tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}</span>
                     {tx.paymentMethod === 'cash' && tx.amountPaid !== undefined && <span>Gegeben: {formatCurrency(tx.amountPaid)}</span>}
