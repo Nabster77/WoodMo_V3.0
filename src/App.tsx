@@ -367,7 +367,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const diagHandlersRef = useRef<DiagHandlers>({ run: async () => ({ done: true, text: '' }) });
   diagHandlersRef.current = {
-    async run(command: DiagCommand) {
+    async run(command: DiagCommand, force: boolean) {
       if (command === 'status') return { done: true, text: `Status gesendet, Version ${APP_VERSION}` };
       if (command === 'update-check') {
         try {
@@ -383,7 +383,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       // 27.11.: Steht der angemeldete Benutzer auf dem Startbildschirm (kein Kassenfenster offen), meldet der Fernbefehl ihn selbst ab,
       // damit das Update nicht an einer vergessenen Anmeldung hängt. Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt.
       // Steht er noch in Kasse/Verwaltung/Journal, wartet der Befehl wie bisher.
-      if (loggedIn && idle && homeVisible && currentStaff) {
+      // 28.11.: Mit „force“ (Alle Geräte updaten) wird auch abgemeldet, wenn der Benutzer noch in Kasse/Verwaltung/Journal steht.
+      if (loggedIn && idle && (homeVisible || (force && command === 'update-install')) && currentStaff) {
+        if (!homeVisible) { setMenuOpen(false); setHomeVisible(true); }
         recordStaff('logout', currentStaff);
         setCurrentStaff(null);
         setManagementAdministrator(null);

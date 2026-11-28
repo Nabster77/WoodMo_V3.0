@@ -222,6 +222,22 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
         <div className="space-y-2">
           <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Geräte</h3>
           {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät aktiv.</p>}
+          {(() => {
+            // 28.11.: Ein Knopf für alle: Geräte auf AN, online und mit älterer Version bekommen das Update; angemeldete Benutzer werden dort abgemeldet.
+            const targets = latest ? rows.filter((row) => row.device_id !== myId && row.mode === 'on' && ago(row.reported_at).online && row.app_version !== latest && row.pending_command !== 'update-install') : [];
+            if (targets.length === 0) return null;
+            return (
+              <button type="button" disabled={busy}
+                onClick={() => {
+                  if (!window.confirm(`${targets.length} Gerät${targets.length === 1 ? '' : 'e'} jetzt auf Version ${latest} aktualisieren?\nAngemeldete Benutzer werden dort abgemeldet (Kasse und Buchungen bleiben bestehen). Ein gerade laufender Warenkorb geht verloren.`)) return;
+                  void guarded(async () => { for (const row of targets) await sendRemoteCommand(row.device_id, 'update-install', password, true); },
+                    `Update ${latest} an ${targets.length} Gerät${targets.length === 1 ? '' : 'e'} gesendet.`, true);
+                }}
+                className="min-h-11 w-full rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white disabled:opacity-40">
+                Alle Geräte jetzt updaten und abmelden ({targets.length})
+              </button>
+            );
+          })()}
           {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).map((row) => {
             const seen = ago(row.reported_at);
             const own = row.device_id === myId;
