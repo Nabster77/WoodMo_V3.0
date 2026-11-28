@@ -330,6 +330,7 @@ interface OpenSession {
   session_id: string; location: string; opened_at: number; opened_by: string | null; opening_balance: number; logged_in: string[];
   receipts: number; total: number; goods: number; pfand: number; cash: number; card: number; storno_gross: number; cash_balance: number;
   last_receipt_at: number | null; recent: Receipt[];
+  status?: 'open' | 'closed'; closed_at?: number | null; closing_balance?: number | null;
 }
 const REFRESH_MS = 15_000;
 const STALE_MS = 45_000;
@@ -435,13 +436,17 @@ function AdminOverview({ login, onLogout }: { login: AdminLogin; onLogout: () =>
       </div>
       <ErrorLine text={error} />
       <div className={stale && sessions ? 'opacity-60' : ''}>
-        {sessions && sessions.length === 0 && <p className="gx-panel rounded-2xl p-4 text-center font-semibold">Keine Kasse offen.</p>}
+        {sessions && sessions.length === 0 && <p className="gx-panel rounded-2xl p-4 text-center font-semibold">Keine Kasse vorhanden.</p>}
         {!current && sessions?.map((s) => (
-          <button key={s.session_id} type="button" onClick={() => setSelected(s.session_id)} className="gx-tile mb-3 block w-full rounded-3xl p-4 text-left">
+          <button key={s.session_id} type="button" onClick={() => setSelected(s.session_id)} className={`gx-tile mb-3 block w-full rounded-3xl p-4 text-left ${s.status === 'closed' ? 'border-2 border-[color:var(--gx-warn)] bg-[color:var(--gx-warn)]/10' : ''}`}>
             <div className="flex items-center gap-2"><MapPin className="h-5 w-5" /><span className="text-xl font-extrabold">{s.location}</span>
-              <span className="ml-auto rounded-full border border-[color:var(--gx-ok)] px-2 py-0.5 text-xs font-bold text-[color:var(--gx-ok)]">OFFEN</span></div>
-            <p className="gx-muted mt-1 text-xs font-semibold">seit {new Date(s.opened_at).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {s.receipts} Bons</p>
+              {s.status === 'closed'
+                ? <span className="ml-auto rounded-full border border-[color:var(--gx-warn)] px-2 py-0.5 text-xs font-bold text-[color:var(--gx-warn)]">GESCHLOSSEN</span>
+                : <span className="ml-auto rounded-full border border-[color:var(--gx-ok)] px-2 py-0.5 text-xs font-bold text-[color:var(--gx-ok)]">OFFEN</span>}</div>
+            {s.status === 'closed' && s.closed_at ? <p className="mt-1 text-sm font-extrabold text-[color:var(--gx-warn)]">Kassenvorgang geschlossen am {new Date(s.closed_at).toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p> : null}
+            <p className="gx-muted mt-1 text-xs font-semibold">{s.status === 'closed' ? 'geöffnet' : 'seit'} {new Date(s.opened_at).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {s.receipts} Bons</p>
             <p className="mt-2 text-3xl font-black">{formatCurrency(s.total)}</p>
+            {s.status === 'closed' && <p className="text-sm font-bold">Kassenbestand: {formatCurrency(s.cash_balance)}</p>}
             <p className="gx-muted text-xs">Letzter Bon: {s.last_receipt_at ? time(s.last_receipt_at) : '–'}</p>
           </button>
         ))}
@@ -460,7 +465,8 @@ function SessionDetail({ s, onBack }: { s: OpenSession; onBack: () => void }) {
     <>
       <button type="button" onClick={onBack} className="gx-btn mb-3 min-h-11 rounded-xl px-4 text-sm font-bold">← Alle Kassen</button>
       <div className="gx-panel mb-3 rounded-3xl p-4">
-        {row('Status', 'OFFEN')}
+        {row('Status', s.status === 'closed' ? 'GESCHLOSSEN' : 'OFFEN')}
+        {s.status === 'closed' && s.closed_at ? row('Geschlossen', new Date(s.closed_at).toLocaleString('de-DE')) : null}
         {row('Geöffnet', `${new Date(s.opened_at).toLocaleString('de-DE')}${s.opened_by ? ' · ' + s.opened_by : ''}`)}
         {row('Angemeldet', s.logged_in.length ? s.logged_in.join(', ') : '–')}
         <div className="my-2 border-t gx-rule" />
@@ -472,7 +478,7 @@ function SessionDetail({ s, onBack }: { s: OpenSession; onBack: () => void }) {
         {s.storno_gross !== 0 && row('Stornos', formatCurrency(s.storno_gross))}
         <div className="my-2 border-t gx-rule" />
         {row('Anfangsbestand', formatCurrency(s.opening_balance))}
-        {row('Bargeld (rechnerisch)', formatCurrency(s.cash_balance), true)}
+        {row(s.status === 'closed' ? 'Kassenbestand (nach Abschluss)' : 'Bargeld (rechnerisch)', formatCurrency(s.cash_balance), true)}
         {row('Bons', String(s.receipts))}
       </div>
       <p className="gx-heading mb-2 text-xs font-bold uppercase tracking-[.12em]">Letzte Verkäufe</p>

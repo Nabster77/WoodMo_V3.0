@@ -283,13 +283,26 @@ Deno.serve(async request => {
     await db.from('pos_mobile_pairings').update({ last_used_at: new Date().toISOString(), expires_at: new Date(Date.now() + ADMIN_MINUTES * 60_000).toISOString() }).eq('id', pairing.id);
     const generation = await currentGeneration(db);
     const { data: sessionRows } = await db.from('pos_cash_sessions').select('id, location, data').eq('booking_generation', generation);
-    const open = (sessionRows ?? []).filter(row => isOpen(row.data as Record<string, unknown>));
+    const allRows = sessionRows ?? [];
+    const open = allRows.filter(row => isOpen(row.data as Record<string, unknown>));
+    const openLocations = new Set(open.map(row => row.location));
+    const closedAtOf = (d: Record<string, unknown>) => Number(d.closedAt ?? d.dailyCloseFinalizedAt ?? 0);
+    const latestClosed = new Map<string, (typeof allRows)[number]>();
+    for (const row of allRows) {
+      if (isOpen(row.data as Record<string, unknown>) || openLocations.has(row.location)) continue;
+      const prev = latestClosed.get(row.location);
+      if (!prev || closedAtOf(row.data as Record<string, unknown>) > closedAtOf(prev.data as Record<string, unknown>)) latestClosed.set(row.location, row);
+    }
     const result = [];
-    for (const row of open) {
+    for (const row of [...open, ...latestClosed.values()]) {
       const s = row.data as Record<string, unknown>;
+      const isClosedRow = !isOpen(s);
+      const closedAt = isClosedRow ? closedAtOf(s) : null;
       const openedAt = Number(s.openedAt ?? 0);
-      const { data: txRows } = await db.from('pos_transactions').select('data').eq('booking_generation', generation)
-        .eq('location', row.location).gte('timestamp', openedAt).order('timestamp', { ascending: false }).limit(2000);
+      let txQuery = db.from('pos_transactions').select('data').eq('booking_generation', generation)
+        .eq('location', row.location).gte('timestamp', openedAt);
+      if (closedAt) txQuery = txQuery.lte('timestamp', closedAt + 60_000);
+      const { data: txRows } = await txQuery.order('timestamp', { ascending: false }).limit(2000);
       const txs = (txRows ?? []).map(t => t.data as Record<string, unknown>)
         .filter(t => !t.cashSessionId || t.cashSessionId === row.id);
       const { data: stornoRows } = await db.from('pos_stornos').select('original_transaction_id, cash_effect_cents, gross_amount_cents')
@@ -308,11 +321,13 @@ Deno.serve(async request => {
       const intervals = Array.isArray(s.staffLoginIntervals) ? s.staffLoginIntervals as Array<Record<string, unknown>> : [];
       const loggedIn = [...new Set(intervals.filter(i => i.logoutAt == null).map(i => String(i.staffName ?? '')))].filter(Boolean);
       result.push({
+        status: isClosedRow ? 'closed' : 'open', closed_at: closedAt,
+        closing_balance: isClosedRow ? round2(Number(s.closingBalance ?? 0) - Number(s.closingWithdrawalAmount ?? 0)) : null,
         session_id: row.id, location: row.location, opened_at: openedAt, opened_by: s.openedByName ?? null,
         opening_balance: Number(s.openingBalance ?? 0), logged_in: loggedIn,
         receipts: txs.length, total: round2(total), goods: round2(goods), pfand: round2(pfand),
         cash: round2(cash), card: round2(card), storno_gross: round2(stornoGross),
-        cash_balance: round2(Number(s.openingBalance ?? 0) + cash + entrySum + stornoCash),
+        cash_balance: isClosedRow ? round2(Number(s.closingBalance ?? 0) - Number(s.closingWithdrawalAmount ?? 0)) : round2(Number(s.openingBalance ?? 0) + cash + entrySum + stornoCash),
         last_receipt_at: txs[0] ? Number(txs[0].timestamp) : null,
         recent: txs.slice(0, 40).map(t => ({
           id: t.id, at: Number(t.timestamp), total: Number(t.total ?? 0), payment: t.paymentMethod, employee: t.employeeName ?? null,
