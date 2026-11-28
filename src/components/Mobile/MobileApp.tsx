@@ -107,7 +107,7 @@ function ErrorLine({ text }: { text: string | null }) {
 
 // ---------------- Pfand-Retoure ----------------
 interface PfandPairing { token: string; location: string; staff_name: string; pfand_amount: number; session_id: string }
-interface Booked { id: string; count: number; total: number; at: number; state: 'ok' | 'pending' | 'error' }
+interface Booked { id: string; count: number; total: number; at: number; state: 'ok' | 'pending' | 'queued' | 'error' }
 
 function PfandMobile({ initialCode }: { initialCode: string }) {
   // Neuer QR-Code im Link: alte Kopplung dieses Tabs nicht weiterverwenden, neue einlösen.
@@ -208,6 +208,8 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     return () => window.clearInterval(timer);
   }, [pairing.token]);
 
+  // 28.11.: Ohne Verbindung merkt sich das Handy die Buchung (state 'queued') und sendet sie automatisch, sobald es wieder online ist.
+  // Die Bon-ID bleibt gleich, der Server bucht denselben Bon nie doppelt. Die Kopplung bleibt dabei bestehen.
   async function send(entry: Booked) {
     try {
       const result = await callMobile<{ total: number }>('pfand_book', { token: pairing.token, id: entry.id, count: entry.count });
@@ -215,12 +217,36 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
       return true;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
+      if (cause instanceof MobileApiError && cause.status === 0) {
+        setOnline(false);
+        setBooked((list) => list.map((b) => b.id === entry.id ? { ...b, state: 'queued' } : b));
+        return true; // gemerkt, wird automatisch gesendet
+      }
       if (cause instanceof MobileApiError && cause.status === 410) setEnded(message);
       setBooked((list) => list.map((b) => b.id === entry.id ? { ...b, state: 'error' } : b));
       setError(`${message} Bon NICHT gebucht – nicht auszahlen.`);
       return false;
     }
   }
+
+  // Wartende Buchungen automatisch nachsenden (älteste zuerst), sobald das Netz wieder da ist.
+  const bookedRef = useRef<Booked[]>([]);
+  bookedRef.current = booked;
+  const flushing = useRef(false);
+  useEffect(() => {
+    const flush = async () => {
+      if (flushing.current || ended || !navigator.onLine) return;
+      const waiting = [...bookedRef.current].filter((b) => b.state === 'queued').reverse();
+      if (waiting.length === 0) return;
+      flushing.current = true;
+      try { for (const entry of waiting) { const ok = await send(entry); if (!ok) break; if (!navigator.onLine) break; } }
+      finally { flushing.current = false; }
+    };
+    const timer = window.setInterval(() => { void flush(); }, 6_000);
+    window.addEventListener('online', flush);
+    return () => { window.clearInterval(timer); window.removeEventListener('online', flush); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- send/ended werden über Referenzen und frische Renderer erfasst
+  }, [pairing.token, ended]);
 
   async function book() {
     if (busy || ended || count < 1) return;
@@ -274,7 +300,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
         <span className="text-lg font-extrabold">{pairing.location}</span>
         <span className="gx-muted ml-auto text-sm font-semibold">{formatCurrency(pairing.pfand_amount)} je Stück</span>
       </div>
-      {!online && <p className="mb-3 flex items-center gap-2 rounded-xl border border-[color:var(--gx-warn)] px-3 py-2 text-sm font-bold text-[color:var(--gx-warn)]"><WifiOff className="h-4 w-4" /> Keine Verbindung – Buchen erst wieder mit Internet.</p>}
+      {!online && <p className="mb-3 flex items-center gap-2 rounded-xl border border-[color:var(--gx-warn)] px-3 py-2 text-sm font-bold text-[color:var(--gx-warn)]"><WifiOff className="h-4 w-4" /> Keine Verbindung – Buchungen werden gemerkt und automatisch gesendet, sobald das Internet wieder da ist. Kopplung bleibt bestehen.</p>}
       {ended ? (
         <div className="gx-panel rounded-3xl p-5 text-center">
           <p className="text-lg font-extrabold text-[color:var(--gx-err)]">{endedByUser ? ended : 'Kopplung beendet'}</p>
@@ -303,7 +329,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
           </div>
           <p className="mt-4 text-center text-sm font-semibold gx-muted">Auszahlen</p>
           <p className="text-center text-4xl font-black text-[color:var(--gx-ok)]">{formatCurrency(total)}</p>
-          <SwipeConfirm label={count < 1 ? 'Erst Anzahl wählen' : '← Zum Buchen nach links schieben'} disabled={!online || count < 1 || Boolean(ended)} busy={busy} onConfirm={() => void book()} />
+          <SwipeConfirm label={count < 1 ? 'Erst Anzahl wählen' : '← Zum Buchen nach links schieben'} disabled={count < 1 || Boolean(ended)} busy={busy} onConfirm={() => void book()} />
           <ErrorLine text={error} />
         </div>
       )}
@@ -316,8 +342,8 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
                 <span className="gx-muted w-20 font-mono">{time(b.at)}</span>
                 <span className="font-bold">{b.count} Stück</span>
                 <span className="ml-auto font-bold">{formatCurrency(b.total)}</span>
-                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : 'gx-muted'}`}>
-                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : '… sendet'}
+                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : b.state === 'queued' ? 'text-[color:var(--gx-warn)]' : 'gx-muted'}`}>
+                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : b.state === 'queued' ? '⏳ wartet auf Netz' : '… sendet'}
                 </span>
                 {b.state === 'error' && !ended && <button type="button" onClick={() => { setError(null); setBooked((l) => l.map((x) => x.id === b.id ? { ...x, state: 'pending' } : x)); void send(b); }} className="gx-btn rounded-lg px-2 py-1 text-xs font-bold">Erneut</button>}
               </li>

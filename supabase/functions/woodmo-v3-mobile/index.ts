@@ -128,7 +128,8 @@ Deno.serve(async request => {
       const { data } = await db.from('pos_mobile_pairings').update({ tablet_seen_at: new Date().toISOString() })
         .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).not('claimed_at', 'is', null)
         .gt('expires_at', new Date().toISOString()).select('id, phone_seen_at');
-      return reply(200, { active: (data ?? []).filter(phoneAlive).length });
+      // total: alle noch gültigen Kopplungen; active: davon Handys mit aktueller Meldung (Rest = Verbindung abgebrochen, Handy meldet sich wieder).
+      return reply(200, { active: (data ?? []).filter(phoneAlive).length, total: (data ?? []).length });
     }
     if (action === 'pair_list') {
       const open = await loadSession(db, sessionId);

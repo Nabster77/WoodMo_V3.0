@@ -151,6 +151,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const pairStartupDone = useRef(false);
   const [showPhonePair, setShowPhonePair] = useState(false);
   const [phonePaired, setPhonePaired] = useState(false);
+  /** Kopplung besteht, das Handy meldet sich aber nicht mehr (Verbindung abgebrochen): Punkt an der Uhr wird rot. */
+  const [phoneLost, setPhoneLost] = useState(false);
   const [phonePairedNotice, setPhonePairedNotice] = useState(false);
   useEffect(() => {
     if (!phonePairedNotice) return;
@@ -435,13 +437,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     if (!pairSessionId || testMode) return;
     const beat = () => {
       if (!navigator.onLine) return;
-      void callMobileAsTablet<{ active: number }>('pair_heartbeat', { session_id: pairSessionId })
-        .then((result) => setPhonePaired(result.active > 0)).catch(() => undefined);
+      void callMobileAsTablet<{ active: number; total?: number }>('pair_heartbeat', { session_id: pairSessionId })
+        .then((result) => { setPhonePaired(result.active > 0); setPhoneLost(result.active === 0 && (result.total ?? 0) > 0); }).catch(() => undefined);
     };
     // Kassen-App wurde neu geöffnet (vorher geschlossen): alte Handy-Kopplungen dieser Kasse enden, erst danach Lebenszeichen.
     if (!pairStartupDone.current) {
       pairStartupDone.current = true;
-      void callMobileAsTablet('pair_revoke', { session_id: pairSessionId }).then(() => setPhonePaired(false)).catch(() => undefined).finally(beat);
+      void callMobileAsTablet('pair_revoke', { session_id: pairSessionId }).then(() => { setPhonePaired(false); setPhoneLost(false); }).catch(() => undefined).finally(beat);
     } else beat();
     const timer = window.setInterval(beat, 30_000);
     return () => window.clearInterval(timer);
@@ -459,7 +461,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     const previous = previousPairSession.current;
     previousPairSession.current = pairSessionId;
     if (previous && !pairSessionId && !testMode) {
-      setPhonePaired(false);
+      setPhonePaired(false); setPhoneLost(false);
       void callMobileAsTablet('pair_revoke', { session_id: previous }).catch(() => undefined);
     }
   }, [pairSessionId, testMode]);
@@ -1174,6 +1176,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
               {headerTime(headerNow)} Uhr
               {phonePaired && <span className="ml-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400 align-middle shadow-[0_0_8px_#34d399]" role="img" aria-label="Handy gekoppelt" title="Handy gekoppelt" />}
+              {!phonePaired && phoneLost && <span className="ml-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 align-middle shadow-[0_0_8px_#ef4444]" role="img" aria-label="Handy-Verbindung unterbrochen" title="Handy-Verbindung unterbrochen – Kopplung bleibt, Handy meldet sich wieder" />}
             </span>
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
               {tab === 'pos' && (
@@ -1306,7 +1309,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       {showPhonePair && store.activeSession && currentStaff && (
         <PhonePairDialog session={store.activeSession} staff={currentStaff}
           pfandAmount={store.pfandSettings[store.activeSession.location]}
-          onClose={() => setShowPhonePair(false)} onPairedChange={setPhonePaired} onPaired={handlePhonePaired} />
+          onClose={() => setShowPhonePair(false)} onPairedChange={(paired) => { setPhonePaired(paired); if (paired) setPhoneLost(false); }} onPaired={handlePhonePaired} />
       )}
       {phonePairedNotice && (
         <div role="status" className="pointer-events-none fixed left-1/2 top-20 z-[90] -translate-x-1/2 rounded-2xl border border-emerald-400 bg-emerald-900/95 px-5 py-3 text-base font-bold text-white shadow-2xl">
