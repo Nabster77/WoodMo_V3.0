@@ -212,7 +212,8 @@ Deno.serve(async request => {
     const { data: existing } = await db.from('pos_transactions').select('id, data').eq('id', id).maybeSingle();
     if (existing) {
       const prev = existing.data as Record<string, unknown>;
-      if (prev.cashSessionId === session.id && prev.mobilePairingId === pairing.id) return reply(200, { ok: true, duplicate: true, total: prev.total });
+      // Die Buchung trägt kein Handy-Merkmal (wie eine Retoure an der Kasse); Wiederholung erkennt man an Bon-ID, Kassensitzung und Mitarbeiter.
+      if (prev.cashSessionId === session.id && prev.employeeId === pairing.staff_id) return reply(200, { ok: true, duplicate: true, total: prev.total });
       return reply(409, { error: 'Bon-ID bereits vergeben.' });
     }
     const unit = Number(pairing.pfand_amount);
@@ -232,7 +233,6 @@ Deno.serve(async request => {
       subtotal: 0, taxByRate: {}, totalNet: 0, totalTax: 0, totalPfand: amount, total: amount,
       pfandTaxByRate: { [rate]: pfandTax }, pfandNet, paymentMethod: 'cash', location,
       cashSessionId: session.id, employeeId: pairing.staff_id, employeeName: pairing.staff_name,
-      mobilePairingId: pairing.id,
     };
     const generation = await currentGeneration(db);
     const { error } = await db.from('pos_transactions').insert({ id, location, timestamp: now, data: transaction, booking_generation: generation });
@@ -316,7 +316,7 @@ Deno.serve(async request => {
         last_receipt_at: txs[0] ? Number(txs[0].timestamp) : null,
         recent: txs.slice(0, 40).map(t => ({
           id: t.id, at: Number(t.timestamp), total: Number(t.total ?? 0), payment: t.paymentMethod, employee: t.employeeName ?? null,
-          storno: stornoIds.has(t.id), mobile: Boolean(t.mobilePairingId),
+          storno: stornoIds.has(t.id),
           items: (Array.isArray(t.items) ? t.items as Array<Record<string, unknown>> : []).map(i => `${i.quantity}× ${i.name ?? ''}${i.shotName ? ' + ' + i.shotName : ''}`),
         })),
       });

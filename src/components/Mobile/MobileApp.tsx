@@ -325,7 +325,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
 
 // ---------------- Administrator-Übersicht ----------------
 interface AdminLogin { token: string; name: string }
-interface Receipt { id: string; at: number; total: number; payment: string; employee: string | null; storno: boolean; mobile: boolean; items: string[] }
+interface Receipt { id: string; at: number; total: number; payment: string; employee: string | null; storno: boolean; items: string[] }
 interface OpenSession {
   session_id: string; location: string; opened_at: number; opened_by: string | null; opening_balance: number; logged_in: string[];
   receipts: number; total: number; goods: number; pfand: number; cash: number; card: number; storno_gross: number; cash_balance: number;
@@ -482,7 +482,6 @@ function SessionDetail({ s, onBack }: { s: OpenSession; onBack: () => void }) {
             <div className="flex items-center gap-2 text-sm">
               <span className="font-mono font-bold">{time(r.at)}</span>
               <span className="rounded-full border px-2 text-xs font-bold">{r.payment === 'card' ? 'Karte' : 'Bar'}</span>
-              {r.mobile && <span className="rounded-full border border-[color:var(--gx-ok)] px-2 text-xs font-bold text-[color:var(--gx-ok)]">Handy</span>}
               {r.storno && <span className="text-xs font-bold text-[color:var(--gx-err)]">STORNIERT</span>}
               <span className="ml-auto font-black">{formatCurrency(r.total)}</span>
             </div>
