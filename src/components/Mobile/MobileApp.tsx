@@ -229,6 +229,18 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     }
   }
 
+    const renderBooked = (b: Booked) => (
+    <li key={b.id} className="flex items-center gap-2 text-sm">
+                <span className="gx-muted w-20 font-mono">{time(b.at)}</span>
+                <span className="font-bold">{b.count} Stück</span>
+                <span className="ml-auto font-bold">{formatCurrency(b.total)}</span>
+                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : b.state === 'queued' ? 'text-[color:var(--gx-warn)]' : 'gx-muted'}`}>
+                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : b.state === 'queued' ? '⏳ wartet auf Netz' : '… sendet'}
+                </span>
+                {b.state === 'error' && !ended && <button type="button" onClick={() => { setError(null); setBooked((l) => l.map((x) => x.id === b.id ? { ...x, state: 'pending' } : x)); void send(b); }} className="gx-btn rounded-lg px-2 py-1 text-xs font-bold">Erneut</button>}
+              </li>
+  );
+
   // Wartende Buchungen automatisch nachsenden (älteste zuerst), sobald das Netz wieder da ist.
   const bookedRef = useRef<Booked[]>([]);
   bookedRef.current = booked;
@@ -244,17 +256,6 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     };
     const timer = window.setInterval(() => { void flush(); }, 6_000);
     window.addEventListener('online', flush);
-    const renderBooked = (b: Booked) => (
-    <li key={b.id} className="flex items-center gap-2 text-sm">
-                <span className="gx-muted w-20 font-mono">{time(b.at)}</span>
-                <span className="font-bold">{b.count} Stück</span>
-                <span className="ml-auto font-bold">{formatCurrency(b.total)}</span>
-                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : b.state === 'queued' ? 'text-[color:var(--gx-warn)]' : 'gx-muted'}`}>
-                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : b.state === 'queued' ? '⏳ wartet auf Netz' : '… sendet'}
-                </span>
-                {b.state === 'error' && !ended && <button type="button" onClick={() => { setError(null); setBooked((l) => l.map((x) => x.id === b.id ? { ...x, state: 'pending' } : x)); void send(b); }} className="gx-btn rounded-lg px-2 py-1 text-xs font-bold">Erneut</button>}
-              </li>
-  );
   return () => { window.clearInterval(timer); window.removeEventListener('online', flush); };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- send/ended werden über Referenzen und frische Renderer erfasst
   }, [pairing.token, ended]);
