@@ -1441,14 +1441,23 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 await persistFinalizedCashSession(closed);
                 store.commitFinalizedSession(closed);
                 const closeReport = closedSessionReport(closed, store.transactions, store.categories, currentStaff.name, verifiedStornos);
-                try {
-                  // Without an active folder permission, a button lets the
-                  // user save with a fresh tap instead of a system alert.
-                  if (await saveJournalPdfIfAllowed(closeReport) === 'needs-tap') setPendingClosePdf(closeReport);
-                } catch (pdfError) {
-                  console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
-                  setPendingClosePdf(closeReport);
-                }
+                // Der Abschluss ist in der Cloud gespeichert und zurückgelesen. Das PDF wird
+                // erst NACH der Bestätigung erstellt (28.11.2026): die Berechnung des
+                // Berichts blockiert die Seite mehrere Sekunden und ließ „Seite reagiert
+                // nicht“ erscheinen, während der Dialog noch offen war. Schlägt das PDF
+                // fehl, bleibt der Speichern-Button (pendingClosePdf) wie bisher.
+                window.setTimeout(() => {
+                  void (async () => {
+                    try {
+                      // Without an active folder permission, a button lets the
+                      // user save with a fresh tap instead of a system alert.
+                      if (await saveJournalPdfIfAllowed(closeReport) === 'needs-tap') setPendingClosePdf(closeReport);
+                    } catch (pdfError) {
+                      console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
+                      setPendingClosePdf(closeReport);
+                    }
+                  })();
+                }, 600);
                 // persistFinalizedCashSession hat den Abschluss in der Cloud gespeichert UND zurückgelesen:
                 // „Synchronisiert“ ist damit bestätigt. Die Belegnummer ist je Kasse eindeutig (idempotent).
                 return { ok: true, synced: true, receiptLabel: formatDailyCloseReceiptNumber(closed.dailyCloseReceiptNumber, closed.dailyCloseReceiptLocation ?? closed.location, finalizedAt, closed.dailyCloseReceiptYear) ?? undefined };
