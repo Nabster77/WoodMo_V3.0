@@ -244,7 +244,18 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     };
     const timer = window.setInterval(() => { void flush(); }, 6_000);
     window.addEventListener('online', flush);
-    return () => { window.clearInterval(timer); window.removeEventListener('online', flush); };
+    const renderBooked = (b: Booked) => (
+    <li key={b.id} className="flex items-center gap-2 text-sm">
+                <span className="gx-muted w-20 font-mono">{time(b.at)}</span>
+                <span className="font-bold">{b.count} Stück</span>
+                <span className="ml-auto font-bold">{formatCurrency(b.total)}</span>
+                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : b.state === 'queued' ? 'text-[color:var(--gx-warn)]' : 'gx-muted'}`}>
+                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : b.state === 'queued' ? '⏳ wartet auf Netz' : '… sendet'}
+                </span>
+                {b.state === 'error' && !ended && <button type="button" onClick={() => { setError(null); setBooked((l) => l.map((x) => x.id === b.id ? { ...x, state: 'pending' } : x)); void send(b); }} className="gx-btn rounded-lg px-2 py-1 text-xs font-bold">Erneut</button>}
+              </li>
+  );
+  return () => { window.clearInterval(timer); window.removeEventListener('online', flush); };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- send/ended werden über Referenzen und frische Renderer erfasst
   }, [pairing.token, ended]);
 
@@ -300,7 +311,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
         <span className="text-lg font-extrabold">{pairing.location}</span>
         <span className="gx-muted ml-auto text-sm font-semibold">{formatCurrency(pairing.pfand_amount)} je Stück</span>
       </div>
-      {!online && <p className="mb-3 flex items-center gap-2 rounded-xl border border-[color:var(--gx-warn)] px-3 py-2 text-sm font-bold text-[color:var(--gx-warn)]"><WifiOff className="h-4 w-4" /> Keine Verbindung – Buchungen werden gemerkt und automatisch gesendet, sobald das Internet wieder da ist. Kopplung bleibt bestehen.</p>}
+      {!online && <p className="mb-3 flex items-center gap-2 text-sm font-bold text-red-500"><span className="h-3 w-3 animate-pulse rounded-full bg-red-500" /> Keine Verbindung</p>}
       {ended ? (
         <div className="gx-panel rounded-3xl p-5 text-center">
           <p className="text-lg font-extrabold text-[color:var(--gx-err)]">{endedByUser ? ended : 'Kopplung beendet'}</p>
@@ -337,18 +348,8 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
         <div className="gx-panel mt-3 rounded-2xl p-3">
           <p className="gx-heading mb-2 text-xs font-bold uppercase tracking-[.12em]">Von diesem Handy</p>
           <ul className="space-y-1.5">
-            {booked.map((b) => (
-              <li key={b.id} className="flex items-center gap-2 text-sm">
-                <span className="gx-muted w-20 font-mono">{time(b.at)}</span>
-                <span className="font-bold">{b.count} Stück</span>
-                <span className="ml-auto font-bold">{formatCurrency(b.total)}</span>
-                <span className={`w-24 text-right text-xs font-bold ${b.state === 'ok' ? 'text-[color:var(--gx-ok)]' : b.state === 'error' ? 'text-[color:var(--gx-err)]' : b.state === 'queued' ? 'text-[color:var(--gx-warn)]' : 'gx-muted'}`}>
-                  {b.state === 'ok' ? '✓ gebucht' : b.state === 'error' ? '✗ nicht gebucht' : b.state === 'queued' ? '⏳ wartet auf Netz' : '… sendet'}
-                </span>
-                {b.state === 'error' && !ended && <button type="button" onClick={() => { setError(null); setBooked((l) => l.map((x) => x.id === b.id ? { ...x, state: 'pending' } : x)); void send(b); }} className="gx-btn rounded-lg px-2 py-1 text-xs font-bold">Erneut</button>}
-              </li>
-            ))}
-          </ul>
+            {booked.slice(0, 3).map(renderBooked)}
+          </ul>{booked.length > 3 && (<details className="mt-1.5"><summary className="gx-muted cursor-pointer text-xs font-bold">Weitere {booked.length - 3} anzeigen</summary><ul className="mt-1.5 space-y-1.5">{booked.slice(3).map(renderBooked)}</ul></details>)}
         </div>
       )}
     </>
