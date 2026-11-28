@@ -204,7 +204,7 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
       }
     };
     void check();
-    const timer = window.setInterval(() => { void check(); }, 20_000);
+    const timer = window.setInterval(() => { void check(); }, 10_000);
     return () => window.clearInterval(timer);
   }, [pairing.token]);
 
