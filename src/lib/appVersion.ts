@@ -70,6 +70,21 @@ export async function publishedUpdate(): Promise<PublishedUpdate | null> {
   return build as PublishedUpdate;
 }
 
+/**
+ * In einer frischen Browsersitzung (z. B. Inkognito) wird der Update-Dienst erst kurz nach dem ersten Laden registriert.
+ * Die Vorabprüfung wartet darauf, statt sofort mit einer Fehlermeldung abzubrechen.
+ */
+async function waitForRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!navigator.serviceWorker) return null;
+  const existing = await navigator.serviceWorker.getRegistration(base.href);
+  if (existing) return existing;
+  const ready = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>(resolve => window.setTimeout(() => resolve(null), 30000)),
+  ]);
+  return ready ? await navigator.serviceWorker.getRegistration(base.href) ?? null : null;
+}
+
 export async function preparePublishedUpdate(candidate: PublishedUpdate): Promise<void> {
   const latest = await publishedUpdate();
   if (!latest || buildId(latest) !== buildId(candidate)) throw new Error('Die veröffentlichte Version hat sich geändert. Bitte erneut prüfen.');
@@ -94,7 +109,7 @@ export async function preparePublishedUpdate(candidate: PublishedUpdate): Promis
   ]);
   if (!worker.includes(latest.workerGuard) ||
       !latest.files.some(file => file.endsWith('.js') && html.includes(file)) ||
-      !await navigator.serviceWorker?.getRegistration(base.href)) {
+      !await waitForRegistration()) {
     throw new Error('Der Update-Dienst konnte dieser Version nicht zugeordnet werden.');
   }
 }
