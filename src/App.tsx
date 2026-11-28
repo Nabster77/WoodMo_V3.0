@@ -1573,6 +1573,10 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               administratorTools={managementAdministrator ? <><ManagerPasswordPanel online={online} hasAdministrator={staff.users.some((user) => user.role === 'administrator' && user.active && !!user.passwordHash)} onChange={(currentPassword, nextPassword) => changeManagerPassword(currentPassword, nextPassword, true)} /><CloudPasswordPanel onChanged={() => { saveJSON(STORAGE_KEYS.rootPasswordChanged, true); saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); }} /></> : undefined}
               testMode={testMode}
               onToggleMode={() => setModeConfirm(testMode ? 'to-active' : 'to-test')}
+              onLogoutStaff={(sessionId, staffId, staffName) => store.recordStaffActivity(sessionId, {
+                id: `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                type: 'logout', staffId, staffName, timestamp: Date.now(),
+              })}
               onCloseOpenCash={(location) => { store.switchLocation(location as Location); chooseCashAction('close'); }}
               onExportBackup={async () => {
                 try {

@@ -67,6 +67,8 @@ interface Props {
   onImportBackup?: (file: File) => void;
   /** Führt zum Tagesabschluss der offenen Kasse am Standort (Weg B beim Zurücksetzen). */
   onCloseOpenCash?: (location: string) => void;
+  /** Meldet einen Mitarbeiter in einer offenen Kassensitzung ab (nur Login-Status, keine Buchung). */
+  onLogoutStaff?: (sessionId: string, staffId: string, staffName: string) => void;
   resetQuarantineCount?: number;
   onExportResetQuarantine?: () => Promise<void>;
   onClearResetQuarantine?: () => Promise<void>;
@@ -124,7 +126,7 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onLogoutStaff, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
   const [tab, setTab] = useState<keyof typeof ADMIN_SECTION_TITLES>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
@@ -369,6 +371,10 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
           testMode={testMode}
           openLocations={[...new Set(props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).map((session) => session.location))]}
           onCloseOpenCash={onCloseOpenCash ? (location) => { setShowReset(false); onCloseOpenCash(location); } : undefined}
+          loggedInStaff={props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt)
+            .flatMap((session) => (session.staffLoginIntervals ?? []).filter((interval) => interval.logoutAt === undefined)
+              .map((interval) => ({ sessionId: session.id, location: session.location, staffId: interval.staffId, staffName: interval.staffName })))}
+          onLogoutStaff={onLogoutStaff}
           onCancel={() => setShowReset(false)}
           onConfirm={async (adminPassword) => { await onResetAllData?.(adminPassword); setShowReset(false); }}
         />
@@ -1766,7 +1772,9 @@ function SaleRow({ tx }: { tx: Transaction }) {
 
 // ---- Reset / Backup / Import dialogs ----
 
-function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, openLocations, onCloseOpenCash, testMode }: {
+function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, openLocations, onCloseOpenCash, loggedInStaff, onLogoutStaff, testMode }: {
+  loggedInStaff: { sessionId: string; location: string; staffId: string; staffName: string }[];
+  onLogoutStaff?: (sessionId: string, staffId: string, staffName: string) => void;
   openLocations: string[];
   onCloseOpenCash?: (location: string) => void;
   onExport?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
@@ -1962,6 +1970,21 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
 
         {testMode && openSessionCount > 0 && (
           <p className="mb-3 text-xs text-amber-700">Im Testmodus werden nur lokale Testdaten entfernt.</p>
+        )}
+        {!testMode && loggedInStaff.length > 0 && onLogoutStaff && (
+          <div className="mb-3 rounded-xl border border-gray-300 p-3 text-sm text-gray-800 dark:border-gray-600 dark:text-gray-100">
+            <p className="mb-2 font-semibold">Angemeldete Mitarbeiter</p>
+            <div className="flex flex-col gap-2">
+              {loggedInStaff.map(entry => (
+                <button key={entry.sessionId + entry.staffId} type="button" disabled={busy}
+                  onClick={() => onLogoutStaff(entry.sessionId, entry.staffId, entry.staffName)}
+                  className="flex min-h-11 items-center justify-between rounded-xl border border-gray-300 px-4 py-2 text-left font-semibold disabled:opacity-50 dark:border-gray-600">
+                  <span>{entry.staffName} <span className="text-xs font-normal text-gray-500 dark:text-gray-400">· {entry.location}</span></span>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Abmelden</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {!testMode && completed && report?.resetAllowed === false && openLocations.length > 0 && onCloseOpenCash && (
           <div className="mb-3 rounded-xl border border-blue-400/60 p-3 text-sm text-gray-800 dark:text-gray-100">
