@@ -28,6 +28,20 @@ export async function callMobile<T = Record<string, unknown>>(action: string, bo
   return data as T;
 }
 
+/** Handy-Browser wird geschlossen: Kopplung sofort beenden (best effort; sonst endet sie durch ausbleibende Meldungen). */
+export function unpairPhoneOnClose(token: string): void {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return;
+  try {
+    void fetch(`${url}/functions/v1/${FUNCTION}`, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ action: 'pfand_unpair', token }),
+    }).catch(() => undefined);
+  } catch { /* Schließen darf nie blockieren. */ }
+}
+
 let lastTabletJwt: string | null = null;
 
 /** Beim Schließen der Kassen-App: Kopplungen dieser Kasse beenden. keepalive lässt die Anfrage das Schließen überleben. */

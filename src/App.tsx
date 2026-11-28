@@ -427,7 +427,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       pairStartupDone.current = true;
       void callMobileAsTablet('pair_revoke', { session_id: pairSessionId }).then(() => setPhonePaired(false)).catch(() => undefined).finally(beat);
     } else beat();
-    const timer = window.setInterval(beat, 60_000);
+    const timer = window.setInterval(beat, 30_000);
     return () => window.clearInterval(timer);
   }, [pairSessionId, testMode]);
   // Kassen-App wird geschlossen (Tab/App weg): Kopplungen sofort beenden. Bildschirmsperre oder Hintergrund zählt nicht.
@@ -1157,6 +1157,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             <span className="order-3 w-full text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl min-[1100px]:absolute min-[1100px]:left-1/2 min-[1100px]:w-auto min-[1100px]:-translate-x-1/2"
               role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
               {headerTime(headerNow)} Uhr
+              {phonePaired && <span className="ml-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400 align-middle shadow-[0_0_8px_#34d399]" role="img" aria-label="Handy gekoppelt" title="Handy gekoppelt" />}
             </span>
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
               {tab === 'pos' && (

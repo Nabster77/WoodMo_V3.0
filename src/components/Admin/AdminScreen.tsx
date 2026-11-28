@@ -20,7 +20,7 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench, Smartphone } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench, QrCode as QrIcon } from 'lucide-react';
 import { mobileLink } from '@/lib/mobileApi';
 import { QrCode } from '@/components/QrCode';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
@@ -257,7 +257,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                 {/* 27.11.: Link für die mobile Kassenübersicht (Handy, nur lesen, eigene Administrator-Anmeldung). */}
                 <button type="button" className={adminMenuItem}
                   onClick={() => openAdminAction(() => setShowMobileLink(true))}>
-                  <Smartphone className="h-5 w-5 shrink-0" aria-hidden="true" /> Mobile Kassenübersicht
+                  <QrIcon className="h-5 w-5 shrink-0 text-cyan-400" aria-hidden="true" /> Mobile Kassenübersicht
                 </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>

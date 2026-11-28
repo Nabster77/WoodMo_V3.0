@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, LogOut, MapPin, Minus, Plus, Recycle, RefreshCw, RotateCcw, ShieldCheck, WifiOff } from 'lucide-react';
-import { callMobile, MobileApiError, newMobileReceiptId } from '@/lib/mobileApi';
+import { callMobile, MobileApiError, newMobileReceiptId, unpairPhoneOnClose } from '@/lib/mobileApi';
 import { formatCurrency } from '@/lib/format';
 import { APP_VERSION } from '@/lib/appVersion';
 import { SwipeConfirm } from './SwipeConfirm';
@@ -188,6 +188,12 @@ function PfandBooking({ pairing, onEnd }: { pairing: PfandPairing; onEnd: () => 
     window.addEventListener('online', on); window.addEventListener('offline', off);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
+  // Browser/Tab wird wirklich geschlossen (nicht nur Bildschirmsperre): Kopplung beenden, Handy muss neu koppeln.
+  useEffect(() => {
+    const onHide = (event: PageTransitionEvent) => { if (!event.persisted) { unpairPhoneOnClose(pairing.token); saveSession(PFAND_KEY, null); } };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [pairing.token]);
   // Kopplung regelmäßig prüfen: endet sie (Tagesabschluss, „Kopplung beenden“), wird nicht mehr gebucht.
   useEffect(() => {
     const check = async () => {

@@ -18,6 +18,9 @@ const CODE_MINUTES = 3;
 const PFAND_HOURS = 10;
 /** Ohne Lebenszeichen der Kassen-App (geschlossen) endet die Kopplung (Rückfall, falls das Schließen nicht gemeldet werden konnte). */
 const TABLET_SILENCE_MIN = 10;
+/** Handy meldet sich alle 20 s; ohne Meldung (Browser geschlossen) zählt die Kopplung am Tablet nicht mehr. */
+const PHONE_SILENCE_MS = 120_000;
+const phoneAlive = (row: Record<string, unknown>) => !row.phone_seen_at || Date.now() - new Date(String(row.phone_seen_at)).getTime() < PHONE_SILENCE_MS;
 const ADMIN_MINUTES = 30;
 const MAX_FAILS = 8;
 const FAIL_WINDOW_MIN = 10;
@@ -122,8 +125,8 @@ Deno.serve(async request => {
       }
       const { data } = await db.from('pos_mobile_pairings').update({ tablet_seen_at: new Date().toISOString() })
         .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).not('claimed_at', 'is', null)
-        .gt('expires_at', new Date().toISOString()).select('id');
-      return reply(200, { active: (data ?? []).length });
+        .gt('expires_at', new Date().toISOString()).select('id, phone_seen_at');
+      return reply(200, { active: (data ?? []).filter(phoneAlive).length });
     }
     if (action === 'pair_list') {
       const open = await loadSession(db, sessionId);
@@ -131,10 +134,10 @@ Deno.serve(async request => {
         await db.from('pos_mobile_pairings').update({ revoked_at: new Date().toISOString() }).eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null);
         return reply(200, { pairings: [] });
       }
-      const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at, tablet_seen_at')
+      const { data } = await db.from('pos_mobile_pairings').select('staff_name, claimed_at, last_used_at, code_expires_at, tablet_seen_at, phone_seen_at')
         .eq('session_id', sessionId).eq('kind', 'pfand').is('revoked_at', null).gt('expires_at', new Date().toISOString()).order('claimed_at', { ascending: true });
       const active = (data ?? []).filter(row => row.claimed_at
-        ? !(row.tablet_seen_at && Date.now() - new Date(row.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000)
+        ? phoneAlive(row) && !(row.tablet_seen_at && Date.now() - new Date(row.tablet_seen_at).getTime() > TABLET_SILENCE_MIN * 60_000)
         : new Date(row.code_expires_at).getTime() > Date.now());
       return reply(200, { pairings: active });
     }
@@ -174,7 +177,7 @@ Deno.serve(async request => {
     if (!session || !isOpen(session.data)) return reply(409, { error: 'Die Kasse ist nicht mehr offen.' });
     const token = randomToken();
     const { data: claimed } = await db.from('pos_mobile_pairings')
-      .update({ claimed_at: new Date().toISOString(), token_hash: await sha(token), code: null })
+      .update({ claimed_at: new Date().toISOString(), phone_seen_at: new Date().toISOString(), token_hash: await sha(token), code: null })
       .eq('id', row.id).is('claimed_at', null).select('id').maybeSingle();
     if (!claimed) return reply(409, { error: 'Code wurde bereits verwendet.' });
     return reply(200, { token, location: row.location, session_id: row.session_id, staff_name: row.staff_name, pfand_amount: Number(row.pfand_amount) });
@@ -194,6 +197,7 @@ Deno.serve(async request => {
     if (!pairing) return reply(410, { error: 'Kopplung beendet.' });
     const session = await loadSession(db, String(pairing.session_id));
     if (!session || !isOpen(session.data)) { await revokePairing(db, pairing.id); return reply(410, { error: 'Kasse geschlossen. Kopplung beendet.' }); }
+    await db.from('pos_mobile_pairings').update({ phone_seen_at: new Date().toISOString() }).eq('id', pairing.id);
     return reply(200, { ok: true, expires_at: pairing.expires_at, location: pairing.location, staff_name: pairing.staff_name, pfand_amount: Number(pairing.pfand_amount) });
   }
 
@@ -237,7 +241,7 @@ Deno.serve(async request => {
     const generation = await currentGeneration(db);
     const { error } = await db.from('pos_transactions').insert({ id, location, timestamp: now, data: transaction, booking_generation: generation });
     if (error) return reply(503, { error: 'Buchung nicht gespeichert. Bitte erneut senden.' });
-    await db.from('pos_mobile_pairings').update({ last_used_at: new Date().toISOString() }).eq('id', pairing.id);
+    await db.from('pos_mobile_pairings').update({ last_used_at: new Date().toISOString(), phone_seen_at: new Date().toISOString() }).eq('id', pairing.id);
     return reply(200, { ok: true, total: amount });
   }
 
