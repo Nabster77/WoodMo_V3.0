@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Activity, X, Loader2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, getDiagMode, listDevices,
+  DIAG_EVENT, DIAG_ONLINE_WINDOW_MS, invokeGateway, enableOwnDevice, getDeviceId, getDeviceLabel, hasDeviceLabel, getDiagMode, listDevices, cleanupStaleDevices,
   resetFolderCache, sendRemoteCommand, setDeviceLabel, setLocalMode, setRemoteMode, verifyDiagnosticsPassword,
   type DiagCommand, type DiagMode, type DiagRow,
 } from '@/lib/diagnostics';
@@ -118,13 +118,15 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
     try {
       await verifyDiagnosticsPassword(password);
       setUnlocked(true);
+      try { await cleanupStaleDevices(password); await refresh(); } catch { /* Anzeige blendet Veraltetes ohnehin aus */ }
     } catch (error) {
       setPassword('');
       setMessage({ ok: false, text: error instanceof Error ? error.message : 'Passwort nicht geprüft.' });
     } finally { setBusy(false); }
   }
 
-  async function guarded(action: () => Promise<void>, okText: string, needPassword: boolean) {
+  async function guarded(action: () => Promise<void>, okText: string, needPassword: boolean, needName = false) {
+    if (needName && !hasDeviceLabel()) { setMessage({ ok: false, text: 'Bitte zuerst einen Gerätenamen eintragen (z. B. „Tablet Bregenz“) und auf Speichern drücken.' }); return; }
     if (needPassword && !password.trim()) { setMessage({ ok: false, text: 'Bitte zuerst das Administrator- oder Verwaltungspasswort eingeben.' }); return; }
     setBusy(true); setMessage(null);
     try {
@@ -181,7 +183,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
         <div className="space-y-2 rounded-xl border border-slate-300 p-3 dark:border-slate-700">
           <p className="text-sm font-bold">Dieses Gerät ist <span className="text-emerald-600">{MODE_TEXT[mode]}</span></p>
           <div>
-            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename</label>
+            <label htmlFor="diag-device-name" className="block text-xs font-semibold">Gerätename{!hasDeviceLabel() ? ' – bitte vergeben (z. B. „Tablet Bregenz“)' : ''}</label>
             <div className="mt-1 flex gap-2">
               <input id="diag-device-name" value={label} maxLength={40} onChange={(event) => setLabel(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Enter') { setDeviceLabel(label); setMessage({ ok: true, text: 'Gerätename gespeichert.' }); } }}
@@ -207,8 +209,8 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
           )}
           <div className="flex gap-2">
             {modeButton('off', 'AUS', () => void guarded(() => setLocalMode('off', location), 'Diagnose ist aus.', false))}
-            {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false))}
-            {modeButton('on', 'AN', () => void guarded(() => enableOwnDevice(password, location), 'Diagnose ist an.', true))}
+            {modeButton('ready', 'BEREIT', () => void guarded(() => setLocalMode('ready', location), 'Gerät ist bereit und wartet auf Freigabe.', false, true))}
+            {modeButton('on', 'AN', () => void guarded(() => enableOwnDevice(password, location), 'Diagnose ist an.', true, true))}
           </div>
         </div>
 
@@ -220,8 +222,24 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
 
         <div className="space-y-2">
           <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Geräte</h3>
-          {rows.filter((row) => row.device_id !== myId).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät gemeldet.</p>}
-          {rows.filter((row) => row.device_id !== myId).map((row) => {
+          {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).length === 0 && <p className="text-sm text-slate-500">Kein weiteres Gerät aktiv.</p>}
+          {(() => {
+            // 28.11.: Ein Knopf für alle: Geräte auf AN, online und mit älterer Version bekommen das Update; angemeldete Benutzer werden dort abgemeldet.
+            const targets = latest ? rows.filter((row) => row.device_id !== myId && row.mode === 'on' && ago(row.reported_at).online && row.app_version !== latest && row.pending_command !== 'update-install') : [];
+            if (targets.length === 0) return null;
+            return (
+              <button type="button" disabled={busy}
+                onClick={() => {
+                  if (!window.confirm(`${targets.length} Gerät${targets.length === 1 ? '' : 'e'} jetzt auf Version ${latest} aktualisieren?\nAngemeldete Benutzer werden dort abgemeldet (Kasse und Buchungen bleiben bestehen). Ein gerade laufender Warenkorb geht verloren.`)) return;
+                  void guarded(async () => { for (const row of targets) await sendRemoteCommand(row.device_id, 'update-install', password, true); },
+                    `Update ${latest} an ${targets.length} Gerät${targets.length === 1 ? '' : 'e'} gesendet.`, true);
+                }}
+                className="min-h-11 w-full rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white disabled:opacity-40">
+                Alle Geräte jetzt updaten und abmelden ({targets.length})
+              </button>
+            );
+          })()}
+          {rows.filter((row) => row.device_id !== myId && ago(row.reported_at).online).map((row) => {
             const seen = ago(row.reported_at);
             const own = row.device_id === myId;
             return (
@@ -252,7 +270,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                     </div>
                   );
                 })}
-                {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}</p>}
+                {row.pending_command && <p className="text-xs font-semibold text-amber-600">Befehl wartet: {COMMANDS.find((c) => c.id === row.pending_command)?.label}{row.command_result && row.command_result.startsWith('Wartet') ? ' – ' + row.command_result : ' – das Gerät fragt etwa alle 30 Sekunden nach.'}</p>}
                 {openRows.has(row.device_id) && row.command_result && <p className="text-xs text-slate-500">Letztes Ergebnis: {row.command_result}</p>}
                 {!own && (
                   <div className="flex flex-wrap gap-2">
@@ -280,6 +298,7 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
                         onClick={() => void guarded(async () => {
                           // Schon auf der aktuellen Version: nichts senden, kein Update und kein Neustart nötig.
                           if (command.id === 'update-install' && row.app_version === APP_VERSION) throw new Error(`${row.label || 'Gerät'} läuft schon auf Version ${APP_VERSION}. Kein Update und kein Neustart nötig.`);
+                          if (row.pending_command && row.pending_command !== command.id) throw new Error(`${row.label || 'Gerät'} hat noch einen wartenden Befehl (${COMMANDS.find((c) => c.id === row.pending_command)?.label}). Bitte warten, bis er ausgeführt ist.`);
                           await sendRemoteCommand(row.device_id, command.id, password, false);
                         }, `${command.label} an ${row.label || 'Gerät'} gesendet.`, true)}
                         className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">{command.label}</button>
@@ -290,9 +309,22 @@ export function DiagnosticsDialog({ location, onClose }: { location: string | nu
               </div>
             );
           })}
-          <button type="button" disabled={busy} onClick={() => void refresh()}
+          {(() => {
+            const hidden = rows.filter((row) => row.device_id !== myId && !ago(row.reported_at).online).length;
+            return hidden > 0 ? <p className="text-xs text-slate-500">{hidden} nicht aktive{hidden === 1 ? 's Gerät' : ' Geräte'} ausgeblendet. „Aktualisieren“ entfernt Einträge, die seit über 24 Stunden nichts gemeldet haben.</p> : null;
+          })()}
+          <button type="button" disabled={busy}
+            onClick={() => void (async () => {
+              if (unlocked && password.trim()) { try { await cleanupStaleDevices(password); } catch { /* nur Anzeige */ } }
+              await refresh();
+            })()}
             className="flex min-h-10 items-center gap-1.5 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Aktualisieren
+          </button>
+          <button type="button" disabled={busy}
+            onClick={() => void guarded(async () => { const removed = await cleanupStaleDevices(password); setMessage({ ok: true, text: removed > 0 ? `${removed} alte Einträge entfernt.` : 'Keine alten Einträge vorhanden.' }); }, 'Alte Einträge geprüft.', true)}
+            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-slate-700 px-3 text-xs font-bold text-white">
+            Alte Einträge jetzt entfernen
           </button>
         </div>
       </section>

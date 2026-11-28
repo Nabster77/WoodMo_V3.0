@@ -29,7 +29,8 @@ export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, 
     void archiveFolderStatus().then(result => {
       if (!active) return;
       setStatus(result);
-      if (firstSetup && result === 'missing') setFolderOptionsOpen(true);
+      // Ist ein Ordner gespeichert, entscheidet der Nutzer mit „Beibehalten“ oder „Neu auswählen“ (Prüfung kann sich irren).
+      if (firstSetup && result === 'missing' && setup?.archiveMode !== 'folder') setFolderOptionsOpen(true);
     });
     return () => { active = false; };
   }, [setup, firstSetup]);
@@ -99,11 +100,11 @@ export function DeviceSetupDialog({ firstSetup = false, onContinue, onComplete, 
             {status === null && <p>Gespeicherter Ordner wird geprüft …</p>}
           </div>}
           {setup?.archiveMode === 'downloads' && <p className="text-sm">Dateien werden manuell gespeichert.</p>}
-          {firstSetup && !folderOptionsOpen && status && status !== 'missing' && <div className="space-y-2">
-            <p className="text-sm">{status === 'ok' ? 'Ordner bereits ausgewählt. Möchten Sie ihn behalten?' : 'Möchten Sie den Schreibzugriff auf diesen Ordner erneut erlauben?'}</p>
+          {firstSetup && !folderOptionsOpen && status && (status !== 'missing' || setup?.archiveMode === 'folder') && <div className="space-y-2">
+            <p className="text-sm">{status === 'ok' ? 'Ordner bereits ausgewählt. Möchten Sie ihn behalten?' : status === 'needs-permission' ? 'Möchten Sie den Schreibzugriff auf diesen Ordner erneut erlauben?' : 'Der gespeicherte Ordner konnte gerade nicht bestätigt werden. „Beibehalten“ prüft ihn noch einmal. Nur wenn er wirklich fehlt, müssen Sie ihn neu auswählen.'}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={action} disabled={busy} onClick={() => void saveLocation('saved')}>{status === 'ok' ? 'Behalten und weiter' : 'Zugriff erlauben und weiter'}</button>
-              <button type="button" className={action} disabled={busy} onClick={() => { setError(null); setFolderOptionsOpen(true); }}>Ordner ändern</button>
+              <button type="button" className={action} disabled={busy} onClick={() => void saveLocation('saved')}>{status === 'needs-permission' ? 'Zugriff erlauben und weiter' : 'Beibehalten und weiter'}</button>
+              <button type="button" className={action} disabled={busy} onClick={() => { setError(null); setFolderOptionsOpen(true); }}>Neu auswählen</button>
             </div>
           </div>}
           {!folderOptionsOpen && (!firstSetup || status === null) && <button type="button" className={action} onClick={() => setFolderOptionsOpen(true)}>

@@ -5,6 +5,11 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/** 28.11.: Minusbeträge (Retouren, Auszahlungen) erscheinen überall rot; das Minus steht schon in der Zahl. */
+export function amountColor(value: number, normal = ''): string {
+  return value < -0.004 ? 'text-red-600 dark:text-red-400' : normal;
+}
+
 export function formatTime(ts: number): string {
   return new Intl.DateTimeFormat('de-DE', {
     hour: '2-digit',

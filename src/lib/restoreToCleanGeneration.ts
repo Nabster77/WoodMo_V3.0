@@ -6,6 +6,7 @@ import { readPendingOutbox } from '@/lib/outbox';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { prepareCleanGenerationRestore } from '@/lib/cleanGenerationRestore';
 import { restoreBackupSafely, type CompleteBackup, type RestoredBackup } from '@/lib/backupRecovery';
+import { restoreStepRunning } from '@/lib/restoreProgress';
 import type { Transaction, CashSession } from '@/types';
 import type { StornoRecord } from '@/lib/stornoRules';
 
@@ -45,6 +46,7 @@ export async function restoreToCleanGeneration(backup: CompleteBackup): Promise<
   };
   if (!financial.transactions.length && !financial.cashSessions.length && !financial.stornos.length) return null;
   requireValidBackupIntegrity(financial, 'Backup-Import');
+  restoreStepRunning(1);
 
   const reset = await fetchLatestBookingReset();
   const generation = reset?.generation ?? 0;
@@ -70,6 +72,7 @@ export async function restoreToCleanGeneration(backup: CompleteBackup): Promise<
   );
   if (!approved) throw new Error('Backup-Wiederherstellung abgebrochen. Keine Buchungen verändert.');
 
+  restoreStepRunning(2);
   // Server verifies empty generation and expected reset marker once again
   // under exclusive transaction locks, then commits all three ledgers at once.
   const { data, error } = await supabase.rpc('restore_pos_clean_backup_v3',{
@@ -87,6 +90,7 @@ export async function restoreToCleanGeneration(backup: CompleteBackup): Promise<
     throw new Error('Unvollständige Bestätigung der Rücksicherung. Zuerst Cloud-Journal kontrollieren.');
   }
 
+  restoreStepRunning(3);
   const [written, writtenStornos] = await Promise.all([
     fetchCloudData(null,generation), loadCloudStornos(generation),
   ]);
@@ -107,6 +111,7 @@ export async function restoreToCleanGeneration(backup: CompleteBackup): Promise<
 
   // Secondary staff/catalog/security recovery is deliberately separate from
   // immutable financial replay. Do not duplicate old daily-close receipt IDs.
+  restoreStepRunning(4);
   let assets: RestoredBackup;
   try {
     const meta = backup.data.serverRecovery ? {...backup.data.serverRecovery,receipts:[]} : undefined;

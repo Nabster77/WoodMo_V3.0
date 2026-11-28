@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { CloudLoginGate } from './components/CloudLoginGate.tsx';
+import { MobileApp, isMobileMode } from './components/Mobile/MobileApp.tsx';
 import './index.css';
 
 // Chrome offers installation right after loading – before login and before
@@ -17,10 +18,15 @@ window.addEventListener('beforeinstallprompt', (event) => {
 // device runs low on space; installed apps are normally granted this.
 void navigator.storage?.persist?.().catch(() => false);
 
-createRoot(document.getElementById('root')!).render(
+// 27.11.: Handy-Modus (?mobil=pfand|admin) ist eine eigene Seite ohne Kassen-App und ohne Cloud-Konto.
+createRoot(document.getElementById('root')!).render(isMobileMode() ? (
+  <StrictMode>
+    <MobileApp />
+  </StrictMode>
+) : (
   <StrictMode>
     <CloudLoginGate>
       {adminStartup => <App adminStartup={adminStartup} />}
     </CloudLoginGate>
-  </StrictMode>,
-);
+  </StrictMode>
+));

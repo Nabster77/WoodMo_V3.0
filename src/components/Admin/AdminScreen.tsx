@@ -4,7 +4,7 @@ import type { CatalogImportSession } from '@/lib/catalogEngine';
 import type { LocalCatalog } from '@/lib/catalogSync';
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { Category, Product, TaxClass, Location, Transaction, CashSession, PfandSettings, StaffRole, StaffSecurityQuestion, StaffUser, ShotOption } from '@/types';
-import { formatCurrency, formatDateISO, formatTime } from '@/lib/format';
+import { amountColor, formatCurrency, formatDateISO, formatTime } from '@/lib/format';
 import { DiagnosticsDialog } from './DiagnosticsDialog';
 import { mergeTaxByRate, sortedRateKeys, transactionNet, LOCATION_TAX_RATES } from '@/lib/tax';
 import { buildDailyReport, closedSessionReport } from '@/lib/dailyReport';
@@ -20,7 +20,9 @@ import { DynamicIcon, availableIconNames } from '@/components/DynamicIcon';
 import { importFileToDataURL, isSupported, ACCEPTED_TYPES } from '@/lib/imageImport';
 import { uploadArticleImage } from '@/lib/imageUpload';
 import { publicAssetUrl } from '@/lib/publicAssetUrl';
-import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Save, Tag, Package, Upload, Loader2, RotateCcw, Wine, Recycle, MonitorDot, Settings, FileDown, Printer, MapPin, TrendingUp, Euro, Receipt as ReceiptIcon, Clock, Check, Info, ChevronDown, FileText, FlaskConical, CheckCircle2, Download, FileUp, ShieldCheck, AlertTriangle, Wrench, QrCode as QrIcon } from 'lucide-react';
+import { mobileLink } from '@/lib/mobileApi';
+import { QrCode } from '@/components/QrCode';
 import { SHOT_CATEGORY_ID } from '@/lib/shotCatalog';
 import type { StornoRecord } from '@/lib/stornoRules';
 import type { ResetSafetyResult } from '@/lib/resetSafetyChecklist';
@@ -61,8 +63,14 @@ interface Props {
   onDeviceSetup?: () => void;
   testMode?: boolean;
   onToggleMode?: () => void;
-  onExportBackup?: () => void | Promise<void>;
+  onExportBackup?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onImportBackup?: (file: File) => void;
+  /** Führt zum Tagesabschluss der offenen Kasse am Standort (Weg B beim Zurücksetzen). */
+  onCloseOpenCash?: (location: string) => void;
+  /** Info-Fenster: Update prüfen; gibt es eins, melden sich alle ab und die App installiert es und startet neu. */
+  onUpdateNow?: () => void;
+  /** Meldet einen Mitarbeiter in einer offenen Kassensitzung ab (nur Login-Status, keine Buchung). */
+  onLogoutStaff?: (sessionId: string, staffId: string, staffName: string) => void;
   resetQuarantineCount?: number;
   onExportResetQuarantine?: () => Promise<void>;
   onClearResetQuarantine?: () => Promise<void>;
@@ -120,7 +128,7 @@ const ADMIN_SECTION_TITLES = {
 } as const;
 
 
-export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
+export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, onToggleMode, onExportBackup, onImportBackup, onCloseOpenCash, onLogoutStaff, onUpdateNow, onCheckResetSafety, resetQuarantineCount = 0, onExportResetQuarantine, onClearResetQuarantine, menuOpen, onOpenMenu, onCloseMenu, onOpenJournal, onAdminSectionChange, onShotDraftDirtyChange, ...props }: Props) {
   const [tab, setTab] = useState<keyof typeof ADMIN_SECTION_TITLES>('sessions');
 
   const [shotDraftDirty, setShotDraftDirty] = useState(false);
@@ -156,6 +164,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
   const [showCatalogTransfer, setShowCatalogTransfer] = useState(false);
   const [showReleaseInfo, setShowReleaseInfo] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showMobileLink, setShowMobileLink] = useState(false);
   const [readRelease, setReadRelease] = useState(() => loadJSON<string | null>(READ_RELEASE_KEY, null));
   const unreadRelease = APP_RELEASE_NOTES.length > 0 && readRelease !== RELEASE_ID;
   function closeReleaseInfo() {
@@ -247,6 +256,11 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   onClick={() => openAdminAction(() => setShowDiagnostics(true))}>
                   <Wrench className="h-5 w-5 shrink-0" aria-hidden="true" /> Diagnose
                 </button>
+                {/* 27.11.: Link für die mobile Kassenübersicht (Handy, nur lesen, eigene Administrator-Anmeldung). */}
+                <button type="button" className={adminMenuItem}
+                  onClick={() => openAdminAction(() => setShowMobileLink(true))}>
+                  <QrIcon className="h-5 w-5 shrink-0 text-cyan-400" aria-hidden="true" /> Mobile Kassenübersicht
+                </button>
                 {onDeviceSetup && (
                   <button type="button" className={adminMenuItem} onClick={() => openAdminAction(onDeviceSetup)}>
                     <Settings className="h-5 w-5 shrink-0" /> Setup / PDF-Ordner
@@ -273,7 +287,7 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
                   </button>
                 )}
                 {onExportBackup && (
-                  <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void onExportBackup(); })}>
+                  <button type="button" className={adminMenuItem} onClick={() => openAdminAction(() => { void (async () => { const saved = await onExportBackup(); if (saved && saved.mode === 'folder') alert(`Backup gespeichert: ${saved.savedAs}`); })(); })}>
                     <Download className="h-5 w-5 shrink-0" /> Backup exportieren
                   </button>
                 )}
@@ -314,6 +328,20 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
               : tab === 'shots' ? <ShotManager shots={props.shotOptions} onChange={props.onUpdateShotOptions} onDirtyChange={(dirty) => { setShotDraftDirty(dirty); onShotDraftDirtyChange?.(dirty); }} />
               : props.onCreateStaff && props.onUpdateStaff && props.onSetStaffPassword && props.onDeleteStaff ? <div className="space-y-4"><StaffManager users={props.staffUsers ?? []} online={props.staffOnline ?? navigator.onLine} onCreate={props.onCreateStaff} onUpdate={props.onUpdateStaff} onSetPassword={props.onSetStaffPassword} onDelete={props.onDeleteStaff} />{props.administratorTools}</div> : null}
       </div>
+      {showMobileLink && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4" onClick={() => { setShowMobileLink(false); onOpenMenu(); }}>
+          <div className="gx-dialog w-full max-w-sm rounded-3xl p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-1 text-xl font-bold">Mobile Kassenübersicht</h2>
+            <p className="mb-3 text-sm">Mit der Handy-Kamera scannen, dann mit Administrator-Name und persönlichem Passwort anmelden. Nur lesen.</p>
+            <QrCode text={mobileLink('admin')} size={220} />
+            <a href={mobileLink('admin')} target="_blank" rel="noopener noreferrer" className="mt-3 block break-all font-mono text-xs font-bold underline">{mobileLink('admin')}</a>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { void navigator.clipboard?.writeText(mobileLink('admin')).catch(() => undefined); }} className="min-h-11 rounded-xl text-sm font-bold">Link kopieren</button>
+              <button type="button" onClick={() => { setShowMobileLink(false); onOpenMenu(); }} className="bg-slate-900 min-h-11 rounded-xl text-sm font-bold">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDiagnostics && <DiagnosticsDialog location={props.selectedLocation ?? null} onClose={() => setShowDiagnostics(false)} />}
       {showReleaseInfo && (
         <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 p-4 backdrop-blur-[2px]"
@@ -323,6 +351,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
             onClick={event => event.stopPropagation()}>
             <h2 id="woodmo-version-info" className="text-xl font-bold">Info</h2>
             <ReleaseSummary />
+            {onUpdateNow && (
+              <button type="button" onClick={() => { saveJSON(READ_RELEASE_KEY, RELEASE_ID); setReadRelease(RELEASE_ID); setShowReleaseInfo(false); onUpdateNow(); }}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/70 bg-cyan-950/30 px-4 font-semibold text-cyan-200 hover:bg-cyan-900/50">
+                <RotateCcw className="h-4 w-4" aria-hidden="true" /> Auf neue Version prüfen / Aktualisieren
+              </button>
+            )}
             <button type="button" autoFocus onClick={closeReleaseInfo}
               className="ml-auto block min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white dark:bg-white dark:text-slate-900">
               Schließen
@@ -343,6 +377,12 @@ export function AdminScreen({ onResetAllData, onDeviceSetup, testMode = false, o
           sessionCount={props.cashSessions.length}
           openSessionCount={props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).length}
           testMode={testMode}
+          openLocations={[...new Set(props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt).map((session) => session.location))]}
+          onCloseOpenCash={onCloseOpenCash ? (location) => { setShowReset(false); onCloseOpenCash(location); } : undefined}
+          loggedInStaff={props.cashSessions.filter((session) => !session.closed && !session.discarded && !session.dailyCloseFinalizedAt)
+            .flatMap((session) => (session.staffLoginIntervals ?? []).filter((interval) => interval.logoutAt === undefined && interval.staffId !== props.currentStaff?.id)
+              .map((interval) => ({ sessionId: session.id, location: session.location, staffId: interval.staffId, staffName: interval.staffName })))}
+          onLogoutStaff={onLogoutStaff}
           onCancel={() => setShowReset(false)}
           onConfirm={async (adminPassword) => { await onResetAllData?.(adminPassword); setShowReset(false); }}
         />
@@ -1002,13 +1042,8 @@ function LiveSessionOverview({ transactions, cashSessions, stornos, categories, 
   onOpenCash?: () => void;
   exportedByName?: string;
 }) {
-  // 24.11.: Beim Öffnen die offene Kasse des gewählten Standorts zeigen, sonst heute.
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const now = formatDateISO(Date.now());
-    const open = cashSessions.find((s) => s.location === selectedLocation && !s.closed && !s.discarded && !s.dailyCloseFinalizedAt);
-    const day = open ? formatDateISO(open.openedAt) : now;
-    return day <= now ? day : now;
-  });
+  // 27.11.: Beim Öffnen immer das heutige Datum („letzter Umsatztag“ bleibt als Sprungziel).
+  const [selectedDate, setSelectedDate] = useState<string>(() => formatDateISO(Date.now()));
   const [previewReport, setPreviewReport] = useState<JournalReportData | null>(null);
   const [infoLocation, setInfoLocation] = useState<Location | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -1335,7 +1370,7 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
             ] as const).map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs text-[var(--loc-strong)] opacity-80 dark:text-[var(--loc-light)]">{label}</p>
-                <p className="text-sm font-bold text-[var(--loc-strong)] dark:text-[var(--loc-light)]">{formatCurrency(value)}</p>
+                <p className={`text-sm font-bold ${value < 0 ? RED_TEXT : 'text-[var(--loc-strong)] dark:text-[var(--loc-light)]'}`}>{formatCurrency(value)}</p>
               </div>
             ))}
             {/* MwSt.: reduziert + regulär je Standort, darunter gesamt */}
@@ -1362,18 +1397,19 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
           </button>
           {salesOpen && txToday.length > 0 && (
             <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-              {txToday.map((tx) => (
+              {[...txToday].sort((a, b) => b.timestamp - a.timestamp).map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-1.5 text-xs last:border-0 dark:border-gray-700/50">
                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Clock className="h-3 w-3" />
                     {formatTime(tx.timestamp)}
                     <span className="rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
+                    {tx.total < 0 && tx.items.every((i) => i.isPfandRetoure) && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">RETOURE</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                       {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
                     </span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+                    <span className={`font-bold ${amountColor(tx.total, 'text-gray-900 dark:text-gray-100')}`}>{formatCurrency(tx.total)}</span>
                   </div>
                 </div>
               ))}
@@ -1411,6 +1447,8 @@ function LocationSessionCard({ loc, session, sessionCount, total, count, totalTa
 }
 
 // ---- Day Info Dialog ----
+
+const RED_TEXT = 'text-red-600 dark:text-red-400';
 
 function DayInfoDialog({ location, date, categories, transactions, parts, onClose }: {
   location: Location;
@@ -1508,7 +1546,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 </div>
                 <div className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-900/20">
                   <p className="text-xs text-green-700/70 dark:text-green-400/70">Pfand-Saldo</p>
-                  <p className="text-base font-bold text-green-700 dark:text-green-300">{formatCurrency(totalPfand)}</p>
+                  <p className={`text-base font-bold ${totalPfand < 0 ? RED_TEXT : 'text-green-700 dark:text-green-300'}`}>{formatCurrency(totalPfand)}</p>
                 </div>
               </div>
 
@@ -1597,7 +1635,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                       <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">Anfangsbestandskorrekturen</h3>
                       <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Bereits im angezeigten Anfangsbestand enthalten; wird nicht erneut abgezogen oder addiert.</p>
                       <div className="mt-2 space-y-2">
-                        {[...session.corrections].sort((a, b) => a.timestamp - b.timestamp).map((correction) => {
+                        {[...session.corrections].sort((a, b) => b.timestamp - a.timestamp).map((correction) => {
                           const difference = Math.round((correction.newAmount - correction.oldAmount) * 100) / 100;
                           return <div key={correction.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm dark:border-amber-800 dark:bg-gray-900/40">
                             <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(correction.oldAmount)} → {formatCurrency(correction.newAmount)} <span className={difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>({difference > 0 ? '+' : ''}{formatCurrency(difference)})</span></p>
@@ -1679,7 +1717,7 @@ function DayInfoDialog({ location, date, categories, transactions, parts, onClos
                 <details className="group">
                   <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 [&::-webkit-details-marker]:hidden"><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> Verkäufe ({transactions.length})</summary>
                   <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700">
-                    {[...transactions].sort((a, b) => a.timestamp - b.timestamp).map((tx) => (
+                    {[...transactions].sort((a, b) => b.timestamp - a.timestamp).map((tx) => (
                       <SaleRow key={tx.id} tx={tx} />
                     ))}
                   </div>
@@ -1711,12 +1749,13 @@ function SaleRow({ tx }: { tx: Transaction }) {
           <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
           <span className="shrink-0">{formatTime(tx.timestamp)}</span>
           <span className="truncate rounded px-1.5 py-0.5 font-medium text-gray-400 dark:text-gray-500">{tx.items.length} Art.</span>
+          {tx.total < 0 && tx.items.every((i) => i.isPfandRetoure) && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">RETOURE</span>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tx.paymentMethod === 'cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
             {tx.paymentMethod === 'cash' ? 'BAR' : 'KARTE'}
           </span>
-          <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(tx.total)}</span>
+          <span className={`font-bold ${amountColor(tx.total, 'text-gray-900 dark:text-gray-100')}`}>{formatCurrency(tx.total)}</span>
         </div>
       </button>
       {open && (
@@ -1731,7 +1770,7 @@ function SaleRow({ tx }: { tx: Transaction }) {
             <div className="flex justify-between text-green-700 dark:text-green-400"><span>Pfand-Retoure {retoureQty} ×</span><span>− {money(pfandBack)}</span></div>
           )}
           <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900 dark:border-gray-700 dark:text-gray-100">
-            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span>{formatCurrency(tx.total)}</span>
+            <span>{tx.total < 0 ? 'Auszahlung' : 'Summe'} · {tx.paymentMethod === 'cash' ? 'bar' : 'Karte'}</span><span className={amountColor(tx.total)}>{formatCurrency(tx.total)}</span>
           </div>
           {Math.abs(goodsSum + pfandOut - pfandBack - tx.total) > 0.01 && (
             <div className="text-[10px] text-amber-600 dark:text-amber-400">Hinweis: Teilbetrag einer geteilten Zahlung, Rest steht in einer eigenen Zeile.</div>
@@ -1745,8 +1784,12 @@ function SaleRow({ tx }: { tx: Transaction }) {
 
 // ---- Reset / Backup / Import dialogs ----
 
-function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, testMode }: {
-  onExport?: () => void | Promise<void>;
+function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactionCount, stornoCount, sessionCount, openSessionCount, openLocations, onCloseOpenCash, loggedInStaff, onLogoutStaff, testMode }: {
+  loggedInStaff: { sessionId: string; location: string; staffId: string; staffName: string }[];
+  onLogoutStaff?: (sessionId: string, staffId: string, staffName: string) => void;
+  openLocations: string[];
+  onCloseOpenCash?: (location: string) => void;
+  onExport?: () => void | Promise<void | { mode: 'folder' | 'downloads'; savedAs: string }>;
   onCheck?: (progress: (result: ResetSafetyResult) => void) => Promise<ResetSafetyResult>;
   onCancel: () => void;
   onConfirm: (adminPassword: string) => Promise<void>;
@@ -1768,6 +1811,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
   const [notice, setNotice] = useState<string | null>(null);
   const checkRef = useRef(onCheck);
   checkRef.current = onCheck;
+  const autoBackupTried = useRef(false);
 
   // First opening performs a real scan; the dialog must be reopened to scan again.
   useEffect(() => {
@@ -1790,7 +1834,7 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
     setBusy(true);
     setError(null);
     try {
-            await onExport();
+      const exported = await onExport();
       setNotice(null);
       // An open cash register does not block the backup itself (22.11.2026):
       // the file is complete. Only the reset needs every register closed, so
@@ -1816,7 +1860,14 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
       // A download request is NOT proof that the file was saved. The user
       // must expressly tick the confirmation once the file is on disk.
       setBackupRequested(true);
-      setSavedBackup(false);
+      // Im Ordner-Modus ist das Schreiben der Datei selbst der Nachweis (Dateiname
+      // wurde vom Ordner bestätigt). Nur beim normalen Download bleibt der Haken manuell.
+      if (exported && exported.mode === 'folder') {
+        setSavedBackup(true);
+        setNotice('Backup gespeichert: ' + exported.savedAs);
+      } else {
+        setSavedBackup(false);
+      }
     } catch (cause) {
             setBackupRequested(false);
       setSavedBackup(false);
@@ -1827,6 +1878,17 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
       setBusy(false);
     }
   }
+
+  // Automatisch sichern, sobald die Prüfung bestanden ist. Es wird immer eine
+  // frische Sicherung erstellt (nie eine alte Datei wiederverwendet): sie ist
+  // dadurch sicher zum aktuellen Cloud-Stand passend. Schlägt es fehl (z. B.
+  // Ordnerzugriff nur per Tippen), bleibt der Button zum manuellen Sichern.
+  useEffect(() => {
+    if (testMode || autoBackupTried.current || !completed || !canBackup || !report?.resetAllowed || !onExport || busy) return;
+    autoBackupTried.current = true;
+    void saveBackup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completed, canBackup, report?.resetAllowed]);
 
   async function confirm() {
     if (!confirmed || busy || checking || !canReset || (!testMode && !adminPassword.trim())) return;
@@ -1920,6 +1982,36 @@ function ResetConfirmDialog({ onExport, onCheck, onCancel, onConfirm, transactio
 
         {testMode && openSessionCount > 0 && (
           <p className="mb-3 text-xs text-amber-700">Im Testmodus werden nur lokale Testdaten entfernt.</p>
+        )}
+        {!testMode && loggedInStaff.length > 0 && onLogoutStaff && (
+          <div className="mb-3 rounded-xl border border-gray-300 p-3 text-sm text-gray-800 dark:border-gray-600 dark:text-gray-100">
+            <p className="mb-2 font-semibold">Angemeldete Mitarbeiter</p>
+            <div className="flex flex-col gap-2">
+              {loggedInStaff.map(entry => (
+                <button key={entry.sessionId + entry.staffId} type="button" disabled={busy}
+                  onClick={() => onLogoutStaff(entry.sessionId, entry.staffId, entry.staffName)}
+                  className="flex min-h-11 items-center justify-between rounded-xl border border-gray-300 px-4 py-2 text-left font-semibold disabled:opacity-50 dark:border-gray-600">
+                  <span>{entry.staffName} <span className="text-xs font-normal text-gray-500 dark:text-gray-400">· {entry.location}</span></span>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Abmelden</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {!testMode && completed && report?.resetAllowed === false && openLocations.length > 0 && onCloseOpenCash && (
+          <div className="mb-3 rounded-xl border border-blue-400/60 p-3 text-sm text-gray-800 dark:text-gray-100">
+            <p className="mb-2 font-semibold">Offene Kassen zuerst abschließen:</p>
+            <div className="flex flex-col gap-2">
+              {openLocations.map(location => (
+                <button key={location} type="button" disabled={busy}
+                  onClick={() => onCloseOpenCash(location)}
+                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                  Kasse {location} jetzt abschließen
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">Nach dem Abschluss: Verwaltung → Buchungen zurücksetzen. Das Backup startet dann automatisch.</p>
+          </div>
         )}
         {error && <p role="alert" className="mb-3 rounded-xl border border-red-300 p-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
         {notice && <p role="status" className="mb-3 rounded-xl border border-emerald-400/60 p-2 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}

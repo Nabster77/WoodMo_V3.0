@@ -1,11 +1,10 @@
 {
-  "title": "WOODMO Update: neues Design „Graphit“",
+  "title": "WOODMO Update: Handy-Modus",
   "notes": [
-    "Neues Design „Graphit“ in dunkel und hell: große 3D-Kacheln auf der Startseite, einheitliche 3D-Buttons in Verwaltungsmenü, Kassenmenü und Dialogen.",
-    "Verwaltungsmenü: Testmodus blau, Aktivmodus grün, Sicherheitsarchiv gelb, Zurücksetzen rot; Diagnose mit Schraubenschlüssel.",
-    "Kassenmenü: Kacheln zweispaltig, Tagesabschluss bleibt farbig hervorgehoben.",
-    "Anmelde-, Kassenöffnungs- und Schussfenster kompakter; Hinweisfenster im neuen Design.",
-    "Favoriten werden pro Mitarbeiter gespeichert und beim Anmelden automatisch geladen.",
-    "Artikel ohne Bild zeigen ein passendes Symbol nach Artikelname."
+    "Handy koppeln: Das Kassentablet zeigt einen QR-Code, Link oder Code. Am Handy lässt sich Pfand-Retoure buchen (Schieber), ohne die Kasse zu bedienen.",
+    "Kopplung aufheben per Schieber mit Rückfrage; „Minimieren“ lässt die Kopplung bestehen. Sie endet auch beim Schließen der Kassen-App, bei Sitzungsende oder nach 10 Stunden.",
+    "Mobile Kassenübersicht für Administratoren (nur lesen): Namen auswählen, beide Standorte auf einen Blick.",
+    "Startseite/Home meldet Mitarbeiter und Administratoren ab; Kasse und Buchungen bleiben bestehen.",
+    "Diagnose → Geräte: zeigt nur noch aktive Geräte; Einträge, die über 24 Stunden nichts gemeldet haben, werden beim Aktualisieren entfernt."
   ]
 }

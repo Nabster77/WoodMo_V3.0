@@ -51,8 +51,9 @@ assert.match(app, /addEventListener\('visibilitychange', check\)/);
 assert.match(app, /onDismiss=\{\(\) => \{ autoUpdate\.current = false; updateDeferred\.current = true; if \(updatePhase === .offer.\) remindLater\(\); setUpdatePhase\(null\); \}\}/);
 // Ein Tipp: „Jetzt installieren“ läuft selbst bis zum Neustart (23.11.), nur auf dem Startbildschirm ohne Mitarbeiter.
 assert.match(app, /onPrepare=\{\(\) => \{ autoUpdate\.current = true; void prepareUpdate\(\); \}\}/);
-assert.match(app, /if \(!homeVisible \|\| currentStaff\) \{ autoUpdate\.current = false; return; \}/);
-assert.match(app, /homeVisible && !currentStaff && updatePhase/, 'Dialog nie während eines Kassenvorgangs');
+assert.match(app, /if \(!updateSafeView \|\| currentStaff\) \{ autoUpdate\.current = false; return; \}/);
+assert.match(app, /const updateSafeView = homeVisible \|\| tab === 'pos';/, 'Update-Ansicht: Startseite oder Kasse ohne Anmeldung');
+assert.match(app, /updateSafeView && !currentStaff && updatePhase/, 'Dialog nie bei angemeldetem Mitarbeiter (Kassenvorgang)');
 assert.match(app, /updateWaiting=\{candidate\?\.version\}/);
 assert.match(home, /'● Update wartet' : 'Update'/);
 assert.match(dialog, /'Später'/);

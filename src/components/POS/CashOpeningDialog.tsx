@@ -47,7 +47,8 @@ export function CashOpeningDialog({ existingSession: deviceSession, openSessions
   const [question, setQuestion] = useState<StaffSecurityQuestion | ''>('');
   const [answer, setAnswer] = useState('');
   const [answerRepeat, setAnswerRepeat] = useState('');
-  const [staffAuthenticated, setStaffAuthenticated] = useState(false);
+  // Zurück auf der Startseite: der schon angemeldete Mitarbeiter muss sich zum Weiterführen nicht erneut anmelden.
+  const [staffAuthenticated, setStaffAuthenticated] = useState(() => Boolean(currentStaff && currentStaff.active !== false && staffUsers.some((user) => user.id === currentStaff.id && user.active)));
   const [resetMode, setResetMode] = useState(false);
   // „X ist angemeldet“ nur, solange X wirklich der angemeldete Mitarbeiter der App ist (z. B. nach Abmeldung außerhalb des Dialogs).
   useEffect(() => {

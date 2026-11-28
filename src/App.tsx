@@ -55,9 +55,13 @@ import { headerDateLong, headerDateShort, headerTime } from '@/lib/headerDate';
 import { CLOSE_ARCHIVE_BACKUP_VERSION, exportRecoveryMetadata, restoreBackupSafely, validateBackupCloseArchive, type CompleteBackup } from '@/lib/backupRecovery';
 import { requireValidBackupIntegrity } from '@/lib/backupIntegrity';
 import { restoreToCleanGeneration } from '@/lib/restoreToCleanGeneration';
+import { restoreStepRunning, restoreFinished, restoreFailed, restoreClear } from '@/lib/restoreProgress';
+import { RestoreProgressOverlay } from '@/components/RestoreProgressOverlay';
 import { runResetSafetyChecks, type ResetSafetyResult } from '@/lib/resetSafetyChecklist';
 import { installKeyboardOnTap } from '@/lib/keyboardOnTap';
 import { installStyledAlert } from '@/lib/styledAlert';
+import { PhonePairDialog } from '@/components/POS/PhonePairDialog';
+import { callMobileAsTablet, revokePairingsOnClose } from '@/lib/mobileApi';
 import { installFullscreenToggle } from '@/lib/fullscreenToggle';
 import { serveFileTransfers } from '@/lib/fileTransfer';
 import { DIAG_EVENT, diagnosticsTick, getDeviceId, getDiagMode, installDiagErrorCapture, type DiagCommand, type DiagContext, type DiagHandlers } from '@/lib/diagnostics';
@@ -65,6 +69,7 @@ import {
   ShoppingCart, Settings, Receipt, Sun, Moon,
   ArrowDownCircle, ArrowUpCircle,
   FlaskConical, CheckCircle2, AlertTriangle, RefreshCw, Cloud, LayoutGrid, X, Home, LogOut, LogIn, LockKeyhole, MapPin, UserRound,
+  Smartphone,
 } from 'lucide-react';
 
 type Tab = 'pos' | 'admin' | 'journal';
@@ -142,6 +147,21 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const closeSyncToast = useCallback(() => setSyncedAt(null), []);
   const [syncOpen, setSyncOpen] = useState(false);
   const [currentStaff, setCurrentStaff] = useState<StaffUser | null>(null);
+  // Update-Hinweis und -Ablauf: Startseite ODER Kassenansicht, solange niemand angemeldet ist (Anmeldung blendet ihn aus).
+  const updateSafeView = homeVisible || tab === 'pos';
+  // 27.11.: Handy für Pfand-Retouren koppeln (Kassenmenü); gekoppelt → Kasse gleicht alle 5 s ab.
+  const pairStartupDone = useRef(false);
+  const [showPhonePair, setShowPhonePair] = useState(false);
+  const [phonePaired, setPhonePaired] = useState(false);
+  /** Kopplung besteht, das Handy meldet sich aber nicht mehr (Verbindung abgebrochen): Punkt an der Uhr wird rot. */
+  const [phoneLost, setPhoneLost] = useState(false);
+  const [phonePairedNotice, setPhonePairedNotice] = useState(false);
+  useEffect(() => {
+    if (!phonePairedNotice) return;
+    const timer = window.setTimeout(() => setPhonePairedNotice(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [phonePairedNotice]);
+  const handlePhonePaired = useCallback(() => { setShowPhonePair(false); setPhonePaired(true); setPhonePairedNotice(true); }, []);
   const [openingManagementAccess, setOpeningManagementAccess] = useState<OpeningManagementAccess>(null);
   // This is deliberately separate from `currentStaff`: opening Verwaltung
   // must never replace the person currently working at the cash register.
@@ -277,7 +297,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   useEffect(() => {
     // Neue Version tatsächlich installiert (Prüfung findet kein Update mehr): Erinnerung löschen.
     if (approvedActivation() || updatePhase !== null || updateBusy.current || autoInstallPending) return; // Installation läuft: pausieren
-    if (!homeVisible || currentStaff || document.visibilityState === 'hidden') return;
+    if (!updateSafeView || currentStaff || document.visibilityState === 'hidden') return;
     const later = readLater();
     if (later && Date.now() - later.at < REMIND_MS) return;
     let active = true;
@@ -292,7 +312,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     }).catch(() => undefined);
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Takt, Startbildschirm und Phase genügen
-  }, [reminderTick, homeVisible, currentStaff, updatePhase, autoInstallPending]);
+  }, [reminderTick, updateSafeView, currentStaff, updatePhase, autoInstallPending]);
   function remindLater() {
     const c = candidateRef.current;
     try { if (c) localStorage.setItem(UPDATE_LATER_KEY, JSON.stringify({ id: candidateId(c), at: Date.now() })); } catch { /* ignore */ }
@@ -301,12 +321,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   // 24.11.: Bei jeder Rückkehr zum Startbildschirm sofort online prüfen,
   // ob eine neue Version bereitsteht (Dialog/Erinnerung folgen den Regeln oben).
   useEffect(() => {
-    if (!homeVisible || currentStaff || approvedActivation()) return;
+    if (!updateSafeView || currentStaff || approvedActivation()) return;
     if (document.visibilityState === 'hidden') return;
     void checkForUpdate(!updateDeferred.current)
       .then(() => setReminderTick((n) => n + 1))
       .catch(() => undefined); // offline: installierte Version läuft weiter
-  }, [homeVisible, currentStaff, checkForUpdate]);
+  }, [updateSafeView, currentStaff, checkForUpdate]);
 
   async function openUpdateFromHome() {
     updateDeferred.current = false;
@@ -314,6 +334,20 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       const update = candidateRef.current ?? await checkForUpdate(false);
       if (update) setUpdatePhase('offer');
       else alert(`Version ${APP_VERSION} ist aktuell.`);
+    } catch (error) {
+      alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
+    }
+  }
+
+  // 28.11.: „Auf neue Version prüfen / Aktualisieren“ im Info-Fenster (Administrator): gibt es ein Update, melden sich alle
+  // an diesem Gerät ab (Kasse und Buchungen bleiben), die App installiert es und startet neu bis zum Startbildschirm.
+  async function updateNowFromInfo() {
+    updateDeferred.current = false;
+    try {
+      const update = candidateRef.current ?? await checkForUpdate(false);
+      if (!update) { alert(`Version ${APP_VERSION} ist aktuell. Kein Update vorhanden.`); return; }
+      forceUpdateRef.current = true;
+      goHome();
     } catch (error) {
       alert('Die Update-Prüfung ist gerade nicht möglich: ' + readableSyncError(error));
     }
@@ -337,7 +371,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const diagHandlersRef = useRef<DiagHandlers>({ run: async () => ({ done: true, text: '' }) });
   diagHandlersRef.current = {
-    async run(command: DiagCommand) {
+    async run(command: DiagCommand, force: boolean) {
       if (command === 'status') return { done: true, text: `Status gesendet, Version ${APP_VERSION}` };
       if (command === 'update-check') {
         try {
@@ -348,10 +382,23 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       // reload und update-install: nur wenn kein Benutzer angemeldet ist (auch Verwaltung zählt). Eine offene Kasse
       // ohne angemeldeten Benutzer ist erlaubt. Sonst bleibt der Befehl in der Warteschlange und wird beim
       // nächsten Durchlauf erneut geprüft. Buchungen liegen dauerhaft im Gerätespeicher, ein Neuladen verliert nichts.
-      const loggedIn = !!currentStaff; // Verwaltungs-Anmeldung ohne Kassen-Benutzer gilt als abgemeldet
+      let loggedIn = !!currentStaff; // Verwaltungs-Anmeldung ohne Kassen-Benutzer gilt als abgemeldet
       const idle = !updatePhase && !updateBusy.current;
+      // 27.11.: Steht der angemeldete Benutzer auf dem Startbildschirm (kein Kassenfenster offen), meldet der Fernbefehl ihn selbst ab,
+      // damit das Update nicht an einer vergessenen Anmeldung hängt. Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt.
+      // Steht er noch in Kasse/Verwaltung/Journal, wartet der Befehl wie bisher.
+      // 28.11.: Mit „force“ (Alle Geräte updaten) wird auch abgemeldet, wenn der Benutzer noch in Kasse/Verwaltung/Journal steht.
+      if (loggedIn && idle && (homeVisible || (force && command === 'update-install')) && currentStaff) {
+        if (!homeVisible) { setMenuOpen(false); setHomeVisible(true); }
+        recordStaff('logout', currentStaff);
+        setCurrentStaff(null);
+        setManagementAdministrator(null);
+        setAdminUnlocked(false);
+        resetJournalSelection();
+        loggedIn = false;
+      }
       if (loggedIn || !idle) {
-        return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet, wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
+        return { done: false, text: loggedIn ? 'Wartet: Benutzer angemeldet (nicht auf dem Startbildschirm), wird bei Abmeldung ausgeführt' : 'Wartet: Update-Vorgang läuft' };
       }
       if (command === 'reload') {
         window.setTimeout(() => window.location.reload(), 2500);
@@ -377,15 +424,54 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   };
   const forceUpdateRef = useRef(false);
   useEffect(() => {
-    if (!forceUpdateRef.current || !homeVisible || currentStaff || !candidate || updatePhase || updateBusy.current) return;
+    if (!forceUpdateRef.current || !updateSafeView || currentStaff || !candidate || updatePhase || updateBusy.current) return;
     forceUpdateRef.current = false;
     autoUpdate.current = true;
     void prepareUpdate();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Lage-Wechsel
-  }, [homeVisible, currentStaff, candidate, updatePhase]);
+  }, [updateSafeView, currentStaff, candidate, updatePhase]);
   useEffect(() => installFullscreenToggle(), []);
   useEffect(() => installKeyboardOnTap(), []);
   useEffect(() => { installStyledAlert(); }, []);
+  // Lebenszeichen an gekoppelte Handys: ohne Meldung (Kassen-App geschlossen) endet deren Kopplung nach 30 Minuten.
+  const pairSessionId = store.activeSession && !store.activeSession.closed ? store.activeSession.id : null;
+  useEffect(() => {
+    if (!pairSessionId || testMode) return;
+    const beat = () => {
+      if (!navigator.onLine) return;
+      void callMobileAsTablet<{ active: number; total?: number }>('pair_heartbeat', { session_id: pairSessionId })
+        .then((result) => { setPhonePaired(result.active > 0); setPhoneLost(result.active === 0 && (result.total ?? 0) > 0); }).catch(() => undefined);
+    };
+    // Kassen-App wurde neu geöffnet (vorher geschlossen): alte Handy-Kopplungen dieser Kasse enden, erst danach Lebenszeichen.
+    if (!pairStartupDone.current) {
+      pairStartupDone.current = true;
+      void callMobileAsTablet('pair_revoke', { session_id: pairSessionId }).then(() => { setPhonePaired(false); setPhoneLost(false); }).catch(() => undefined).finally(beat);
+    } else beat();
+    const timer = window.setInterval(beat, 30_000);
+    return () => window.clearInterval(timer);
+  }, [pairSessionId, testMode]);
+  // Kassen-App wird geschlossen (Tab/App weg): Kopplungen sofort beenden. Bildschirmsperre oder Hintergrund zählt nicht.
+  useEffect(() => {
+    if (!pairSessionId || testMode) return;
+    const onPageHide = (event: PageTransitionEvent) => { if (!event.persisted) revokePairingsOnClose(pairSessionId); };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [pairSessionId, testMode]);
+  // Kassensitzung endet (Tagesabschluss, abgeschlossen): Kopplungen dieser Sitzung enden, Anzeige zurücksetzen.
+  const previousPairSession = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousPairSession.current;
+    previousPairSession.current = pairSessionId;
+    if (previous && !pairSessionId && !testMode) {
+      setPhonePaired(false); setPhoneLost(false);
+      void callMobileAsTablet('pair_revoke', { session_id: previous }).catch(() => undefined);
+    }
+  }, [pairSessionId, testMode]);
+  useEffect(() => {
+    if (!phonePaired || testMode) return;
+    const timer = window.setInterval(() => { if (navigator.onLine) void syncNow(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [phonePaired, testMode, syncNow]);
   // Datei-/Ordneranfragen vom PC zügig beantworten (nur im Modus AN, nur online und sichtbar).
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -425,15 +511,15 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   const autoUpdate = useRef(false);
   useEffect(() => {
     if (!autoUpdate.current || updateBusy.current) return;
-    if (!homeVisible || currentStaff) { autoUpdate.current = false; return; }
+    if (!updateSafeView || currentStaff) { autoUpdate.current = false; return; }
     if (updatePhase === 'prepared' && !updateError) void continueUpdate();
     else if (updatePhase === 'synced' && !updateError) void finishUpdate();
     else if (updatePhase === 'sync-error' || updatePhase === 'offer' || updatePhase === null) autoUpdate.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf Phasenwechsel
-  }, [updatePhase, updateError, homeVisible, currentStaff]);
+  }, [updatePhase, updateError, updateSafeView, currentStaff]);
   useEffect(() => {
     if (!autoInstallPending || !candidate || updatePhase !== null || updateBusy.current) return;
-    if (!homeVisible || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
+    if (!updateSafeView || currentStaff || testMode) return; // sicherer Zeitpunkt: Startbildschirm, niemand angemeldet
     setAutoInstallPending(false);
     autoChecking.current = true;
     // Automatisch nur, wenn alle Kassen abgeschlossen sind; sonst wartet das Update auf „Jetzt installieren“.
@@ -443,7 +529,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
       void prepareUpdate();
     }).finally(() => { autoChecking.current = false; setReminderTick((n) => n + 1); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- startet nur bei passender Lage
-  }, [autoInstallPending, candidate, updatePhase, homeVisible, currentStaff, testMode]);
+  }, [autoInstallPending, candidate, updatePhase, updateSafeView, currentStaff, testMode]);
 
   // Sicherheitsprüfung 23.11.: Update nur, wenn in der Cloud ALLE Kassen endgültig
   // abgeschlossen sind. Ohne Cloud-Antwort gilt das Update als nicht freigegeben.
@@ -462,7 +548,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   }
 
   async function prepareUpdate() {
-    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    if (!candidate || updateBusy.current || !updateSafeView || currentStaff) return;
     updateBusy.current = true;
     setUpdateError(null);
     setUpdatePhase('preparing');
@@ -530,7 +616,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
   }
 
   async function finishUpdate() {
-    if (!candidate || updateBusy.current || !homeVisible || currentStaff) return;
+    if (!candidate || updateBusy.current || !updateSafeView || currentStaff) return;
     updateBusy.current = true;
     setUpdateError(null);
     setUpdatePhase('activating');
@@ -878,6 +964,15 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
     setAdminShotDirty(false);
     setMenuOpen(false);
     setHomeVisible(true);
+    // 27.11.: Wer zur Startseite wechselt (Home-Knopf oder Menü „Startseite“), wird sofort abgemeldet – Mitarbeiter und
+    // Administrator. Nur der Login-Status endet: Kassensitzung, Buchungen und Anfangsbestand bleiben unberührt (kein Verwerfen).
+    if (currentStaff) {
+      recordStaff('logout', currentStaff);
+      setCurrentStaff(null);
+      setManagementAdministrator(null);
+      setAdminUnlocked(false);
+      resetJournalSelection();
+    }
   }
 
   function navigateToProtected(nextTab: 'admin' | 'journal') {
@@ -1082,6 +1177,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             <span className="order-3 w-full text-center text-xl font-extrabold tabular-nums text-white sm:text-2xl min-[1100px]:absolute min-[1100px]:left-1/2 min-[1100px]:w-auto min-[1100px]:-translate-x-1/2"
               role="timer" aria-label={`Uhrzeit ${headerTime(headerNow)} Uhr`}>
               {headerTime(headerNow)} Uhr
+              {phonePaired && <span className="ml-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400 align-middle shadow-[0_0_8px_#34d399]" role="img" aria-label="Handy gekoppelt" title="Handy gekoppelt" />}
+              {!phonePaired && phoneLost && <span className="ml-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 align-middle shadow-[0_0_8px_#ef4444]" role="img" aria-label="Handy-Verbindung unterbrochen" title="Handy-Verbindung unterbrochen – Kopplung bleibt, Handy meldet sich wieder" />}
             </span>
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5">
               {tab === 'pos' && (
@@ -1192,6 +1289,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                       <button type="button" onClick={() => chooseCashAction('correction')} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
                         <Settings className="h-5 w-5" /> Bestandskorrektur
                       </button>
+                      {!testMode && (
+                        <button type="button" onClick={() => { setMenuOpen(false); setShowPhonePair(true); }} className="gx-btn flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-2xl p-2 text-center text-sm font-bold">
+                          <Smartphone className="h-5 w-5" /> Handy koppeln{phonePaired ? ' ●' : ''}
+                        </button>
+                      )}
                     </div>
                     <button type="button" onClick={() => chooseCashAction('close')}
                       className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-amber-300 bg-gradient-to-b from-amber-500 to-amber-700 px-4 py-4 text-base font-bold text-white shadow-[0_2px_0_rgba(255,255,255,0.25)_inset,0_4px_10px_rgba(0,0,0,0.5)] transition hover:from-amber-400 active:translate-y-px active:shadow-none">
@@ -1204,6 +1306,17 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
             </div>
           )}
         </>
+      )}
+
+      {showPhonePair && store.activeSession && currentStaff && (
+        <PhonePairDialog session={store.activeSession} staff={currentStaff}
+          pfandAmount={store.pfandSettings[store.activeSession.location]}
+          onClose={() => setShowPhonePair(false)} onPairedChange={(paired) => { setPhonePaired(paired); if (paired) setPhoneLost(false); }} onPaired={handlePhonePaired} />
+      )}
+      {phonePairedNotice && (
+        <div role="status" className="pointer-events-none fixed left-1/2 top-20 z-[90] -translate-x-1/2 rounded-2xl border border-emerald-400 bg-emerald-900/95 px-5 py-3 text-base font-bold text-white shadow-2xl">
+          ✓ Handy gekoppelt
+        </div>
       )}
 
       {/* Test mode banner */}
@@ -1350,14 +1463,23 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 await persistFinalizedCashSession(closed);
                 store.commitFinalizedSession(closed);
                 const closeReport = closedSessionReport(closed, store.transactions, store.categories, currentStaff.name, verifiedStornos);
-                try {
-                  // Without an active folder permission, a button lets the
-                  // user save with a fresh tap instead of a system alert.
-                  if (await saveJournalPdfIfAllowed(closeReport) === 'needs-tap') setPendingClosePdf(closeReport);
-                } catch (pdfError) {
-                  console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
-                  setPendingClosePdf(closeReport);
-                }
+                // Der Abschluss ist in der Cloud gespeichert und zurückgelesen. Das PDF wird
+                // erst NACH der Bestätigung erstellt (28.11.2026): die Berechnung des
+                // Berichts blockiert die Seite mehrere Sekunden und ließ „Seite reagiert
+                // nicht“ erscheinen, während der Dialog noch offen war. Schlägt das PDF
+                // fehl, bleibt der Speichern-Button (pendingClosePdf) wie bisher.
+                window.setTimeout(() => {
+                  void (async () => {
+                    try {
+                      // Without an active folder permission, a button lets the
+                      // user save with a fresh tap instead of a system alert.
+                      if (await saveJournalPdfIfAllowed(closeReport) === 'needs-tap') setPendingClosePdf(closeReport);
+                    } catch (pdfError) {
+                      console.warn('Kasse abgeschlossen; PDF-Export fehlgeschlagen.', pdfError);
+                      setPendingClosePdf(closeReport);
+                    }
+                  })();
+                }, 600);
                 // persistFinalizedCashSession hat den Abschluss in der Cloud gespeichert UND zurückgelesen:
                 // „Synchronisiert“ ist damit bestätigt. Die Belegnummer ist je Kasse eindeutig (idempotent).
                 return { ok: true, synced: true, receiptLabel: formatDailyCloseReceiptNumber(closed.dailyCloseReceiptNumber, closed.dailyCloseReceiptLocation ?? closed.location, finalizedAt, closed.dailyCloseReceiptYear) ?? undefined };
@@ -1473,6 +1595,12 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               administratorTools={managementAdministrator ? <><ManagerPasswordPanel online={online} hasAdministrator={staff.users.some((user) => user.role === 'administrator' && user.active && !!user.passwordHash)} onChange={(currentPassword, nextPassword) => changeManagerPassword(currentPassword, nextPassword, true)} /><CloudPasswordPanel onChanged={() => { saveJSON(STORAGE_KEYS.rootPasswordChanged, true); saveJSON(STORAGE_KEYS.rootPasswordNoticeDismissed, true); }} /></> : undefined}
               testMode={testMode}
               onToggleMode={() => setModeConfirm(testMode ? 'to-active' : 'to-test')}
+              onUpdateNow={() => void updateNowFromInfo()}
+            onLogoutStaff={(sessionId, staffId, staffName) => store.recordStaffActivity(sessionId, {
+                id: `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                type: 'logout', staffId, staffName, timestamp: Date.now(),
+              })}
+              onCloseOpenCash={(location) => { store.switchLocation(location as Location); chooseCashAction('close'); }}
               onExportBackup={async () => {
                 try {
                 // Folder access must be requested while the tap is still active.
@@ -1537,8 +1665,9 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const savedAs = await saveBackupFile(backupTarget, blob, `kasse-backup-${formatDateISO(Date.now())}.json`);
                 if (backupTarget.mode === 'folder') {
-                  alert(`Backup gespeichert: ${savedAs}`);
+                  return { mode: 'folder' as const, savedAs };
                 }
+                return { mode: 'downloads' as const, savedAs };
                 } catch (error) {
                   // Keep the existing error dialog and propagate failure to the
                   // reset checklist: a failed download must never become green.
@@ -1548,6 +1677,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
               }}
               onImportBackup={async (file) => {
                 let restoreSyncPaused = false;
+                let progressStarted = false;
                 try {
                   if (testMode) throw new Error('Rücksicherung aktiver Cloud-Buchungen ist im Testmodus gesperrt. Bitte zum Aktivmodus wechseln.');
                    const text = await file.text();
@@ -1557,6 +1687,8 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                     return;
                   }
 
+                  restoreStepRunning(0);
+                  progressStarted = true;
                   // Financial inconsistencies are rejected before any restore or cloud writes.
                    const selectedBackup = parsed as CompleteBackup;
                    const imported = selectedBackup.data!;
@@ -1582,11 +1714,13 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                          byId(cloudNow.transactions) === byId(imported.transactions) &&
                          byId(cloudNow.cashSessions) === byId(imported.cashSessions) &&
                          byId(stornosNow) === byId(imported.stornos ?? [])) {
+                       restoreClear();
                        alert('Das Backup ist 1:1 identisch mit dem aktuellen Stand in der Cloud. Ein Import ist nicht nötig.');
                        return;
                      }
                      // Cloud hat Buchungen: ein Import ist erst nach dem Zurücksetzen möglich.
                      if (cloudNow.transactions.length > 0 || cloudNow.cashSessions.length > 0) {
+                       restoreClear();
                        const cloudIds = new Set(cloudNow.transactions.map(tx => tx.id));
                        const newer = imported.transactions.every(tx => cloudIds.has(tx.id)) &&
                          cloudNow.transactions.length > imported.transactions.length;
@@ -1640,9 +1774,11 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
                   setOpeningManagementAccess(null);
                   setAdminUnlocked(true);
                   setTab('admin');
+                  restoreFinished();
                   alert('Backup sicher wiederhergestellt. Die Daten sind verfügbar; Sie bleiben in der Verwaltung.');
                 } catch (error) {
-                  alert(error instanceof Error ? error.message : 'Backup-Datei konnte nicht gelesen werden.');
+                  const message = error instanceof Error ? error.message : 'Backup-Datei konnte nicht gelesen werden.';
+                  if (progressStarted) restoreFailed(message); else alert(message);
                 } finally {
                   if (restoreSyncPaused) {
                     resumeSyncAfterRestore();
@@ -1692,6 +1828,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
           )
         )}
       </main>
+      <RestoreProgressOverlay />
       {syncedAt !== null && <SyncToast key={syncedAt} onClose={closeSyncToast} />}
       {syncOpen && <SyncDialog syncNow={syncEverything} onRecoverCashConflict={recoverUnusedLocalCashConflict} onClose={() => setSyncOpen(false)} />}
       {staffAdminLoginOpen && (
@@ -1709,7 +1846,7 @@ export default function App({ adminStartup = false }: { adminStartup?: boolean }
         />
       )}
       {pendingClosePdf && <PendingClosePdfDialog report={pendingClosePdf} onDone={() => setPendingClosePdf(null)} />}
-      {homeVisible && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
+      {updateSafeView && !currentStaff && updatePhase && updatePhase !== 'folder' && (candidate || updatePhase === 'reload') &&
         <InitialSyncDialog phase={updatePhase} version={candidate?.version} installedVersion={APP_VERSION}
           notes={candidate?.notes} ready={updateReady} registers={registerStatus} error={updateError} percent={syncPercent}
           onPrepare={() => { autoUpdate.current = true; void prepareUpdate(); }} onContinue={() => void continueUpdate()}

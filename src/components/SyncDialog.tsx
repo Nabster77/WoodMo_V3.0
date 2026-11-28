@@ -14,6 +14,7 @@ export function SyncDialog({ syncNow, onRecoverCashConflict, onClose }: Props) {
   const [status, setStatus] = useState<Status>('syncing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(3);
 
   function applyResult(result: SyncResult) {
     setStatus(result.ok ? 'success' : 'error');
@@ -36,6 +37,17 @@ export function SyncDialog({ syncNow, onRecoverCashConflict, onClose }: Props) {
       cancelled = true;
     };
   }, [syncNow]);
+
+  // 28.11.: Nach erfolgreichem Abgleich zählt das Fenster 3 Sekunden herunter und schließt selbst; OK oder Tippen daneben schließt sofort.
+  useEffect(() => {
+    if (status !== 'success') return;
+    setSecondsLeft(3);
+    const id = window.setInterval(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => window.clearInterval(id);
+  }, [status]);
+  useEffect(() => {
+    if (status === 'success' && secondsLeft <= 0) onClose();
+  }, [status, secondsLeft, onClose]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-end bg-black/30 p-4 pt-16" onClick={onClose}>
@@ -64,7 +76,11 @@ export function SyncDialog({ syncNow, onRecoverCashConflict, onClose }: Props) {
         {status === 'success' && (
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Erfolgreich synchronisiert.</p>
+            <p className="min-w-0 flex-1 text-sm font-medium text-gray-700 dark:text-gray-200">Erfolgreich synchronisiert.</p>
+            <button type="button" autoFocus onClick={onClose}
+              className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-green-700 active:scale-95">
+              OK <span className="tabular-nums opacity-90">({Math.max(secondsLeft, 0)})</span>
+            </button>
           </div>
         )}
 

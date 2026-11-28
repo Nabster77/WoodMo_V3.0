@@ -81,6 +81,9 @@ export function defaultDeviceLabel(): string {
 export function getDeviceLabel(): string {
   return (readStore(LABEL_KEY) ?? '').trim() || defaultDeviceLabel();
 }
+export function hasDeviceLabel(): boolean {
+  return (readStore(LABEL_KEY) ?? '').trim().length > 0;
+}
 export function setDeviceLabel(label: string): void {
   writeStore(LABEL_KEY, label.trim().slice(0, 40));
   notify();
@@ -213,6 +216,12 @@ export async function setRemoteMode(deviceId: string, mode: DiagMode, password: 
 }
 export async function sendRemoteCommand(deviceId: string, command: DiagCommand, password: string, force = false): Promise<void> {
   await invokeGateway({ action: 'command', device_id: deviceId, command, password, force });
+}
+
+/** Entfernt Geräteeinträge, die seit über 24 Stunden nichts gemeldet haben (nur Diagnose-Tabelle). */
+export async function cleanupStaleDevices(password: string): Promise<number> {
+  const result = await invokeGateway({ action: 'cleanup', password });
+  return typeof result.removed === 'number' ? result.removed : 0;
 }
 
 /** Prüft nur das Passwort (serverseitig), ändert nichts. */
